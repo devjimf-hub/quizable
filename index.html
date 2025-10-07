@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <title>Secure Quiz Application</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        h2 {
+            color: #3498db;
+            margin-bottom: 15px;
+        }
+        
+        h3 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .btn-danger {
+            background-color: #e74c3c;
+        }
+        
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+        
+        .btn-success {
+            background-color: #2ecc71;
+        }
+        
+        .btn-success:hover {
+            background-color: #27ae60;
+        }
+        
+        .btn-info {
+            background-color: #17a2b8;
+        }
+        
+        .btn-info:hover {
+            background-color: #138496;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        input[type="text"], input[type="file"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        .quiz-question {
+            margin-bottom: 25px;
+            padding: 15px;
+            border: 1px solid #e1e1e1;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        
+        .quiz-options {
+            margin-top: 10px;
+        }
+        
+        .quiz-option {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .quiz-option:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .quiz-option.selected {
+            background-color: #e1f5fe;
+            border-color: #3498db;
+        }
+        
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .score-display {
+            text-align: center;
+            font-size: 24px;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #e8f5e9;
+            border-radius: 10px;
+        }
+        
+        .tab-warning {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            text-align: center;
+        }
+        
+        .tab-warning h2 {
+            color: white;
+            margin-bottom: 20px;
+        }
+        
+        .attempts-counter {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background-color: #e74c3c;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .timer-display {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background-color: #3498db;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .progress-bar {
+            height: 5px;
+            background-color: #ecf0f1;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        .progress {
+            height: 100%;
+            background-color: #3498db;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .json-template {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        
+        .section-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            margin-right: 5px;
+        }
+        
+        .tab.active {
+            background-color: white;
+            border-color: #ddd;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .info-message {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #bee5eb;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-actions { margin-top: 20px; }
+
+        .student-result-card {
+            background-color: #f9f9f9;
+            border: 1px solid #e1e1e1;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-name-display {
+            margin-left: 15px;
+            color: #555;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Teacher Section -->
+        <div id="teacher-section" class="card hidden">
+            <h1>Quiz Creator (Teacher)</h1>
+            <div class="info-message">
+                This is the teacher interface for creating encrypted quiz files. Students will not see this section.
+            </div>
+            <div class="form-group">
+                <h2>Load from File</h2>
+                <label for="json-upload" class="btn btn-info">Choose JSON File</label>
+                <input type="file" id="json-upload" accept=".json" style="display: none;">
+                <span id="json-file-name" class="file-name-display">No file chosen</span>
+                <button id="load-from-json" class="btn btn-info" style="margin-top: 10px;">Load from JSON</button>
+                <div class="json-template">
+                    <strong>JSON Format Example:</strong>
+<pre>{
+  "title": "Sample Quiz",
+  "questions": [
+    { "text": "What is 2+2?", "options": ["3", "4", "5"], "correctAnswer": 1 },
+    { "text": "Capital of France?", "options": ["Berlin", "Paris"], "correctAnswer": 1 }
+  ]
+}</pre></div>
+            </div>
+            <div class="form-group">
+                <label for="quiz-title">Quiz Title:</label>
+                <input type="text" id="quiz-title" placeholder="Enter quiz title">
+            </div>
+            <div class="form-group">
+                <label for="quiz-duration">Quiz Duration (in minutes, 0 for no limit):</label>
+                <input type="number" id="quiz-duration" min="0" value="0">
+            </div>
+            <div class="form-group">
+                <label for="secret-key">Secret Key (Password for Encryption):</label>
+                <input type="text" id="secret-key" placeholder="Enter a strong password">
+            </div>
+            <div id="questions-container">
+                <!-- Questions will be added here dynamically -->
+            </div>
+            <button id="add-question" class="btn">Add Question</button>
+            <button id="generate-encrypted-file" class="btn btn-success" style="margin-top: 20px;">Generate Encrypted File</button>
+        
+            <!-- New Results Viewer Section -->
+            <div style="margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px;">
+                <h2>View Student Results</h2>
+                <div class="form-group">
+                    <label for="results-upload" class="btn btn-info">Upload Result File</label>
+                    <input type="file" id="results-upload" accept=".txt" style="display: none;" multiple>
+                    <div style="margin-top: 10px;">
+                        <label for="results-secret-key">Secret Key to View Results:</label>
+                        <input type="text" id="results-secret-key" placeholder="Enter key used for the quiz">
+                    </div>
+                    <span id="results-file-name" class="file-name-display">No file chosen</span>
+                </div>
+                <div id="student-results-display">
+                    <!-- Decrypted results will be shown here -->
+                </div>
+                <button id="export-pdf-btn" class="btn btn-info hidden" style="margin-top: 20px;">Export Scores to PDF</button>
+            </div>
+        </div>
+
+        <!-- Student Section -->
+        <div id="student-section" class="card hidden">
+            <h1>Quiz Taker (Student)</h1>
+            <div class="form-group">
+                <label for="encrypted-file" class="btn">Choose Quiz File</label>
+                <input type="file" id="encrypted-file" accept=".txt" style="display: none;">
+                <span id="encrypted-file-name" class="file-name-display">No file chosen</span>
+            </div>
+            <div class="form-group">
+                <label for="student-first-name">First Name:</label>
+                <input type="text" id="student-first-name" placeholder="Enter your first name">
+            </div>
+            <div class="form-group">
+                <label for="student-last-name">Last Name:</label>
+                <input type="text" id="student-last-name" placeholder="Enter your last name">
+            </div>
+            <div class="form-group">
+                <label for="student-secret-key">Secret Key (from your teacher):</label>
+                <input type="text" id="student-secret-key" placeholder="Enter the secret key for this quiz">
+            </div>
+            <button id="start-quiz" class="btn">Start Quiz</button>
+        </div>
+
+        <!-- Quiz Section -->
+        <div id="quiz-section" class="card hidden">
+            <h1 id="quiz-title-display">Quiz Title</h1>
+            <div class="progress-bar">
+                <div class="progress" id="quiz-progress"></div>
+            </div>
+            <div id="quiz-questions">
+                <!-- Questions will be displayed here -->
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" class="card hidden">
+            <h1>Quiz Results</h1>
+            <div class="info-message" style="background-color: #e8f5e9; color: #155724; border-color: #c3e6cb;">
+                <p><strong>Submission Complete!</strong></p>
+                <p>Your results have been encrypted. Please download the file and send it to your teacher.</p>
+                <p>Please save the downloaded file and send it to your Facebook Messenger Group Chat.</p>
+            </div>
+            <button id="restart-quiz" class="btn">Take Another Quiz</button>
+        </div>
+
+        <!-- Tab Warning -->
+        <div id="tab-warning" class="tab-warning hidden">
+            <h2>Warning: Tab Switching Detected</h2>
+            <p>You are not allowed to switch tabs or open new windows during the quiz.</p>
+            <p>You have <span id="remaining-attempts">3</span> attempts remaining.</p>
+            <button id="return-to-quiz" class="btn">Return to Quiz</button>
+        </div>
+
+        <!-- Attempts Counter -->
+        <div id="attempts-counter" class="attempts-counter hidden">
+            Switching Attempts: <span id="attempts-count">0</span>/3
+        </div>
+
+        <!-- Timer Display -->
+        <div id="timer-display" class="timer-display hidden">
+            Time Left: 00:00
+        </div>
+
+        <!-- Custom Confirmation Modal -->
+        <div id="confirmation-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <h2 id="modal-title">Confirm Submission</h2>
+                <p id="modal-message">Are you sure you want to submit?</p>
+                <div class="modal-actions">
+                    <button id="modal-confirm-btn" class="btn btn-success">Confirm</button>
+                    <button id="modal-cancel-btn" class="btn btn-danger">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let quizData = null;
+        let currentQuestionIndex = 0;
+        let studentAnswers = [];
+        let focusLostCount = 0;
+        let isQuizActive = false;
+        let isHandlingFocusLoss = false; // Flag to prevent double counting
+        const MAX_ATTEMPTS = 3;
+        let timerInterval = null;
+        let processedStudentResults = []; // To store results for PDF export
+        let quizStartTime = 0;
+
+        // DOM Elements
+        const teacherSection = document.getElementById('teacher-section');
+        const studentSection = document.getElementById('student-section');
+        const quizSection = document.getElementById('quiz-section');
+        const resultsSection = document.getElementById('results-section');
+        const tabWarning = document.getElementById('tab-warning');
+        const attemptsCounter = document.getElementById('attempts-counter');
+        const timerDisplay = document.getElementById('timer-display');
+        const attemptsCount = document.getElementById('attempts-count');
+        const remainingAttempts = document.getElementById('remaining-attempts');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+
+
+        // Initialize based on URL parameters
+        function initializeApp() {
+            const urlParams = new URLSearchParams(window.location.search);
+            // Ensure warning and counter are explicitly hidden on initialization
+            tabWarning.classList.add('hidden');
+            attemptsCounter.classList.add('hidden');
+            timerDisplay.classList.add('hidden');
+            confirmationModal.classList.add('hidden');
+            document.getElementById('export-pdf-btn').classList.add('hidden');
+
+            const part = urlParams.get('part');
+            
+            if (part === 'teacher') {
+                // Show teacher section
+                teacherSection.classList.remove('hidden');
+                studentSection.classList.add('hidden');
+                // Add the first question form for the teacher
+                addQuestion();
+            } else {
+                // Show student section
+                teacherSection.classList.add('hidden');
+                studentSection.classList.remove('hidden');
+            }
+        }
+
+        // Teacher functionality
+        document.getElementById('add-question').addEventListener('click', addQuestion);
+        document.getElementById('generate-encrypted-file').addEventListener('click', generateEncryptedFile);
+        document.getElementById('load-from-json').addEventListener('click', loadQuizFromJson);
+
+        // Add listeners to display selected file names
+        document.getElementById('json-upload').addEventListener('change', function() {
+            const fileName = this.files[0] ? this.files[0].name : 'No file chosen';
+            document.getElementById('json-file-name').textContent = fileName;
+        });
+
+        document.getElementById('encrypted-file').addEventListener('change', function() {
+            const fileName = this.files[0] ? this.files[0].name : 'No file chosen';
+            document.getElementById('encrypted-file-name').textContent = fileName;
+        });
+
+        document.getElementById('results-upload').addEventListener('change', function() {
+            const fileCount = this.files.length;
+            const fileNameDisplay = document.getElementById('results-file-name');
+            if (fileCount > 0) {
+                fileNameDisplay.textContent = `${fileCount} file(s) selected`;
+                displayBulkResults(this.files);
+            } else {
+                fileNameDisplay.textContent = 'No file chosen';
+            }
+        });
+
+
+        // Student functionality
+        document.getElementById('start-quiz').addEventListener('click', startQuiz);
+        document.getElementById('return-to-quiz').addEventListener('click', returnToQuiz);
+        document.getElementById('restart-quiz').addEventListener('click', restartQuiz);
+        document.getElementById('export-pdf-btn').addEventListener('click', exportResultsToPdf);
+
+
+        // Handle page visibility change
+        function handleVisibilityChange() {
+            if (document.hidden && isQuizActive) {
+                // Page is hidden (user switched tabs or minimized window)
+                handleFocusLoss();
+            }
+        }
+
+        // Question template for teacher
+        function addQuestion(questionData = null) {
+            const questionsContainer = document.getElementById('questions-container');
+            const questionIndex = questionsContainer.children.length;
+
+            // Pre-fill values from JSON if available, otherwise use defaults
+            const text = questionData ? questionData.text : '';
+            const options = questionData ? questionData.options.join(' | ') : '';
+            const correctAnswer = questionData ? questionData.correctAnswer : 0;
+            
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'quiz-question';
+            questionDiv.innerHTML = `
+                <h3>Question ${questionIndex + 1}</h3>
+                <div class="form-group">
+                    <label>Question Text:</label>
+                    <input type="text" class="question-text" placeholder="Enter question text" value="${text}">
+                </div>
+                <div class="form-group">
+                    <label>Options (separated by a pipe character: |):</label>
+                    <input type="text" class="question-options" placeholder="Option A | Option B | Option C" value="${options}">
+                </div>
+                <div class="form-group">
+                    <label>Correct Answer (index, starting from 0):</label>
+                    <input type="number" class="correct-answer" min="0" value="${correctAnswer}">
+                </div>
+                <button class="btn btn-danger remove-question">Remove Question</button>
+            `;
+            
+            questionsContainer.appendChild(questionDiv);
+            
+            // Add event listener for remove button
+            questionDiv.querySelector('.remove-question').addEventListener('click', function() {
+                questionsContainer.removeChild(questionDiv);
+                // Update question numbers
+                const questions = questionsContainer.querySelectorAll('.quiz-question');
+                questions.forEach((q, index) => {
+                    q.querySelector('h3').textContent = `Question ${index + 1}`;
+                });
+            });
+        }
+
+        // Load quiz data from a JSON file into the teacher form
+        function loadQuizFromJson() {
+            const fileInput = document.getElementById('json-upload');
+            if (!fileInput.files[0]) {
+                alert('Please select a JSON file to upload.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const quizJson = JSON.parse(e.target.result);
+
+                    if (!quizJson.title || !Array.isArray(quizJson.questions)) {
+                        throw new Error('Invalid JSON format. "title" and "questions" array are required.');
+                    }
+
+                    // Populate the form with the loaded data
+                    document.getElementById('quiz-title').value = quizJson.title;
+
+                    const questionsContainer = document.getElementById('questions-container');
+                    questionsContainer.innerHTML = ''; // Clear existing questions
+
+                    quizJson.questions.forEach(questionData => {
+                        addQuestion(questionData);
+                    });
+
+                    alert('Quiz loaded successfully from JSON file!');
+
+                } catch (error) {
+                    alert('Failed to load or parse JSON file. Please check the file format and content.');
+                    console.error('JSON Load Error:', error);
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
+        // Generate encrypted quiz file
+        function generateEncryptedFile() {
+            const quizTitle = document.getElementById('quiz-title').value;
+            const quizDuration = parseInt(document.getElementById('quiz-duration').value) || 0;
+            const secretKey = document.getElementById('secret-key').value;
+            const questions = document.querySelectorAll('.quiz-question');
+            
+            if (questions.length === 0) {
+                alert('Please add at least one question.');
+                return;
+            }
+            
+            if (!secretKey) {
+                alert('Please enter a Secret Key to encrypt the quiz.');
+                return;
+            }
+
+            let allQuestionsValid = true;
+            // Generate a unique ID for this quiz instance to prevent re-takes.
+            const quizId = 'quiz-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+
+            const quiz = {
+                title: quizTitle,
+                duration: quizDuration,
+                id: quizId,
+                questions: []
+            };
+            
+            questions.forEach((q, index) => {
+                const text = q.querySelector('.question-text').value;
+                // Filter out any empty strings that result from trailing commas or extra spaces
+                const options = q.querySelector('.question-options').value.split('|')
+                                 .map(opt => opt.trim()).filter(opt => opt !== '');
+                const correctAnswer = parseInt(q.querySelector('.correct-answer').value);
+                
+                // Add a check to ensure the correct answer index is valid for the number of options
+                if (text && options.length >= 2 && !isNaN(correctAnswer) && correctAnswer >= 0 && correctAnswer < options.length) {
+                    quiz.questions.push({
+                        text,
+                        options,
+                        correctAnswer
+                    });
+                } else {
+                    // If a question is invalid, stop the process and alert the user.
+                    alert(`Error in Question ${index + 1}: Please ensure it has text, at least two options, and a valid correct answer index (between 0 and ${options.length - 1}).`);
+                    allQuestionsValid = false;
+                }
+            });
+            
+            // Only proceed if all questions were validated successfully
+            if (!allQuestionsValid) {
+                return;
+            }
+            
+            // Encrypt the data
+            encryptData(JSON.stringify(quiz), secretKey).then(encryptedString => {
+                // Create and download the file
+                const blob = new Blob([encryptedString], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'quiz_encrypted.txt';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                alert('Encrypted quiz file generated successfully!');
+            }).catch(err => {
+                console.error("Encryption failed:", err);
+                alert("Encryption failed. See console for details.");
+            });
+        }
+
+        // Decrypt a single result file and return a promise
+        function decryptResultFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const unsafeString = atob(e.target.result);
+                        const resultsString = decodeURIComponent(escape(unsafeString));
+                        const resultsData = JSON.parse(resultsString);
+                        resolve(resultsData);
+                    } catch (error) {
+                        console.error(`Failed to decrypt file: ${file.name}`, error);
+                        reject(null); // Reject but don't crash everything
+                    }
+                };
+                reader.onerror = (error) => {
+                    console.error(`Failed to read file: ${file.name}`, error);
+                    reject(null);
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        // Process multiple result files, sort, and display them
+        async function displayBulkResults(files) {
+            const secretKey = document.getElementById('results-secret-key').value;
+            const resultsDisplay = document.getElementById('student-results-display');
+            resultsDisplay.innerHTML = '<p>Processing files...</p>';
+
+            const promises = Array.from(files).map(file => decryptResultFile(file));
+            const results = await Promise.allSettled(promises);
+
+            const validResults = results
+                .filter(result => result.status === 'fulfilled' && result.value)
+                .map(result => result.value);
+
+            // Sort by last name, then first name
+            validResults.sort((a, b) => {
+                if (a.student.lastName.toLowerCase() < b.student.lastName.toLowerCase()) return -1;
+                if (a.student.lastName.toLowerCase() > b.student.lastName.toLowerCase()) return 1;
+                if (a.student.firstName.toLowerCase() < b.student.firstName.toLowerCase()) return -1;
+                if (a.student.firstName.toLowerCase() > b.student.firstName.toLowerCase()) return 1;
+                return 0;
+            });
+
+            // Store results for PDF export and show the button
+            processedStudentResults = validResults;
+            document.getElementById('export-pdf-btn').classList.toggle('hidden', validResults.length === 0);
+
+            let resultsHTML = `<h3>Student Scores (${validResults.length} of ${files.length} files processed)</h3>`;
+            validResults.forEach(res => {
+                resultsHTML += `
+                    <div class="student-result-card">
+                        <span><strong>${res.student.lastName}, ${res.student.firstName}</strong></span>
+                        <span style="font-weight: bold; color: #3498db;">${res.score} / ${res.totalQuestions}</span>
+                    </div>
+                `;
+            });
+
+            resultsDisplay.innerHTML = resultsHTML;
+        }
+
+        // Export the processed results to a PDF file
+        function exportResultsToPdf() {
+            if (processedStudentResults.length === 0) {
+                alert('No results to export.');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const quizTitle = processedStudentResults[0]?.quizTitle || 'Quiz Results';
+
+            // Main title
+            doc.setFontSize(18);
+            doc.text(quizTitle, 14, 22);
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Summary for ${processedStudentResults.length} students.`, 14, 30);
+
+            // Summary Table
+            const summaryHead = [['Last Name', 'First Name', 'Score']];
+            const summaryBody = processedStudentResults.map(res => [
+                res.student.lastName,
+                res.student.firstName,
+                `${res.score} / ${res.totalQuestions}`
+            ]);
+
+            doc.autoTable({
+                head: summaryHead,
+                body: summaryBody,
+                startY: 35,
+            });
+
+            // Detailed per-student results
+            processedStudentResults.forEach(res => {
+                doc.addPage();
+                doc.setFontSize(16);
+                doc.text(`Detailed Results for: ${res.student.lastName}, ${res.student.firstName}`, 14, 22);
+
+                const detailHead = [['#', 'Question', 'Student Answer', 'Correct Answer', 'Result']];
+                const detailBody = res.detailedAnswers.map((ans, i) => [
+                    i + 1,
+                    ans.questionText,
+                    ans.studentAnswerText,
+                    ans.correctAnswerText,
+                    ans.isCorrect ? '✓' : '✗'
+                ]);
+                doc.autoTable({ head: detailHead, body: detailBody, startY: 30 });
+            });
+
+            doc.save(`${quizTitle.replace(/\s/g, '_')}_Results.pdf`);
+        }
+
+        // Start the quiz for student
+        function startQuiz() {
+            const fileInput = document.getElementById('encrypted-file');
+            const firstName = document.getElementById('student-first-name').value;
+            const lastName = document.getElementById('student-last-name').value;
+            const secretKey = document.getElementById('student-secret-key').value;
+            
+            if (!fileInput.files[0]) {
+                alert('Please upload an encrypted quiz file.');
+                return;
+            }
+            
+            if (!firstName || !lastName) {
+                alert('Please enter your first and last name.');
+                return;
+            }
+            
+            if (!secretKey) {
+                alert('Please enter the Secret Key provided by your teacher.');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                decryptData(e.target.result, secretKey).then(decryptedData => {
+                    if (!decryptedData) {
+                        alert('Decryption failed. Please check the Secret Key and file.');
+                        return;
+                    }
+
+                    quizData = JSON.parse(decryptedData);
+
+                    // Check if the student has already taken this quiz within the last 3 hours
+                    if (quizData.id) {
+                        const attemptRecord = localStorage.getItem(quizData.id);
+                        if (attemptRecord) {
+                            const record = JSON.parse(attemptRecord);
+                            const timeSinceAttempt = Date.now() - record.timestamp;
+                            const threeHoursInMillis = 3 * 60 * 60 * 1000;
+
+                            if (timeSinceAttempt < threeHoursInMillis) {
+                                alert('You have already submitted this quiz. Please ask your teacher for a new quiz file if you need to retake it.');
+                                restartQuiz(); // Reset the interface
+                                return; // Stop the quiz from starting
+                            }
+                        }
+                    }
+                    
+                    // Store student info
+                    quizData.student = {
+                        firstName,
+                        lastName
+                    };
+                    
+                    // Initialize answers array
+                    studentAnswers = new Array(quizData.questions.length).fill(null);
+                    
+                    // Show quiz section
+                    studentSection.classList.add('hidden');
+                    quizSection.classList.remove('hidden');
+                    
+                    // Display quiz title
+                    document.getElementById('quiz-title-display').textContent = quizData.title;
+                    
+                    // Display first question
+                    displayQuestion(0);
+                    updateAttemptsDisplay();
+
+                    // Start the timer if one is set
+                    if (quizData.duration > 0) {
+                        startQuizTimer(quizData.duration);
+                    }
+
+                    // Activate quiz monitoring after a short delay to allow the UI to settle.
+                    // This prevents the initial blur event from being counted.
+                    setTimeout(() => { // A single, robust delay
+                        quizStartTime = Date.now(); // Set the start time for the grace period
+                        isQuizActive = true;
+
+                        // Add event listeners to start monitoring
+                        window.addEventListener('blur', handleFocusLoss);
+                        document.addEventListener('visibilitychange', handleVisibilityChange);
+                        attemptsCounter.classList.remove('hidden'); // Show the counter
+                    }, 500);
+
+                }).catch(err => {
+                    alert('Decryption failed. Please make sure you have the correct file and Secret Key.');
+                    console.error("Decryption Error:", err);
+                });
+            };
+            
+            reader.readAsText(file);
+        }
+
+        // Display a specific question
+        function displayQuestion(index) {
+            if (!quizData || index < 0 || index >= quizData.questions.length) return;
+            
+            currentQuestionIndex = index;
+            const question = quizData.questions[index];
+            const quizQuestions = document.getElementById('quiz-questions');
+            
+            // Update progress bar
+            const progress = ((index + 1) / quizData.questions.length) * 100;
+            document.getElementById('quiz-progress').style.width = `${progress}%`;
+            
+            // Create question HTML
+            let optionsHTML = '';
+            question.options.forEach((option, i) => {
+                const isSelected = studentAnswers[index] === i;
+                optionsHTML += `
+                    <div class="quiz-option ${isSelected ? 'selected' : ''}" data-index="${i}">
+                        ${option}
+                    </div>
+                `;
+            });
+            
+            quizQuestions.innerHTML = `
+                <div class="quiz-question">
+                    <h3>Question ${index + 1} of ${quizData.questions.length}</h3>
+                    <p>${question.text}</p>
+                    <div class="quiz-options">
+                        ${optionsHTML}
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button id="prev-question" class="btn" ${index === 0 ? 'disabled' : ''}>Previous</button>                    
+                    ${index === quizData.questions.length - 1 
+                        ? `<button id="submit-quiz" class="btn btn-success">Submit Quiz</button>`
+                        : `<button id="next-question" class="btn">Next</button>`
+                    }
+                </div>
+            `;
+            
+            // Add event listener for options
+            const optionElements = quizQuestions.querySelectorAll('.quiz-option');
+            optionElements.forEach(option => {
+                option.addEventListener('click', function() {
+                    // Remove selected class from all options
+                    optionElements.forEach(opt => opt.classList.remove('selected'));
+                    // Add selected class to clicked option
+                    this.classList.add('selected');
+                    // Store the answer
+                    studentAnswers[index] = parseInt(this.getAttribute('data-index'));
+                });
+            });
+            
+            // Add event listeners for navigation buttons
+            document.getElementById('prev-question').addEventListener('click', function() {
+                if (currentQuestionIndex > 0) {
+                    displayQuestion(currentQuestionIndex - 1);
+                }
+            });
+            
+            // Add event listener for Next or Submit button
+            if (index === quizData.questions.length - 1) {
+                document.getElementById('submit-quiz').addEventListener('click', function() {
+                    submitQuiz(); // Call with no arguments to ensure isAutoSubmit is false
+                });
+            } else {
+                document.getElementById('next-question').addEventListener('click', function() {
+                    displayQuestion(currentQuestionIndex + 1);
+                });
+            }
+        }
+
+        // Start and manage the quiz timer
+        function startQuizTimer(durationInMinutes) {
+            timerDisplay.classList.remove('hidden');
+            const endTime = Date.now() + durationInMinutes * 60 * 1000;
+
+            timerInterval = setInterval(() => {
+                const remainingTime = endTime - Date.now();
+
+                if (remainingTime <= 0) {
+                    clearInterval(timerInterval);
+                    timerDisplay.textContent = 'Time\'s Up!';
+                    alert('Time is up! The quiz will now be submitted.');
+                    submitQuiz(true); // Auto-submit without confirmation
+                    return;
+                }
+
+                const minutes = Math.floor((remainingTime / 1000 / 60) % 60);
+                const seconds = Math.floor((remainingTime / 1000) % 60);
+
+                const formattedMinutes = minutes.toString().padStart(2, '0');
+                const formattedSeconds = seconds.toString().padStart(2, '0');
+
+                timerDisplay.textContent = `Time Left: ${formattedMinutes}:${formattedSeconds}`;
+            }, 1000);
+        }
+
+        function stopQuizTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+        }
+
+        // Handle focus loss (tab switching)
+        function handleFocusLoss() {
+            // Use a flag to prevent blur and visibilitychange from firing together and double-counting
+            if (isQuizActive && !isHandlingFocusLoss) {
+                // Ignore focus loss within the first second (1000ms) of the quiz starting.
+                // This acts as a grace period to prevent false positives on load.
+                if (Date.now() - quizStartTime < 1000) {
+                    return;
+                }
+
+                isHandlingFocusLoss = true;
+                focusLostCount++;
+                updateAttemptsDisplay();
+                
+                if (focusLostCount <= MAX_ATTEMPTS) {
+                    tabWarning.classList.remove('hidden');
+                    remainingAttempts.textContent = MAX_ATTEMPTS - focusLostCount;
+                } else {
+                    // Block the quiz after exceeding attempts
+                    alert('You have exceeded the allowed number of tab switches. The quiz will now be submitted.');
+                    submitQuiz(true);
+                }
+
+                // Reset the flag after a short delay
+                setTimeout(() => {
+                    isHandlingFocusLoss = false;
+                }, 100);
+            }
+        }
+
+        // Return to quiz from warning
+        function returnToQuiz() {
+            tabWarning.classList.add('hidden');
+        }
+
+        // Update attempts display
+        function updateAttemptsDisplay() {
+            attemptsCount.textContent = focusLostCount;
+            document.querySelector('#attempts-counter').textContent = `Attempts: ${focusLostCount}/${MAX_ATTEMPTS}`;
+        }
+
+        // Custom confirmation modal handler
+        function showConfirmationModal(title, message, onConfirm, showCancel = true) {
+            modalTitle.textContent = title;
+            modalMessage.textContent = message;
+            modalCancelBtn.style.display = showCancel ? 'inline-block' : 'none';
+            modalConfirmBtn.textContent = showCancel ? 'Confirm' : 'OK';
+
+            // Use .cloneNode to remove old event listeners and prevent stacking
+            const newConfirmBtn = modalConfirmBtn.cloneNode(true);
+            modalConfirmBtn.parentNode.replaceChild(newConfirmBtn, modalConfirmBtn);
+            
+            const newCancelBtn = modalCancelBtn.cloneNode(true);
+            modalCancelBtn.parentNode.replaceChild(newCancelBtn, modalCancelBtn);
+
+            newConfirmBtn.addEventListener('click', () => {
+                confirmationModal.classList.add('hidden');
+                if (onConfirm) onConfirm();
+            });
+
+            newCancelBtn.addEventListener('click', () => {
+                confirmationModal.classList.add('hidden');
+            });
+
+            confirmationModal.classList.remove('hidden');
+        }
+
+        // Submit the quiz
+        function submitQuiz(isAutoSubmit = false) {
+            if (!quizData) return;
+            
+            const proceedWithSubmission = () => {
+                // Stop the timer if it's running
+                stopQuizTimer();
+
+                const unansweredCount = studentAnswers.filter(answer => answer === null).length;
+                if (unansweredCount > 0) {
+                    const plural = unansweredCount === 1 ? 'question' : 'questions';
+                    showConfirmationModal('Unanswered Questions', `You have ${unansweredCount} unanswered ${plural}. Please answer all questions before submitting.`, null, false);
+                    return;
+                }
+
+                // Calculate score
+                let score = 0;
+                quizData.questions.forEach((question, index) => {
+                    if (studentAnswers[index] === question.correctAnswer) {
+                        score++;
+                    }
+                });
+                
+                // Display results
+                quizSection.classList.add('hidden');
+                resultsSection.classList.remove('hidden');
+                
+                // Save a record of the quiz attempt in localStorage to prevent re-takes
+                if (quizData.id) {
+                    const attemptRecord = { timestamp: Date.now() };
+                    localStorage.setItem(quizData.id, JSON.stringify(attemptRecord));
+                }
+
+                // Create and encrypt the results data for download
+                const resultsData = {
+                    student: quizData.student,
+                    quizTitle: quizData.title,
+                    score: score,
+                    totalQuestions: quizData.questions.length,
+                    detailedAnswers: quizData.questions.map((q, i) => ({
+                        questionText: q.text,
+                        studentAnswerText: studentAnswers[i] !== null ? q.options[studentAnswers[i]] : 'Not Answered',
+                        correctAnswerText: q.options[q.correctAnswer],
+                        isCorrect: studentAnswers[i] === q.correctAnswer
+                    }))
+                };
+
+                // Encrypt and trigger download
+                encryptData(JSON.stringify(resultsData), quizData.secretKey).then(encryptedString => {
+                    const blob = new Blob([encryptedString], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+
+                    const shortQuizName = quizData.title.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const lastName = quizData.student.lastName.toLowerCase();
+                    const firstInitial = quizData.student.firstName.charAt(0).toLowerCase();
+                    a.download = `${shortQuizName}_${lastName}${firstInitial}.txt`;
+
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                });
+
+                // Deactivate quiz monitoring
+                isQuizActive = false;
+                attemptsCounter.classList.add('hidden');
+                timerDisplay.classList.add('hidden');
+
+                // Remove event listeners to prevent them from firing after the quiz
+                window.removeEventListener('blur', handleFocusLoss);
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+            };
+
+            if (isAutoSubmit) {
+                proceedWithSubmission();
+            } else {
+                showConfirmationModal('Confirm Submission', 'Are you sure you want to submit your quiz?', proceedWithSubmission);
+            }
+        }
+
+        // Restart the quiz
+        function restartQuiz() {
+            // Reset all state
+            quizData = null;
+            currentQuestionIndex = 0;
+            studentAnswers = [];
+            focusLostCount = 0;
+            stopQuizTimer();
+            isQuizActive = false;
+            quizStartTime = 0;
+            
+            // Clear form inputs
+            document.getElementById('encrypted-file').value = '';
+            document.getElementById('student-first-name').value = '';
+            document.getElementById('student-last-name').value = '';
+            
+            // Show student section
+            resultsSection.classList.add('hidden');
+            studentSection.classList.remove('hidden');
+            tabWarning.classList.add('hidden');
+            document.getElementById('export-pdf-btn').classList.add('hidden');
+            attemptsCounter.classList.add('hidden');
+            timerDisplay.classList.add('hidden');
+
+            // Ensure event listeners are removed on restart
+            window.removeEventListener('blur', handleFocusLoss);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        }
+
+        // Initialize the application
+        window.onload = function() {
+            initializeApp();
+        };
+    </script>
+
+    <script>
+        // --- CRYPTOGRAPHY HELPER FUNCTIONS ---
+
+        // Derives a key from a password using PBKDF2
+        async function getKey(password, salt) {
+            const enc = new TextEncoder();
+            const keyMaterial = await window.crypto.subtle.importKey(
+                'raw',
+                enc.encode(password),
+                { name: 'PBKDF2' },
+                false,
+                ['deriveKey']
+            );
+            return window.crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: 100000,
+                    hash: 'SHA-256'
+                },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                true,
+                ['encrypt', 'decrypt']
+            );
+        }
+
+        // Encrypts a string using a password
+        async function encryptData(data, password) {
+            const salt = window.crypto.getRandomValues(new Uint8Array(16));
+            const iv = window.crypto.getRandomValues(new Uint8Array(12));
+            const key = await getKey(password, salt);
+            const enc = new TextEncoder();
+            const encryptedContent = await window.crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                enc.encode(data)
+            );
+            const encryptedArr = new Uint8Array([...salt, ...iv, ...new Uint8Array(encryptedContent)]);
+            return btoa(String.fromCharCode.apply(null, encryptedArr));
+        }
+
+        // Decrypts a string using a password
+        async function decryptData(encryptedString, password) {
+            const encryptedArr = new Uint8Array(atob(encryptedString).split('').map(c => c.charCodeAt(0)));
+            const salt = encryptedArr.slice(0, 16);
+            const iv = encryptedArr.slice(16, 28);
+            const data = encryptedArr.slice(28);
+            const key = await getKey(password, salt);
+            const decryptedContent = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, data);
+            return new TextDecoder().decode(decryptedContent);
+        }
+    </script>
+</body>
+</html>
