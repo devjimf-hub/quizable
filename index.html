@@ -65,6 +65,7 @@
             transition: background-color 0.3s;
             margin-right: 10px;
             margin-bottom: 10px;
+            text-decoration: none;
         }
         
         .btn:hover {
@@ -366,6 +367,7 @@
                     </div>
                     <span id="results-file-name" class="file-name-display">No file chosen</span>
                 </div>
+                <button id="view-results-btn" class="btn">View Results</button>
                 <div id="student-results-display">
                     <!-- Decrypted results will be shown here -->
                 </div>
@@ -415,6 +417,7 @@
                 <p>Your results have been encrypted. Please download the file and send it to your teacher.</p>
                 <p>Please save the downloaded file and send it to your Facebook Messenger Group Chat.</p>
             </div>
+            <a id="download-results-btn" class="btn btn-success hidden" download>Download Results</a>
             <button id="restart-quiz" class="btn">Take Another Quiz</button>
         </div>
 
@@ -477,6 +480,7 @@
         const modalMessage = document.getElementById('modal-message');
         const modalConfirmBtn = document.getElementById('modal-confirm-btn');
         const modalCancelBtn = document.getElementById('modal-cancel-btn');
+        const downloadResultsBtn = document.getElementById('download-results-btn');
 
 
         // Initialize based on URL parameters
@@ -488,6 +492,7 @@
             timerDisplay.classList.add('hidden');
             confirmationModal.classList.add('hidden');
             document.getElementById('export-pdf-btn').classList.add('hidden');
+            downloadResultsBtn.classList.add('hidden');
 
             const part = urlParams.get('part');
             
@@ -524,10 +529,10 @@
             const fileCount = this.files.length;
             const fileNameDisplay = document.getElementById('results-file-name');
             if (fileCount > 0) {
-                fileNameDisplay.textContent = `${fileCount} file(s) selected`;
-                displayBulkResults(this.files);
+                fileNameDisplay.textContent = `${fileCount} file(s) selected. Enter the key and click "View Results".`;
             } else {
                 fileNameDisplay.textContent = 'No file chosen';
+                document.getElementById('student-results-display').innerHTML = '';
             }
         });
 
@@ -536,6 +541,7 @@
         document.getElementById('start-quiz').addEventListener('click', startQuiz);
         document.getElementById('return-to-quiz').addEventListener('click', returnToQuiz);
         document.getElementById('restart-quiz').addEventListener('click', restartQuiz);
+        document.getElementById('view-results-btn').addEventListener('click', handleViewResultsClick);
         document.getElementById('export-pdf-btn').addEventListener('click', exportResultsToPdf);
 
 
@@ -703,20 +709,33 @@
             });
         }
 
+        // Click handler for the "View Results" button
+        function handleViewResultsClick() {
+            const fileInput = document.getElementById('results-upload');
+            const secretKey = document.getElementById('results-secret-key').value;
+
+            if (fileInput.files.length === 0) {
+                alert('Please select one or more student result files.');
+                return;
+            }
+            if (!secretKey) {
+                alert('Please enter the Secret Key to decrypt the results.');
+                return;
+            }
+            displayBulkResults(fileInput.files, secretKey);
+        }
+
         // Decrypt a single result file and return a promise
-        function decryptResultFile(file) {
+        function decryptResultFile(file, secretKey) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    try {
-                        const unsafeString = atob(e.target.result);
-                        const resultsString = decodeURIComponent(escape(unsafeString));
-                        const resultsData = JSON.parse(resultsString);
-                        resolve(resultsData);
-                    } catch (error) {
-                        console.error(`Failed to decrypt file: ${file.name}`, error);
-                        reject(null); // Reject but don't crash everything
-                    }
+                    decryptData(e.target.result, secretKey).then(decryptedData => {
+                        resolve(JSON.parse(decryptedData));
+                    }).catch(err => {
+                        console.error(`Failed to decrypt file: ${file.name}`, err);
+                        reject(null);
+                    });
                 };
                 reader.onerror = (error) => {
                     console.error(`Failed to read file: ${file.name}`, error);
@@ -727,12 +746,11 @@
         }
 
         // Process multiple result files, sort, and display them
-        async function displayBulkResults(files) {
-            const secretKey = document.getElementById('results-secret-key').value;
+        async function displayBulkResults(files, secretKey) {
             const resultsDisplay = document.getElementById('student-results-display');
             resultsDisplay.innerHTML = '<p>Processing files...</p>';
 
-            const promises = Array.from(files).map(file => decryptResultFile(file));
+            const promises = Array.from(files).map(file => decryptResultFile(file, secretKey));
             const results = await Promise.allSettled(promises);
 
             const validResults = results
@@ -874,6 +892,9 @@
                         lastName
                     };
                     
+                    // Store the secret key with the quiz data for encrypting the results later
+                    quizData.secretKey = secretKey;
+
                     // Initialize answers array
                     studentAnswers = new Array(quizData.questions.length).fill(null);
                     
@@ -1065,14 +1086,18 @@
             modalMessage.textContent = message;
             modalCancelBtn.style.display = showCancel ? 'inline-block' : 'none';
             modalConfirmBtn.textContent = showCancel ? 'Confirm' : 'OK';
-
-            // Use .cloneNode to remove old event listeners and prevent stacking
-            const newConfirmBtn = modalConfirmBtn.cloneNode(true);
-            modalConfirmBtn.parentNode.replaceChild(newConfirmBtn, modalConfirmBtn);
             
-            const newCancelBtn = modalCancelBtn.cloneNode(true);
-            modalCancelBtn.parentNode.replaceChild(newCancelBtn, modalCancelBtn);
-
+            // Always get the current buttons from the DOM before manipulating them
+            let currentConfirmBtn = document.getElementById('modal-confirm-btn');
+            let currentCancelBtn = document.getElementById('modal-cancel-btn');
+            
+            // Use .cloneNode to remove old event listeners and prevent stacking
+            const newConfirmBtn = currentConfirmBtn.cloneNode(true);
+            currentConfirmBtn.parentNode.replaceChild(newConfirmBtn, currentConfirmBtn);
+            
+            const newCancelBtn = currentCancelBtn.cloneNode(true);
+            currentCancelBtn.parentNode.replaceChild(newCancelBtn, currentCancelBtn);
+            
             newConfirmBtn.addEventListener('click', () => {
                 confirmationModal.classList.add('hidden');
                 if (onConfirm) onConfirm();
@@ -1089,17 +1114,7 @@
         function submitQuiz(isAutoSubmit = false) {
             if (!quizData) return;
             
-            const proceedWithSubmission = () => {
-                // Stop the timer if it's running
-                stopQuizTimer();
-
-                const unansweredCount = studentAnswers.filter(answer => answer === null).length;
-                if (unansweredCount > 0) {
-                    const plural = unansweredCount === 1 ? 'question' : 'questions';
-                    showConfirmationModal('Unanswered Questions', `You have ${unansweredCount} unanswered ${plural}. Please answer all questions before submitting.`, null, false);
-                    return;
-                }
-
+            const performActualSubmission = () => {
                 // Calculate score
                 let score = 0;
                 quizData.questions.forEach((question, index) => {
@@ -1134,20 +1149,17 @@
 
                 // Encrypt and trigger download
                 encryptData(JSON.stringify(resultsData), quizData.secretKey).then(encryptedString => {
+                    // Instead of auto-downloading, prepare the download button
                     const blob = new Blob([encryptedString], { type: 'text/plain' });
                     const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-
+                    
                     const shortQuizName = quizData.title.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
                     const lastName = quizData.student.lastName.toLowerCase();
                     const firstInitial = quizData.student.firstName.charAt(0).toLowerCase();
-                    a.download = `${shortQuizName}_${lastName}${firstInitial}.txt`;
-
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                    
+                    downloadResultsBtn.href = url;
+                    downloadResultsBtn.download = `${shortQuizName}_${lastName}${firstInitial}.txt`;
+                    downloadResultsBtn.classList.remove('hidden');
                 });
 
                 // Deactivate quiz monitoring
@@ -1160,10 +1172,26 @@
                 document.removeEventListener('visibilitychange', handleVisibilityChange);
             };
 
+            // Stop the timer if it's running
+            stopQuizTimer();
+
             if (isAutoSubmit) {
-                proceedWithSubmission();
+                performActualSubmission();
             } else {
-                showConfirmationModal('Confirm Submission', 'Are you sure you want to submit your quiz?', proceedWithSubmission);
+                const unansweredCount = studentAnswers.filter(answer => answer === null).length;
+                if (unansweredCount > 0) {
+                    const plural = unansweredCount === 1 ? 'question' : 'questions';
+                    // Show a warning modal that does not allow submission
+                    showConfirmationModal('Unanswered Questions', `You have ${unansweredCount} unanswered ${plural}. Please answer all questions before submitting.`, null, false);
+                } else {
+                    let confirmationMessage = 'You have answered all questions. Are you sure you want to submit?';
+                    if (timerInterval) {
+                        confirmationMessage += ' You still have time left to review your answers.';
+                    } else {
+                        confirmationMessage += ' You can click Cancel to review your answers first.';
+                    }
+                    showConfirmationModal('Confirm Submission', confirmationMessage, performActualSubmission);
+                }
             }
         }
 
@@ -1188,6 +1216,7 @@
             studentSection.classList.remove('hidden');
             tabWarning.classList.add('hidden');
             document.getElementById('export-pdf-btn').classList.add('hidden');
+            downloadResultsBtn.classList.add('hidden');
             attemptsCounter.classList.add('hidden');
             timerDisplay.classList.add('hidden');
 
