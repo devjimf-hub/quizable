@@ -480,7 +480,6 @@
         const modalMessage = document.getElementById('modal-message');
         const modalConfirmBtn = document.getElementById('modal-confirm-btn');
         const modalCancelBtn = document.getElementById('modal-cancel-btn');
-        const downloadResultsBtn = document.getElementById('download-results-btn');
 
 
         // Initialize based on URL parameters
@@ -492,7 +491,7 @@
             timerDisplay.classList.add('hidden');
             confirmationModal.classList.add('hidden');
             document.getElementById('export-pdf-btn').classList.add('hidden');
-            downloadResultsBtn.classList.add('hidden');
+            document.getElementById('download-results-btn').classList.add('hidden');
 
             const part = urlParams.get('part');
             
@@ -1149,17 +1148,21 @@
 
                 // Encrypt and trigger download
                 encryptData(JSON.stringify(resultsData), quizData.secretKey).then(encryptedString => {
-                    // Instead of auto-downloading, prepare the download button
+                    // Automatically download the result file
                     const blob = new Blob([encryptedString], { type: 'text/plain' });
                     const url = URL.createObjectURL(blob);
                     
                     const shortQuizName = quizData.title.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
                     const lastName = quizData.student.lastName.toLowerCase();
                     const firstInitial = quizData.student.firstName.charAt(0).toLowerCase();
-                    
-                    downloadResultsBtn.href = url;
-                    downloadResultsBtn.download = `${shortQuizName}_${lastName}${firstInitial}.txt`;
-                    downloadResultsBtn.classList.remove('hidden');
+
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${shortQuizName}_${lastName}${firstInitial}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
                 });
 
                 // Deactivate quiz monitoring
@@ -1216,7 +1219,7 @@
             studentSection.classList.remove('hidden');
             tabWarning.classList.add('hidden');
             document.getElementById('export-pdf-btn').classList.add('hidden');
-            downloadResultsBtn.classList.add('hidden');
+            document.getElementById('download-results-btn').classList.add('hidden');
             attemptsCounter.classList.add('hidden');
             timerDisplay.classList.add('hidden');
 
