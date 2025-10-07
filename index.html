@@ -1080,11 +1080,11 @@
         }
 
         // Custom confirmation modal handler
-        function showConfirmationModal(title, message, onConfirm, showCancel = true) {
+        function showConfirmationModal(title, message, onConfirm) {
             modalTitle.textContent = title;
             modalMessage.textContent = message;
-            modalCancelBtn.style.display = showCancel ? 'inline-block' : 'none';
-            modalConfirmBtn.textContent = showCancel ? 'Confirm' : 'OK';
+            modalCancelBtn.style.display = 'inline-block'; // Always show cancel
+            modalConfirmBtn.textContent = onConfirm ? 'Confirm' : 'OK';
             
             // Always get the current buttons from the DOM before manipulating them
             let currentConfirmBtn = document.getElementById('modal-confirm-btn');
@@ -1185,7 +1185,7 @@
                 if (unansweredCount > 0) {
                     const plural = unansweredCount === 1 ? 'question' : 'questions';
                     // Show a warning modal that does not allow submission
-                    showConfirmationModal('Unanswered Questions', `You have ${unansweredCount} unanswered ${plural}. Please answer all questions before submitting.`, null, false);
+                    showConfirmationModal('Unanswered Questions', `You have ${unansweredCount} unanswered ${plural}. Please answer all questions before submitting.`, null);
                 } else {
                     let confirmationMessage = 'You have answered all questions. Are you sure you want to submit?';
                     if (timerInterval) {
