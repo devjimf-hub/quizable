@@ -966,6 +966,13 @@
 
                     quizData = JSON.parse(decryptedData);
 
+                    // Validate the structure of the quiz data
+                    if (!quizData || typeof quizData.title !== 'string' || !Array.isArray(quizData.questions)) {
+                        alert('The provided file is not a valid quiz file. Please check that you have selected the correct file and entered the correct secret key.');
+                        restartQuiz(); // Reset the interface
+                        return;
+                    }
+
                     // Safely check if the student has already taken this quiz BEFORE showing instructions
                     try {
                         if (quizData.id) {
