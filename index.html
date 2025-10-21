@@ -333,10 +333,21 @@
 <body>
     <div class="container">
         <!-- Welcome Section (Removed) -->
+        
+        <!-- Teacher Menu -->
+        <div id="teacher-menu" class="card hidden">
+            <h1>Teacher Dashboard</h1>
+            <p class="info-message" style="text-align: center;">What would you like to do?</p>
+            <div style="text-align: center; margin-top: 20px;">
+                <button id="go-to-create-quiz" class="btn btn-success" style="padding: 15px 30px; font-size: 18px;">Create a New Quiz</button>
+                <button id="go-to-view-results" class="btn btn-info" style="padding: 15px 30px; font-size: 18px;">View Student Scores</button>
+            </div>
+        </div>
 
-        <!-- Teacher Section -->
-        <div id="teacher-section" class="card hidden">
-            <h1>Quiz Creator (Teacher)</h1>
+        <!-- Teacher Create Quiz Section -->
+        <div id="teacher-create-section" class="card hidden">
+            <button class="btn" onclick="showTeacherMenu()">&larr; Back to Dashboard</button>
+            <h1 style="margin-top: 15px;">Quiz Creator</h1>
             <div class="info-message">
                 This is the teacher interface for creating encrypted quiz files. Students will not see this section.
             </div>
@@ -369,6 +380,10 @@
                 <input type="number" id="quiz-duration" min="0" value="0">
             </div>
             <div class="form-group">
+                <label for="instruction-countdown-duration">Instruction Countdown (in seconds):</label>
+                <input type="number" id="instruction-countdown-duration" min="5" value="30">
+            </div>
+            <div class="form-group">
                 <label for="secret-key">Secret Key (Password for Encryption):</label>
                 <input type="text" id="secret-key" placeholder="Enter a strong password">
             </div>
@@ -377,30 +392,29 @@
             </div>
             <button id="add-question" class="btn">Add Question</button>
             <button id="generate-encrypted-file" class="btn btn-success" style="margin-top: 20px;">Save Quiz to Cloud</button>
-        
-            <!-- New Results Viewer Section -->
-            <div style="margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px;">
-                <h2>View Student Results</h2>
-                <div class="form-group">
-                    <label for="results-upload" class="btn btn-info">Upload Result File</label>
-                    <input type="file" id="results-upload" accept=".txt" style="display: none;" multiple>
-                    <div style="margin-top: 10px;">
-                        <label for="results-quiz-id">Quiz ID to View Results:</label>
-                        <input type="text" id="results-quiz-id" placeholder="Enter Quiz ID from generation step">
-                        <label for="results-secret-key">Secret Key to View Results:</label>
-                        <input type="text" id="results-secret-key" placeholder="Enter key used for the quiz">
-                    </div>
-                </div>
-                <button id="view-results-btn" class="btn">View Results</button>
-                <div id="student-results-display">
-                    <!-- Decrypted results will be shown here -->
-                </div>
-                <button id="export-pdf-btn" class="btn btn-info hidden" style="margin-top: 20px;">Export Scores to PDF</button>
+        </div>
+
+        <!-- Teacher View Results Section -->
+        <div id="teacher-results-section" class="card hidden">
+            <button class="btn" onclick="showTeacherMenu()">&larr; Back to Dashboard</button>
+            <h1 style="margin-top: 15px;">View Student Results</h1>
+            <div class="form-group">
+                <label for="results-quiz-id">Quiz ID to View Results:</label>
+                <input type="text" id="results-quiz-id" placeholder="Enter Quiz ID from generation step">
             </div>
+            <div class="form-group">
+                <label for="results-secret-key">Secret Key to View Results:</label>
+                <input type="text" id="results-secret-key" placeholder="Enter key used for the quiz">
+            </div>
+            <button id="view-results-btn" class="btn">View Results</button>
+            <div id="student-results-display" style="margin-top: 20px;">
+                <!-- Decrypted results will be shown here -->
+            </div>
+            <button id="export-pdf-btn" class="btn btn-info hidden" style="margin-top: 20px;">Export Scores to PDF</button>
         </div>
 
         <!-- Student Section -->
-        <div id="student-section" class="card hidden">
+        <div id="student-section" class="card">
             <h1>Quiz Taker (Student)</h1>
             <div class="form-group">
                 <label for="student-quiz-id">Quiz ID (from your teacher):</label>
@@ -530,8 +544,10 @@
         let processedStudentResults = []; // To store results for PDF export
         let quizStartTime = 0;
 
-        // DOM Elements
-        const teacherSection = document.getElementById('teacher-section');
+        // DOM Elements (Teacher)
+        const teacherMenu = document.getElementById('teacher-menu');
+        const teacherCreateSection = document.getElementById('teacher-create-section');
+        const teacherResultsSection = document.getElementById('teacher-results-section');
         const studentSection = document.getElementById('student-section');
         const quizSection = document.getElementById('quiz-section');
         const resultsSection = document.getElementById('results-section');
@@ -559,24 +575,44 @@
             confirmationModal.classList.add('hidden');
             instructionModal.classList.add('hidden');
             document.getElementById('export-pdf-btn').classList.add('hidden');
-
+            
             const part = urlParams.get('part');
             
             if (part === 'teacher') {
-                // Show teacher section
-                teacherSection.classList.remove('hidden');
-                studentSection.classList.add('hidden');
-                // Add the first question form for the teacher
-                addQuestion();
+                showTeacherMenu();
             } else {
                 // Show student section by default
-                teacherSection.classList.add('hidden');
+                teacherMenu.classList.add('hidden');
+                teacherCreateSection.classList.add('hidden');
+                teacherResultsSection.classList.add('hidden');
+                studentSection.classList.add('hidden');
                 studentSection.classList.remove('hidden');
             }
         }
 
+        function showTeacherMenu() {
+            teacherMenu.classList.remove('hidden');
+            teacherCreateSection.classList.add('hidden');
+            teacherResultsSection.classList.add('hidden');
+            studentSection.classList.add('hidden');
+        }
+
+        function showCreateQuiz() {
+            teacherMenu.classList.add('hidden');
+            teacherCreateSection.classList.remove('hidden');
+            // Add the first question form if none exist
+            if (document.getElementById('questions-container').children.length === 0) {
+                addQuestion();
+            }
+        }
+
+        function showViewResults() {
+            teacherMenu.classList.add('hidden');
+            teacherResultsSection.classList.remove('hidden');
+        }
+
         // Teacher functionality
-        document.getElementById('add-question').addEventListener('click', addQuestion);
+        document.getElementById('add-question').addEventListener('click', () => addQuestion());
         document.getElementById('generate-encrypted-file').addEventListener('click', generateEncryptedFile);
         document.getElementById('load-from-json').addEventListener('click', loadQuizFromJson);
 
@@ -586,11 +622,8 @@
             document.getElementById('json-file-name').textContent = fileName;
         });
 
-        document.getElementById('results-upload').addEventListener('change', function() {
-            // This is no longer used for primary result viewing but kept for potential future use.
-            // We can hide or remove the input if it's fully deprecated.
-        });
-
+        document.getElementById('go-to-create-quiz').addEventListener('click', showCreateQuiz);
+        document.getElementById('go-to-view-results').addEventListener('click', showViewResults);
 
         // Student functionality
         document.getElementById('start-quiz').addEventListener('click', startQuiz);
@@ -700,6 +733,7 @@
             const quizTitle = document.getElementById('quiz-title').value;
             const quizSubject = document.getElementById('quiz-subject').value;
             const quizDuration = parseInt(document.getElementById('quiz-duration').value) || 0;
+            const instructionCountdownDuration = parseInt(document.getElementById('instruction-countdown-duration').value) || 30;
             const secretKey = document.getElementById('secret-key').value;
             const questions = document.querySelectorAll('.quiz-question');
             
@@ -721,6 +755,7 @@
                 title: quizTitle,
                 subject: quizSubject,
                 duration: quizDuration,
+                instructionCountdown: instructionCountdownDuration,
                 id: quizId,
                 questions: []
             };
@@ -945,9 +980,9 @@
                 }
             });
         }
-        function showInstructionModal(onComplete) {
+        function showInstructionModal(countdownDuration, onComplete) {
             instructionModal.classList.remove('hidden');
-            let countdown = 30;
+            let countdown = countdownDuration || 30;
             instructionCountdown.textContent = countdown;
 
             const countdownInterval = setInterval(() => {
@@ -1031,7 +1066,8 @@
                     }
 
                     // If the check passes, show the instruction modal, then proceed with the quiz setup.
-                    showInstructionModal(() => {
+                    const countdownDuration = quizData.instructionCountdown || 30;
+                    showInstructionModal(countdownDuration, () => {
                         // Shuffle questions and options before starting
                         shuffleQuiz(quizData);
 
