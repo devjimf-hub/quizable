@@ -361,6 +361,10 @@
                 <input type="text" id="quiz-title" placeholder="Enter quiz title">
             </div>
             <div class="form-group">
+                <label for="quiz-subject">Subject:</label>
+                <input type="text" id="quiz-subject" placeholder="e.g., Web Programming">
+            </div>
+            <div class="form-group">
                 <label for="quiz-duration">Quiz Duration (in minutes, 0 for no limit):</label>
                 <input type="number" id="quiz-duration" min="0" value="0">
             </div>
@@ -403,12 +407,8 @@
                 <input type="text" id="student-quiz-id" placeholder="Enter the Quiz ID">
             </div>
             <div class="form-group">
-                <label for="student-section">Year & Section:</label>
-                <input type="text" id="student-section" placeholder="e.g., BSIT-4A">
-            </div>
-            <div class="form-group">
-                <label for="student-subject">Subject:</label>
-                <input type="text" id="student-subject" placeholder="e.g., PC 4113 - Web Programming">
+                <label for="student-year-section">Year & Section:</label>
+                <input type="text" id="student-year-section" placeholder="e.g., BSIT-4A">
             </div>
             <div class="form-group">
                 <label for="student-first-name">First Name:</label>
@@ -487,7 +487,7 @@
                     <li>Do not switch tabs or minimize the browser window.</li>
                     <li>Do not close the browser until you have submitted the quiz.</li>
                     <li>Violating these rules will be recorded and may result in automatic submission.</li>
-                    <li>Lastly, Submit the downloaded quiz result file to the link provided</li>
+                    <li>Your results will be automatically and securely submitted to your teacher upon completion.</li>
                 </ul>
                 <div style="margin-top: 20px; font-weight: bold;">
                     <p>The quiz will begin in</p>
@@ -698,6 +698,7 @@
         // Generate encrypted quiz file
         function generateEncryptedFile() {
             const quizTitle = document.getElementById('quiz-title').value;
+            const quizSubject = document.getElementById('quiz-subject').value;
             const quizDuration = parseInt(document.getElementById('quiz-duration').value) || 0;
             const secretKey = document.getElementById('secret-key').value;
             const questions = document.querySelectorAll('.quiz-question');
@@ -718,6 +719,7 @@
 
             const quiz = {
                 title: quizTitle,
+                subject: quizSubject,
                 duration: quizDuration,
                 id: quizId,
                 questions: []
@@ -853,7 +855,7 @@
                     <div class="student-result-card">
                         <div>
                             <span><strong>${res.student.lastName}, ${res.student.firstName}</strong> (${res.student.section})</span><br>
-                            <small style="color: #555;">Subject: ${res.student.subject}</small>
+                            <small style="color: #555;">Subject: ${res.subject}</small>
                         </div>
                         <span style="font-weight: bold; color: #3498db;">${res.score} / ${res.totalQuestions}</span>
                     </div>
@@ -874,6 +876,7 @@
             const doc = new jsPDF();
 
             const quizTitle = processedStudentResults[0]?.quizTitle || 'Quiz Results';
+            const quizSubject = processedStudentResults[0]?.subject || 'N/A';
 
             // Main title
             doc.setFontSize(18);
@@ -888,7 +891,7 @@
                 res.student.lastName,
                 res.student.firstName,
                 res.student.section,
-                res.student.subject,
+                res.subject,
                 `${res.score} / ${res.totalQuestions}`
             ]);
 
@@ -903,7 +906,7 @@
                 doc.addPage();
                 doc.setFontSize(16);
                 doc.text(`Detailed Results for: ${res.student.lastName}, ${res.student.firstName}`, 14, 22);
-                doc.text(`(Section: ${res.student.section}, Subject: ${res.student.subject})`, 14, 28);
+                doc.text(`(Section: ${res.student.section}, Subject: ${res.subject})`, 14, 28);
                 const detailHead = [['#', 'Question', 'Student Answer', 'Correct Answer', 'Result']];
                 const detailBody = res.detailedAnswers.map((ans, i) => [
                     i + 1,
@@ -964,8 +967,7 @@
             const quizId = document.getElementById('student-quiz-id').value;
             const firstName = document.getElementById('student-first-name').value;
             const lastName = document.getElementById('student-last-name').value;
-            const section = document.getElementById('student-section').value;
-            const subject = document.getElementById('student-subject').value;
+            const section = document.getElementById('student-year-section').value;
             const secretKey = document.getElementById('student-secret-key').value;
             
             if (!quizId) {
@@ -976,8 +978,8 @@
                 alert('Please enter your first and last name.');
                 return;
             }
-            if (!section || !subject) {
-                alert('Please enter your Year & Section and Subject.');
+            if (!section) {
+                alert('Please enter your Year & Section.');
                 return;
             }
             if (!secretKey) {
@@ -1037,8 +1039,7 @@
                         quizData.student = {
                             firstName,
                             lastName,
-                            section,
-                            subject
+                            section
                         };
 
                         // Store the secret key with the quiz data for encrypting the results later
@@ -1286,6 +1287,7 @@
                 const resultsData = {
                     student: quizData.student,
                     quizTitle: quizData.title,
+                    subject: quizData.subject,
                     score: score,
                     totalQuestions: quizData.questions.length,
                     detailedAnswers: quizData.questions.map((q, i) => ({
@@ -1357,7 +1359,7 @@
             document.getElementById('student-first-name').value = '';
             document.getElementById('student-last-name').value = '';
             document.getElementById('student-section').value = '';
-            document.getElementById('student-subject').value = '';
+            document.getElementById('student-secret-key').value = '';
             
             // Show student section
             resultsSection.classList.add('hidden');
