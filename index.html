@@ -998,10 +998,10 @@
             }, 1000);
         }
         // Start the quiz for student
-        function startQuiz() {
-            const quizId = document.getElementById('student-quiz-id').value;
-            const firstName = document.getElementById('student-first-name').value;
-            const lastName = document.getElementById('student-last-name').value;
+        async function startQuiz() {
+            const quizId = document.getElementById('student-quiz-id').value.trim();
+            const firstName = document.getElementById('student-first-name').value.trim();
+            const lastName = document.getElementById('student-last-name').value.trim();
             const section = document.getElementById('student-year-section').value;
             const secretKey = document.getElementById('student-secret-key').value;
             
@@ -1021,6 +1021,20 @@
                 alert('Please enter the Secret Key provided by your teacher.');
                 return;
             }
+
+            // --- Firebase Double Check ---
+            // Check if a result already exists for this student on Firebase before proceeding.
+            // This is a more robust check than localStorage.
+            const studentIdentifier = `${lastName}_${firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
+            const resultRef = database.ref(`results/${quizId}/${studentIdentifier}`);
+            const snapshot = await resultRef.once('value');
+
+            if (snapshot.exists()) {
+                alert('Our records indicate that you have already submitted this quiz. You cannot take it again. Please contact your teacher if you believe this is an error.');
+                restartQuiz();
+                return;
+            }
+            // --- End Firebase Double Check ---
 
             // Fetch quiz from Firebase
             database.ref('quizzes/' + quizId).once('value').then(snapshot => {
