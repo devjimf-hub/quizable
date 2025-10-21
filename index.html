@@ -3,6 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <!-- jsPDF for PDF Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <title>Secure Quiz Application</title>
@@ -367,7 +372,7 @@
                 <!-- Questions will be added here dynamically -->
             </div>
             <button id="add-question" class="btn">Add Question</button>
-            <button id="generate-encrypted-file" class="btn btn-success" style="margin-top: 20px;">Generate Encrypted File</button>
+            <button id="generate-encrypted-file" class="btn btn-success" style="margin-top: 20px;">Save Quiz to Cloud</button>
         
             <!-- New Results Viewer Section -->
             <div style="margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px;">
@@ -376,10 +381,11 @@
                     <label for="results-upload" class="btn btn-info">Upload Result File</label>
                     <input type="file" id="results-upload" accept=".txt" style="display: none;" multiple>
                     <div style="margin-top: 10px;">
+                        <label for="results-quiz-id">Quiz ID to View Results:</label>
+                        <input type="text" id="results-quiz-id" placeholder="Enter Quiz ID from generation step">
                         <label for="results-secret-key">Secret Key to View Results:</label>
                         <input type="text" id="results-secret-key" placeholder="Enter key used for the quiz">
                     </div>
-                    <span id="results-file-name" class="file-name-display">No file chosen</span>
                 </div>
                 <button id="view-results-btn" class="btn">View Results</button>
                 <div id="student-results-display">
@@ -393,9 +399,16 @@
         <div id="student-section" class="card hidden">
             <h1>Quiz Taker (Student)</h1>
             <div class="form-group">
-                <label for="encrypted-file" class="btn">Choose Quiz File</label>
-                <input type="file" id="encrypted-file" accept=".txt" style="display: none;">
-                <span id="encrypted-file-name" class="file-name-display">No file chosen</span>
+                <label for="student-quiz-id">Quiz ID (from your teacher):</label>
+                <input type="text" id="student-quiz-id" placeholder="Enter the Quiz ID">
+            </div>
+            <div class="form-group">
+                <label for="student-section">Year & Section:</label>
+                <input type="text" id="student-section" placeholder="e.g., BSIT-4A">
+            </div>
+            <div class="form-group">
+                <label for="student-subject">Subject:</label>
+                <input type="text" id="student-subject" placeholder="e.g., PC 4113 - Web Programming">
             </div>
             <div class="form-group">
                 <label for="student-first-name">First Name:</label>
@@ -427,16 +440,10 @@
         <div id="results-section" class="card hidden">
             <h1>Quiz Results</h1>
             <div class="info-message" style="background-color: #e8f5e9; color: #155724; border-color: #c3e6cb; text-align: center;">
-                <p><strong>Submission Complete!</strong></p>
-                <p>Your encrypted results file has been downloaded to your computer.</p>
-                <p>You will now be redirected to the Google Form to upload your results file.</p>
-                <div style="margin: 20px 0;">
-                    <strong id="redirect-countdown" style="font-size: 3em; color: #3498db;">10</strong>
-                </div>
-                <p>If the redirect does not work, please click the "Submit Results Form" button below.</p>
+                <p><strong>Submission Successful!</strong></p>
+                <p>Your results have been securely submitted to your teacher.</p>
+                <p>You may now close this window.</p>
             </div>
-            <a id="download-results-btn" class="btn btn-success hidden" download>Download Results</a>
-            <a href="https://forms.gle/PMXsLnxN8ihcdK3o9" class="btn btn-info" style="margin-top: 10px;">Submit Results Form</a>
             <!-- The download button is no longer needed as download is automatic -->
             <button id="restart-quiz" class="btn">Take Another Quiz</button>
         </div>
@@ -491,6 +498,26 @@
     </div>
 
     <script>
+        // --- FIREBASE INITIALIZATION ---
+        // IMPORTANT: Replace this with your own Firebase project configuration.
+        const firebaseConfig = {
+            apiKey: "AIzaSyAuT2BclaexjC7dVfHmT43eB99GXgXOXB4",
+            authDomain: "quizable-gold.firebaseapp.com",
+            databaseURL: "https://quizable-gold-default-rtdb.firebaseio.com",
+            projectId: "quizable-gold",
+            storageBucket: "quizable-gold.firebasestorage.app",
+            messagingSenderId: "822610236715",
+            appId: "1:822610236715:web:d7f9feecf3d284a474a16e",
+            measurementId: "G-RP9FL5RG88"
+        };
+
+        
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+
         // Global variables
         let quizData = null;
         let currentQuestionIndex = 0;
@@ -532,7 +559,6 @@
             confirmationModal.classList.add('hidden');
             instructionModal.classList.add('hidden');
             document.getElementById('export-pdf-btn').classList.add('hidden');
-            document.getElementById('download-results-btn').classList.add('hidden');
 
             const part = urlParams.get('part');
             
@@ -560,20 +586,9 @@
             document.getElementById('json-file-name').textContent = fileName;
         });
 
-        document.getElementById('encrypted-file').addEventListener('change', function() {
-            const fileName = this.files[0] ? this.files[0].name : 'No file chosen';
-            document.getElementById('encrypted-file-name').textContent = fileName;
-        });
-
         document.getElementById('results-upload').addEventListener('change', function() {
-            const fileCount = this.files.length;
-            const fileNameDisplay = document.getElementById('results-file-name');
-            if (fileCount > 0) {
-                fileNameDisplay.textContent = `${fileCount} file(s) selected. Enter the key and click "View Results".`;
-            } else {
-                fileNameDisplay.textContent = 'No file chosen';
-                document.getElementById('student-results-display').innerHTML = '';
-            }
+            // This is no longer used for primary result viewing but kept for potential future use.
+            // We can hide or remove the input if it's fully deprecated.
         });
 
 
@@ -735,39 +750,45 @@
             }
             
             // Encrypt the data
-            encryptData(JSON.stringify(quiz), secretKey).then(encryptedString => {
-                // Create and download the file
-                const blob = new Blob([encryptedString], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'quiz_encrypted.txt';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                alert('Encrypted quiz file generated successfully!');
+            encryptData(JSON.stringify(quiz), secretKey).then(encryptedQuizData => {
+                // Save to Firebase
+                database.ref('quizzes/' + quiz.id).set({
+                    encryptedQuizData: encryptedQuizData
+                }).then(() => {
+                    // Create and download a file with the quiz credentials
+                    const credentialsContent = `Quiz Title: ${quizTitle}\nQuiz ID: ${quiz.id}\nSecret Key: ${secretKey}`;
+                    const blob = new Blob([credentialsContent], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `quiz_credentials_${quizTitle.replace(/\s+/g, '_') || 'quiz'}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                    // Show a confirmation modal informing the teacher about the download
+                    showConfirmationModal('Quiz Saved!', `The quiz has been saved to the cloud. A file named "${a.download}" containing the Quiz ID and Secret Key has been automatically downloaded for you.`, null);
+                }).catch(error => {
+                    console.error("Firebase save error:", error);
+                    alert("Failed to save quiz to Firebase. See console for details.");
+                });
             }).catch(err => {
                 console.error("Encryption failed:", err);
                 alert("Encryption failed. See console for details.");
             });
         }
 
-        // Click handler for the "View Results" button
         function handleViewResultsClick() {
-            const fileInput = document.getElementById('results-upload');
+            const quizId = document.getElementById('results-quiz-id').value;
             const secretKey = document.getElementById('results-secret-key').value;
 
-            if (fileInput.files.length === 0) {
-                alert('Please select one or more student result files.');
+            if (!quizId || !secretKey) {
+                alert('Please enter both the Quiz ID and the Secret Key.');
                 return;
             }
-            if (!secretKey) {
-                alert('Please enter the Secret Key to decrypt the results.');
-                return;
-            }
-            displayBulkResults(fileInput.files, secretKey);
+
+            fetchAndDisplayResults(quizId, secretKey);
         }
 
         // Decrypt a single result file and return a promise
@@ -792,25 +813,26 @@
             });
         }
 
-        // Process multiple result files, sort, and display them
-        async function displayBulkResults(files, secretKey) {
+        // Fetch results from Firebase, decrypt, sort, and display them
+        async function fetchAndDisplayResults(quizId, secretKey) {
             const resultsDisplay = document.getElementById('student-results-display');
-            resultsDisplay.innerHTML = '<p>Processing files...</p>';
+            resultsDisplay.innerHTML = '<p>Fetching results from Firebase...</p>';
 
-            const promises = Array.from(files).map(file => decryptResultFile(file, secretKey));
-            const results = await Promise.allSettled(promises);
+            const resultsRef = database.ref(`results/${quizId}`);
+            const snapshot = await resultsRef.once('value');
+            const encryptedResults = snapshot.val();
 
-            const validResults = results
-                .filter(result => result.status === 'fulfilled' && result.value)
-                .map(result => result.value);
-
-            const failedFiles = results
-                .filter(result => result.status === 'rejected')
-                .map(result => result.reason.fileName);
-
-            if (failedFiles.length > 0) {
-                alert(`Could not decrypt the following files. This is likely due to an incorrect secret key for these quizzes:\n\n- ${failedFiles.join('\n- ')}`);
+            if (!encryptedResults) {
+                resultsDisplay.innerHTML = '<p>No results found for this Quiz ID.</p>';
+                document.getElementById('export-pdf-btn').classList.add('hidden');
+                return;
             }
+
+            const decryptionPromises = Object.values(encryptedResults).map(encryptedData => 
+                decryptData(encryptedData, secretKey).then(JSON.parse).catch(() => null)
+            );
+
+            const validResults = (await Promise.all(decryptionPromises)).filter(Boolean);
 
             // Sort by last name, then first name
             validResults.sort((a, b) => {
@@ -825,11 +847,14 @@
             processedStudentResults = validResults;
             document.getElementById('export-pdf-btn').classList.toggle('hidden', validResults.length === 0);
 
-            let resultsHTML = `<h3>Student Scores (${validResults.length} of ${files.length} files processed)</h3>`;
+            let resultsHTML = `<h3>Student Scores (${validResults.length} submissions)</h3>`;
             validResults.forEach(res => {
                 resultsHTML += `
                     <div class="student-result-card">
-                        <span><strong>${res.student.lastName}, ${res.student.firstName}</strong></span>
+                        <div>
+                            <span><strong>${res.student.lastName}, ${res.student.firstName}</strong> (${res.student.section})</span><br>
+                            <small style="color: #555;">Subject: ${res.student.subject}</small>
+                        </div>
                         <span style="font-weight: bold; color: #3498db;">${res.score} / ${res.totalQuestions}</span>
                     </div>
                 `;
@@ -858,10 +883,12 @@
             doc.text(`Summary for ${processedStudentResults.length} students.`, 14, 30);
 
             // Summary Table
-            const summaryHead = [['Last Name', 'First Name', 'Score']];
+            const summaryHead = [['Last Name', 'First Name', 'Year & Section', 'Subject', 'Score']];
             const summaryBody = processedStudentResults.map(res => [
                 res.student.lastName,
                 res.student.firstName,
+                res.student.section,
+                res.student.subject,
                 `${res.score} / ${res.totalQuestions}`
             ]);
 
@@ -876,7 +903,7 @@
                 doc.addPage();
                 doc.setFontSize(16);
                 doc.text(`Detailed Results for: ${res.student.lastName}, ${res.student.firstName}`, 14, 22);
-
+                doc.text(`(Section: ${res.student.section}, Subject: ${res.student.subject})`, 14, 28);
                 const detailHead = [['#', 'Question', 'Student Answer', 'Correct Answer', 'Result']];
                 const detailBody = res.detailedAnswers.map((ans, i) => [
                     i + 1,
@@ -885,7 +912,7 @@
                     ans.correctAnswerText,
                     ans.isCorrect ? '✓' : '✗'
                 ]);
-                doc.autoTable({ head: detailHead, body: detailBody, startY: 30 });
+                doc.autoTable({ head: detailHead, body: detailBody, startY: 35 });
             });
 
             doc.save(`${quizTitle.replace(/\s/g, '_')}_Results.pdf`);
@@ -934,31 +961,39 @@
         }
         // Start the quiz for student
         function startQuiz() {
-            const fileInput = document.getElementById('encrypted-file');
+            const quizId = document.getElementById('student-quiz-id').value;
             const firstName = document.getElementById('student-first-name').value;
             const lastName = document.getElementById('student-last-name').value;
+            const section = document.getElementById('student-section').value;
+            const subject = document.getElementById('student-subject').value;
             const secretKey = document.getElementById('student-secret-key').value;
             
-            if (!fileInput.files[0]) {
-                alert('Please upload an encrypted quiz file.');
+            if (!quizId) {
+                alert('Please enter the Quiz ID from your teacher.');
                 return;
             }
-            
             if (!firstName || !lastName) {
                 alert('Please enter your first and last name.');
                 return;
             }
-            
+            if (!section || !subject) {
+                alert('Please enter your Year & Section and Subject.');
+                return;
+            }
             if (!secretKey) {
                 alert('Please enter the Secret Key provided by your teacher.');
                 return;
             }
 
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-            
-            reader.onload = function(e) {
-                decryptData(e.target.result, secretKey).then(decryptedData => {
+            // Fetch quiz from Firebase
+            database.ref('quizzes/' + quizId).once('value').then(snapshot => {
+                const data = snapshot.val();
+                if (!data || !data.encryptedQuizData) {
+                    alert('Quiz not found. Please check the Quiz ID.');
+                    return;
+                }
+
+                decryptData(data.encryptedQuizData, secretKey).then(decryptedData => {
                     if (!decryptedData) {
                         alert('Decryption failed. Please check the Secret Key and file.');
                         return;
@@ -968,7 +1003,7 @@
 
                     // Validate the structure of the quiz data
                     if (!quizData || typeof quizData.title !== 'string' || !Array.isArray(quizData.questions)) {
-                        alert('The provided file is not a valid quiz file. Please check that you have selected the correct file and entered the correct secret key.');
+                        alert('The data for this quiz is invalid. Please check the Quiz ID and Secret Key.');
                         restartQuiz(); // Reset the interface
                         return;
                     }
@@ -1001,7 +1036,9 @@
                         // Store student info
                         quizData.student = {
                             firstName,
-                            lastName
+                            lastName,
+                            section,
+                            subject
                         };
 
                         // Store the secret key with the quiz data for encrypting the results later
@@ -1034,12 +1071,13 @@
                         attemptsCounter.classList.remove('hidden');
                     });
                 }).catch(err => {
-                    alert('Decryption failed. Please make sure you have the correct file and Secret Key. The file might also be corrupted.');
+                    alert('Decryption failed. Please make sure you have the correct Secret Key. The quiz data might also be corrupted.');
                     console.error("Decryption Error:", err);
                 });
-            };
-            
-            reader.readAsText(file);
+            }).catch(error => {
+                alert('Error fetching quiz from the database. Please check your connection and the Quiz ID.');
+                console.error("Firebase fetch error:", error);
+            });
         }
 
         // Display a specific question
@@ -1259,22 +1297,14 @@
                 };
 
                 // Encrypt and trigger download
-                encryptData(JSON.stringify(resultsData), quizData.secretKey).then(encryptedString => {
-                    // Automatically download the result file
-                    const blob = new Blob([encryptedString], { type: 'text/plain' });
-                    const url = URL.createObjectURL(blob);
-                    
-                    const shortQuizName = quizData.title.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-                    const lastName = quizData.student.lastName.toLowerCase();
-                    const firstInitial = quizData.student.firstName.charAt(0).toLowerCase();
-
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${shortQuizName}_${lastName}${firstInitial}.txt`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                encryptData(JSON.stringify(resultsData), quizData.secretKey).then(encryptedResultData => {
+                    // Save result to Firebase
+                    const studentIdentifier = `${quizData.student.lastName}_${quizData.student.firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
+                    database.ref(`results/${quizData.id}/${studentIdentifier}`).set(encryptedResultData)
+                        .catch(error => {
+                            console.error("Firebase result submission error:", error);
+                            alert("There was an error submitting your results. Please check your internet connection and try again, or contact your teacher.");
+                        });
                 });
 
                 // Deactivate quiz monitoring
@@ -1285,21 +1315,6 @@
                 // Remove event listeners to prevent them from firing after the quiz
                 window.removeEventListener('blur', handleFocusLoss);
                 document.removeEventListener('visibilitychange', handleVisibilityChange);
-
-                // Start countdown to redirect
-                let redirectCountdown = 10;
-                const countdownElement = document.getElementById('redirect-countdown');
-                const redirectInterval = setInterval(() => {
-                    redirectCountdown--;
-                    if (countdownElement) {
-                        countdownElement.textContent = redirectCountdown;
-                    }
-                    if (redirectCountdown <= 0) {
-                        clearInterval(redirectInterval);
-                        // Redirect to the Google Form
-                        window.location.href = 'https://forms.gle/PMXsLnxN8ihcdK3o9';
-                    }
-                }, 1000);
 
             };
 
@@ -1338,16 +1353,17 @@
             quizStartTime = 0;
             
             // Clear form inputs
-            document.getElementById('encrypted-file').value = '';
+            document.getElementById('student-quiz-id').value = '';
             document.getElementById('student-first-name').value = '';
             document.getElementById('student-last-name').value = '';
+            document.getElementById('student-section').value = '';
+            document.getElementById('student-subject').value = '';
             
             // Show student section
             resultsSection.classList.add('hidden');
             studentSection.classList.remove('hidden'); // Go back to student form
             tabWarning.classList.add('hidden');
             document.getElementById('export-pdf-btn').classList.add('hidden');
-            document.getElementById('download-results-btn').classList.add('hidden');
             attemptsCounter.classList.add('hidden');
             timerDisplay.classList.add('hidden');
 
