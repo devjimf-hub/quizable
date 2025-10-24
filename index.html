@@ -413,6 +413,10 @@
                 <input type="number" id="quiz-duration" min="0" value="0">
             </div>
             <div class="form-group">
+                <label for="quiz-expiry">Quiz Expiry Date & Time (optional):</label>
+                <input type="datetime-local" id="quiz-expiry">
+            </div>
+            <div class="form-group">
                 <label for="instruction-countdown-duration">Instruction Countdown (in seconds):</label>
                 <input type="number" id="instruction-countdown-duration" min="5" value="30">
             </div>
@@ -583,7 +587,6 @@
         let allStudentResults = []; // To store all results for a quiz
         let processedStudentResults = []; // To store results for PDF export
         let quizStartTime = 0;
-
         // DOM Elements (Teacher)
         const teacherMenu = document.getElementById('teacher-menu');
         const teacherCreateSection = document.getElementById('teacher-create-section');
@@ -787,6 +790,7 @@
             const quizTitle = document.getElementById('quiz-title').value;
             const quizSubject = document.getElementById('quiz-subject').value;
             const quizDuration = parseInt(document.getElementById('quiz-duration').value) || 0;
+            const quizExpiry = document.getElementById('quiz-expiry').value;
             const instructionCountdownDuration = parseInt(document.getElementById('instruction-countdown-duration').value) || 30;
             const secretKey = document.getElementById('secret-key').value;
             const questions = document.querySelectorAll('.quiz-question');
@@ -809,6 +813,7 @@
                 title: quizTitle,
                 subject: quizSubject,
                 duration: quizDuration,
+                expiry: quizExpiry ? new Date(quizExpiry).getTime() : null, // Store as timestamp
                 instructionCountdown: instructionCountdownDuration,
                 id: quizId,
                 questions: []
@@ -1104,6 +1109,22 @@
                 }
             }, 1000);
         }
+
+        // Fetches the current time from a reliable server to prevent client-side manipulation
+        async function getServerTime() {
+            try {
+                const response = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC');
+                if (!response.ok) {
+                    throw new Error(`API response not OK: ${response.statusText}`);
+                }
+                const data = await response.json();
+                return new Date(data.utc_datetime).getTime();
+            } catch (error) {
+                console.error("Could not fetch server time:", error);
+                return null; // Return null to indicate failure
+            }
+        }
+
         // Start the quiz for student
         async function startQuiz() {
             const quizId = document.getElementById('student-quiz-id').value.trim();
@@ -1158,6 +1179,23 @@
                     }
 
                     quizData = JSON.parse(decryptedData);
+
+                    // Check for quiz expiration using server time for accuracy
+                    if (quizData.expiry) {
+                        const currentTime = await getServerTime();
+                        if (currentTime === null) {
+                            alert('Could not verify the current time. Please check your internet connection and try again.');
+                            return; // Block quiz start if time can't be verified
+                        }
+
+                        if (currentTime > quizData.expiry) {
+                            const expiryDate = new Date(quizData.expiry).toLocaleString();
+                            alert(`This quiz has expired. The deadline was ${expiryDate}. You can no longer take this quiz.`);
+                            restartQuiz();
+                            return;
+                        }
+                    }
+
 
                     // Validate the structure of the quiz data
                     if (!quizData || typeof quizData.title !== 'string' || !Array.isArray(quizData.questions)) {
