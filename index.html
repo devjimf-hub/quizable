@@ -674,6 +674,15 @@
         document.getElementById('restart-quiz').addEventListener('click', restartQuiz);
         document.getElementById('view-results-btn').addEventListener('click', handleViewResultsClick);
 
+        // One-time check to see if DevTools is open.
+        function isDevToolsOpen() {
+            const threshold = 160; // Milliseconds threshold. If DevTools is open, it will pause on `debugger` and the time difference will be large.
+            const start = performance.now();
+            debugger;
+            const end = performance.now();
+            return end - start > threshold;
+        }
+
         // --- DEVTOOLS & CHEATING PREVENTION ---
         // Disable right-click context menu during the quiz
         window.addEventListener('contextmenu', (e) => {
@@ -1133,6 +1142,12 @@
             const section = document.getElementById('student-year-section').value;
             const secretKey = document.getElementById('student-secret-key').value;
             
+            // First, check if developer tools are open before proceeding.
+            if (isDevToolsOpen()) {
+                alert('Please close the developer tools before starting the quiz.');
+                return;
+            }
+
             if (!quizId) {
                 alert('Please enter the Quiz ID from your teacher.');
                 return;
