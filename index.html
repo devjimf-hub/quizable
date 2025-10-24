@@ -111,7 +111,7 @@
             font-weight: 600;
         }
         
-        input[type="text"], input[type="file"], input[type="number"] {
+        input[type="text"], input[type="file"], input[type="number"], input[type="datetime-local"] {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
@@ -1172,7 +1172,7 @@
                     return;
                 }
 
-                decryptData(data.encryptedQuizData, secretKey).then(decryptedData => {
+                decryptData(data.encryptedQuizData, secretKey).then(async decryptedData => {
                     if (!decryptedData) {
                         alert('Decryption failed. Please check the Secret Key and file.');
                         return;
