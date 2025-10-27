@@ -1485,7 +1485,7 @@
                     return;
                 }
 
-                const minutes = Math.floor((remainingTime / 1000 / 60) % 60);
+                const minutes = Math.floor(remainingTime / (1000 * 60));
                 const seconds = Math.floor((remainingTime / 1000) % 60);
 
                 const formattedMinutes = minutes.toString().padStart(2, '0');
