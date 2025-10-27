@@ -111,7 +111,7 @@
             font-weight: 600;
         }
         
-        input[type="text"], input[type="file"], input[type="number"], input[type="datetime-local"] {
+        input[type="text"], input[type="file"], input[type="number"], input[type="datetime-local"], textarea {
             width: 100%;
             padding: 10px;
             border: 1px solid #ddd;
@@ -125,6 +125,19 @@
             border: 1px solid #e1e1e1;
             border-radius: 5px;
             background-color: #f9f9f9;
+        }
+
+        .quiz-figure {
+            margin-bottom: 15px;
+            text-align: center;
+            border: 1px solid #eee;
+            padding: 10px;
+        }
+
+        .quiz-figure svg {
+            max-width: 100%;
+            height: auto;
+            display: block;
         }
         
         .quiz-options {
@@ -382,20 +395,25 @@
             <button class="btn" onclick="showTeacherMenu()">&larr; Back to Dashboard</button>
             <h1 style="margin-top: 15px;">Quiz Creator</h1>
             <div class="info-message">
-                This is the teacher interface for creating encrypted quiz files. Students will not see this section.
+                Create a quiz by filling out the form below, or load questions from a JSON file or pasted text.
             </div>
             <div class="form-group">
-                <h2>Load from File</h2>
+                <h2>Load Questions</h2>
                 <label for="json-upload" class="btn btn-info">Choose JSON File</label>
                 <input type="file" id="json-upload" accept=".json" style="display: none;">
                 <span id="json-file-name" class="file-name-display">No file chosen</span>
                 <button id="load-from-json" class="btn btn-info" style="margin-top: 10px;">Load from JSON</button>
+                <hr style="margin: 20px 0; border-top: 1px solid #eee;">
+                <label for="pasted-json-input">Or Paste JSON Text Below:</label>
+                <textarea id="pasted-json-input" rows="8" placeholder="Paste your JSON quiz data here..."></textarea>
+                <button id="load-from-pasted-json" class="btn btn-info" style="margin-top: 10px;">Load from Pasted Text</button>
+
                 <div class="json-template">
                     <strong>JSON Format Example:</strong>
 <pre>{
   "title": "Sample Quiz",
   "questions": [
-    { "text": "What is 2+2?", "options": ["3", "4", "5"], "correctAnswer": 1 },
+    { "text": "What is 2+2?", "options": ["3", "4", "5"], "correctAnswer": 1, "figure": "&lt;svg...&gt;" },
     { "text": "Capital of France?", "options": ["Berlin", "Paris"], "correctAnswer": 1 }
   ]
 }</pre></div>
@@ -423,6 +441,18 @@
             <div class="form-group">
                 <label for="secret-key">Secret Key (Password for Encryption):</label>
                 <input type="text" id="secret-key" placeholder="Enter a strong password">
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="show-results-to-student" checked style="width: auto;">
+                    Allow students to see their score and summary after submission
+                </label>
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="save-results-to-cloud" checked style="width: auto;">
+                    Save student results to the cloud (Firebase)
+                </label>
             </div>
             <div id="questions-container">
                 <!-- Questions will be added here dynamically -->
@@ -495,13 +525,17 @@
         <!-- Results Section -->
         <div id="results-section" class="card hidden">
             <h1>Quiz Results</h1>
-            <div class="info-message" style="background-color: #e8f5e9; color: #155724; border-color: #c3e6cb; text-align: center;">
+            <div id="submission-success-message" class="info-message" style="background-color: #e8f5e9; color: #155724; border-color: #c3e6cb; text-align: center;">
                 <p><strong>Submission Successful!</strong></p>
                 <p>Your results have been securely submitted to your teacher.</p>
                 <p>You may now close this window.</p>
             </div>
+            <div id="student-score-summary" class="hidden">
+                <!-- Score and summary will be injected here -->
+            </div>
             <!-- The download button is no longer needed as download is automatic -->
             <button id="restart-quiz" class="btn">Take Another Quiz</button>
+            <button id="download-student-pdf-btn" class="btn btn-info hidden">Download Results as PDF</button>
         </div>
 
         <!-- Tab Warning -->
@@ -658,6 +692,7 @@
         document.getElementById('add-question').addEventListener('click', () => addQuestion());
         document.getElementById('generate-encrypted-file').addEventListener('click', generateEncryptedFile);
         document.getElementById('load-from-json').addEventListener('click', loadQuizFromJson);
+        document.getElementById('load-from-pasted-json').addEventListener('click', loadQuizFromPastedText);
 
         // Add listeners to display selected file names
         document.getElementById('json-upload').addEventListener('change', function() {
@@ -715,6 +750,7 @@
 
             // Pre-fill values from JSON if available, otherwise use defaults
             const text = questionData ? questionData.text : '';
+            const figure = questionData ? (questionData.figure || '') : '';
             const options = questionData ? questionData.options.join(' | ') : '';
             const correctAnswer = questionData ? questionData.correctAnswer : 0;
             
@@ -724,11 +760,15 @@
                 <h3>Question ${questionIndex + 1}</h3>
                 <div class="form-group">
                     <label>Question Text:</label>
-                    <input type="text" class="question-text" placeholder="Enter question text" value="${text}">
+                    <textarea id="question-text-${questionIndex}" class="question-text" placeholder="Enter question text" rows="4"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="question-figure-${questionIndex}">Figure (optional, paste SVG/HTML here):</label>
+                    <textarea id="question-figure-${questionIndex}" class="question-figure" placeholder="e.g., <svg>...</svg> or <img src=...>" rows="3"></textarea>
                 </div>
                 <div class="form-group">
                     <label>Options (separated by a pipe character: |):</label>
-                    <input type="text" class="question-options" placeholder="Option A | Option B | Option C" value="${options}">
+                    <input type="text" class="question-options" placeholder="Option A | Option B | Option C">
                 </div>
                 <div class="form-group">
                     <label>Correct Answer (index, starting from 0):</label>
@@ -738,6 +778,13 @@
             `;
             
             questionsContainer.appendChild(questionDiv);
+
+            // Safely set the value of the textarea to handle special characters and newlines
+            if (questionData) {
+                questionDiv.querySelector('.question-text').value = text;
+                questionDiv.querySelector('.question-figure').value = figure;
+                questionDiv.querySelector('.question-options').value = questionData.options.join(' | ');
+            }
             
             // Add event listener for remove button
             questionDiv.querySelector('.remove-question').addEventListener('click', function() {
@@ -794,6 +841,47 @@
             reader.readAsText(file);
         }
 
+        // Load quiz data from pasted JSON text
+        function loadQuizFromPastedText() {
+            const jsonText = document.getElementById('pasted-json-input').value;
+            if (!jsonText.trim()) {
+                alert('Please paste your JSON data into the text area before loading.');
+                return;
+            }
+            processJsonData(jsonText);
+        }
+
+        // Central function to process JSON data (from file or text) and populate the form
+        function processJsonData(jsonDataString) {
+            try {
+                const quizJson = JSON.parse(jsonDataString);
+
+                if (!quizJson.title || !Array.isArray(quizJson.questions)) {
+                    throw new Error('Invalid JSON format. "title" and "questions" array are required.');
+                }
+
+                if (quizJson.questions.length === 0) {
+                    throw new Error('The JSON file must contain at least one question.');
+                }
+
+                // Populate the form with the loaded data
+                document.getElementById('quiz-title').value = quizJson.title;
+
+                const questionsContainer = document.getElementById('questions-container');
+                questionsContainer.innerHTML = ''; // Clear existing questions
+
+                quizJson.questions.forEach(questionData => {
+                    addQuestion(questionData);
+                });
+
+                alert('Quiz loaded successfully from JSON!');
+
+            } catch (error) {
+                alert('Failed to load or parse JSON. Please check the format and content.');
+                console.error('JSON Load Error:', error);
+            }
+        }
+
         // Generate encrypted quiz file
         function generateEncryptedFile() {
             const quizTitle = document.getElementById('quiz-title').value;
@@ -801,6 +889,8 @@
             const quizDuration = parseInt(document.getElementById('quiz-duration').value) || 0;
             const quizExpiry = document.getElementById('quiz-expiry').value;
             const instructionCountdownDuration = parseInt(document.getElementById('instruction-countdown-duration').value) || 30;
+            const showResultsToStudent = document.getElementById('show-results-to-student').checked;
+            const saveResultsToCloud = document.getElementById('save-results-to-cloud').checked;
             const secretKey = document.getElementById('secret-key').value;
             const questions = document.querySelectorAll('.quiz-question');
             
@@ -824,12 +914,15 @@
                 duration: quizDuration,
                 expiry: quizExpiry ? new Date(quizExpiry).getTime() : null, // Store as timestamp
                 instructionCountdown: instructionCountdownDuration,
+                showResultsToStudent: showResultsToStudent,
+                saveResultsToCloud: saveResultsToCloud,
                 id: quizId,
                 questions: []
             };
             
             questions.forEach((q, index) => {
                 const text = q.querySelector('.question-text').value;
+                const figure = q.querySelector('.question-figure').value;
                 // Filter out any empty strings that result from trailing commas or extra spaces
                 const options = q.querySelector('.question-options').value.split('|')
                                  .map(opt => opt.trim()).filter(opt => opt !== '');
@@ -839,6 +932,7 @@
                 if (text && options.length >= 2 && !isNaN(correctAnswer) && correctAnswer >= 0 && correctAnswer < options.length) {
                     quiz.questions.push({
                         text,
+                        figure: figure || null,
                         options,
                         correctAnswer
                     });
@@ -885,8 +979,8 @@
         }
 
         function handleViewResultsClick() {
-            const quizId = document.getElementById('results-quiz-id').value;
-            const secretKey = document.getElementById('results-secret-key').value;
+            const quizId = document.getElementById('results-quiz-id').value.trim();
+            const secretKey = document.getElementById('results-secret-key').value.trim();
 
             if (!quizId || !secretKey) {
                 alert('Please enter both the Quiz ID and the Secret Key.');
@@ -1122,15 +1216,20 @@
         // Fetches the current time from a reliable server to prevent client-side manipulation
         async function getServerTime() {
             try {
-                const response = await fetch('https://worldtimeapi.org/api/timezone/Etc/UTC');
-                if (!response.ok) {
-                    throw new Error(`API response not OK: ${response.statusText}`);
-                }
-                const data = await response.json();
-                return new Date(data.utc_datetime).getTime();
+                // Use a temporary Firebase location to get the server timestamp.
+                // This is more reliable than a third-party API.
+                const offsetRef = database.ref(".info/serverTimeOffset");
+                const offsetSnap = await offsetRef.once("value");
+                const offset = offsetSnap.val() || 0;
+
+                // The server time is the current client time plus the offset.
+                return Date.now() + offset;
             } catch (error) {
-                console.error("Could not fetch server time:", error);
-                return null; // Return null to indicate failure
+                console.error("Could not get Firebase server time:", error);
+                // Fallback to client time with a warning if Firebase time fails.
+                // This is less secure but better than blocking the quiz entirely.
+                alert('Warning: Could not verify server time. Using local time, which may be inaccurate.');
+                return Date.now();
             }
         }
 
@@ -1139,8 +1238,8 @@
             const quizId = document.getElementById('student-quiz-id').value.trim();
             const firstName = document.getElementById('student-first-name').value.trim();
             const lastName = document.getElementById('student-last-name').value.trim();
-            const section = document.getElementById('student-year-section').value;
-            const secretKey = document.getElementById('student-secret-key').value;
+            const section = document.getElementById('student-year-section').value.trim();
+            const secretKey = document.getElementById('student-secret-key').value.trim();
             
             // First, check if developer tools are open before proceeding.
             if (isDevToolsOpen()) {
@@ -1305,6 +1404,11 @@
             document.getElementById('quiz-progress').style.width = `${progress}%`;
             
             // Create question HTML
+            let figureHTML = '';
+            if (question.figure) {
+                figureHTML = `<div class="quiz-figure">${question.figure}</div>`;
+            }
+
             let optionsHTML = '';
             question.options.forEach((option, i) => {
                 const isSelected = studentAnswers[index] === i;
@@ -1319,6 +1423,7 @@
                 <div class="quiz-question">
                     <h3>Question ${index + 1} of ${quizData.questions.length}</h3>
                     <p>${question.text}</p>
+                    ${figureHTML}
                     <div class="quiz-options">
                         ${optionsHTML}
                     </div>
@@ -1502,6 +1607,68 @@
                     }
                 });
                 
+                // Create the results data object
+                const resultsData = {
+                    student: quizData.student,
+                    quizTitle: quizData.title,
+                    subject: quizData.subject,
+                    score: score,
+                    totalQuestions: quizData.questions.length,
+                    detailedAnswers: quizData.questions.map((q, i) => ({
+                        questionText: q.text,
+                        figure: q.figure,
+                        studentAnswerText: studentAnswers[i] !== null ? q.options[studentAnswers[i]] : 'Not Answered',
+                        correctAnswerText: q.options[q.correctAnswer],
+                        isCorrect: studentAnswers[i] === q.correctAnswer
+                    }))
+                };
+
+                // Make resultsData available for the PDF download function
+                window.studentResultsDataForPdf = resultsData;
+
+                // Conditionally show score and summary to the student
+                if (quizData.showResultsToStudent) {
+                    document.getElementById('submission-success-message').classList.add('hidden');
+                    const scoreSummaryContainer = document.getElementById('student-score-summary');
+                    
+                    let summaryHTML = `
+                        <div class="score-display">
+                            Your Score: ${score} / ${quizData.questions.length}
+                        </div>
+                        <h3>Answer Summary</h3>
+                    `;
+
+                    resultsData.detailedAnswers.forEach((answer, index) => {
+                        const resultClass = answer.isCorrect ? 'btn-success' : 'btn-danger';
+                        const resultIcon = answer.isCorrect ? '✓ Correct' : '✗ Incorrect';
+                        
+                        let figureHTML = '';
+                        if (answer.figure) {
+                            figureHTML = `<div class="quiz-figure">${answer.figure}</div>`;
+                        }
+
+                        summaryHTML += `
+                            <div class="quiz-question">
+                                <p><strong>Question ${index + 1}:</strong> ${answer.questionText}</p>
+                                ${figureHTML}
+                                <p>Your Answer: ${answer.studentAnswerText || '<em>Not Answered</em>'}</p>
+                                <p>Correct Answer: ${answer.correctAnswerText}</p>
+                                <p><span class="btn ${resultClass}" style="cursor: default; font-size: 12px; padding: 3px 8px;">${resultIcon}</span></p>
+                            </div>
+                        `;
+                    });
+
+                    scoreSummaryContainer.innerHTML = summaryHTML;
+                    scoreSummaryContainer.classList.remove('hidden');
+                    document.getElementById('download-student-pdf-btn').classList.remove('hidden');
+                } else {
+                    // Default behavior: hide summary and show generic success message
+                    document.getElementById('submission-success-message').classList.remove('hidden');
+                    document.getElementById('student-score-summary').classList.add('hidden');
+                    document.getElementById('download-student-pdf-btn').classList.add('hidden');
+                }
+
+
                 // Display results
                 quizSection.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
@@ -1516,31 +1683,18 @@
                     console.warn("Could not save quiz attempt record. This might happen if localStorage is disabled.", e);
                 }
 
-                // Create and encrypt the results data for download
-                const resultsData = {
-                    student: quizData.student,
-                    quizTitle: quizData.title,
-                    subject: quizData.subject,
-                    score: score,
-                    totalQuestions: quizData.questions.length,
-                    detailedAnswers: quizData.questions.map((q, i) => ({
-                        questionText: q.text,
-                        studentAnswerText: studentAnswers[i] !== null ? q.options[studentAnswers[i]] : 'Not Answered',
-                        correctAnswerText: q.options[q.correctAnswer],
-                        isCorrect: studentAnswers[i] === q.correctAnswer
-                    }))
-                };
-
                 // Encrypt and trigger download
-                encryptData(JSON.stringify(resultsData), quizData.secretKey).then(encryptedResultData => {
-                    // Save result to Firebase
-                    const studentIdentifier = `${quizData.student.lastName}_${quizData.student.firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
-                    database.ref(`results/${quizData.id}/${studentIdentifier}`).set(encryptedResultData)
-                        .catch(error => {
-                            console.error("Firebase result submission error:", error);
-                            alert("There was an error submitting your results. Please check your internet connection and try again, or contact your teacher.");
-                        });
-                });
+                if (quizData.saveResultsToCloud !== false) { // Default to true if undefined for older quizzes
+                    encryptData(JSON.stringify(resultsData), quizData.secretKey).then(encryptedResultData => {
+                        // Save result to Firebase
+                        const studentIdentifier = `${quizData.student.lastName}_${quizData.student.firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
+                        database.ref(`results/${quizData.id}/${studentIdentifier}`).set(encryptedResultData)
+                            .catch(error => {
+                                console.error("Firebase result submission error:", error);
+                                alert("There was an error submitting your results. Please check your internet connection and try again, or contact your teacher.");
+                            });
+                    });
+                }
 
                 // Deactivate quiz monitoring
                 isQuizActive = false;
@@ -1577,6 +1731,49 @@
             }
         }
 
+        // Generate a PDF for the student's own results
+        function downloadStudentResultsAsPdf() {
+            const res = window.studentResultsDataForPdf;
+            if (!res) {
+                alert('Result data is not available for download.');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            // Main title
+            doc.setFontSize(18);
+            doc.text(res.quizTitle || 'Quiz Results', 14, 22);
+
+            // Student Info
+            doc.setFontSize(12);
+            doc.setTextColor(50);
+            doc.text(`Student: ${res.student.firstName} ${res.student.lastName}`, 14, 32);
+            doc.text(`Section: ${res.student.section}`, 14, 38);
+            doc.text(`Subject: ${res.subject || 'N/A'}`, 14, 44);
+
+            // Score
+            doc.setFontSize(14);
+            doc.setTextColor(0);
+            doc.text(`Final Score: ${res.score} / ${res.totalQuestions}`, 14, 54);
+
+            // Detailed Answers Table
+            const detailHead = [['#', 'Question', 'Your Answer', 'Correct Answer', 'Result']];
+            const detailBody = res.detailedAnswers.map((ans, i) => [
+                i + 1,
+                ans.questionText,
+                ans.studentAnswerText,
+                ans.correctAnswerText,
+                ans.isCorrect ? '✓ Correct' : '✗ Incorrect'
+            ]);
+
+            doc.autoTable({ head: detailHead, body: detailBody, startY: 65 });
+
+            const fileName = `My_Quiz_Results_${res.quizTitle.replace(/\s/g, '_') || 'Quiz'}.pdf`;
+            doc.save(fileName);
+        }
+
         // Restart the quiz
         function restartQuiz() {
             // Reset all state
@@ -1588,6 +1785,7 @@
             stopDevToolsDetection();
             isQuizActive = false;
             quizStartTime = 0;
+            window.studentResultsDataForPdf = null; // Clear the results data
             
             // Clear form inputs
             document.getElementById('student-quiz-id').value = '';
@@ -1601,6 +1799,7 @@
             studentSection.classList.remove('hidden'); // Go back to student form
             tabWarning.classList.add('hidden');
             document.getElementById('export-pdf-btn').classList.add('hidden');
+            document.getElementById('download-student-pdf-btn').classList.add('hidden');
             attemptsCounter.classList.add('hidden');
             timerDisplay.classList.add('hidden');
 
@@ -1612,6 +1811,7 @@
         // Initialize the application
         window.onload = function() {
             initializeApp();
+            document.getElementById('download-student-pdf-btn').addEventListener('click', downloadStudentResultsAsPdf);
         };
     </script>
 
