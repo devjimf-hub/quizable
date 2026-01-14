@@ -8,9 +8,10 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 
     <!-- jsPDF for PDF Export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/jspdf-autotable@3.5.23/dist/jspdf.plugin.autotable.min.js" crossorigin="anonymous"></script>
     <title>Quizable</title>
+    <link rel="icon" href="logo.jpg" type="image/jpeg">
     <style>
         * {
             margin: 0;
@@ -162,6 +163,14 @@
             border-color: #3498db;
         }
         
+        /* Prevent text selection in the quiz area */
+        #quiz-section {
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE10+/Edge */
+            user-select: none; /* Standard syntax */
+        }
+        
         .warning {
             background-color: #fff3cd;
             color: #856404;
@@ -213,14 +222,17 @@
         }
         
         .timer-display {
-            position: fixed;
-            top: 10px;
-            left: 10px;
+            position: sticky;
+            top: 0;
             background-color: #3498db;
             color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
+            padding: 15px;
+            margin: -30px -30px 20px -30px;
+            border-radius: 10px 10px 0 0;
+            text-align: center;
+            z-index: 100;
             font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         
         .progress-bar {
@@ -374,6 +386,19 @@
         }
 
         .section-checkbox-group label { display: flex; align-items: center; gap: 5px; margin-bottom: 0; }
+
+        /* Anti-screenshot / Privacy */
+        @media print {
+            html, body {
+                display: none !important;
+            }
+        }
+        
+        .privacy-blur {
+            filter: blur(10px);
+            -webkit-filter: blur(10px);
+            transition: filter 0.2s;
+        }
     </style>
 </head>
 <body>
@@ -454,6 +479,12 @@
                     Save student results to the cloud (Firebase)
                 </label>
             </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="randomize-order" checked style="width: auto;">
+                    Randomize question and option order for each student
+                </label>
+            </div>
             <div id="questions-container">
                 <!-- Questions will be added here dynamically -->
             </div>
@@ -513,12 +544,18 @@
 
         <!-- Quiz Section -->
         <div id="quiz-section" class="card hidden">
+            <div id="timer-display" class="timer-display hidden">
+                Time Left: 00:00
+            </div>
             <h1 id="quiz-title-display">Quiz Title</h1>
             <div class="progress-bar">
                 <div class="progress" id="quiz-progress"></div>
             </div>
             <div id="quiz-questions">
                 <!-- Questions will be displayed here -->
+            </div>
+            <div id="quiz-review" class="hidden">
+                <!-- Review content will be injected here -->
             </div>
         </div>
 
@@ -549,11 +586,6 @@
         <!-- Attempts Counter -->
         <div id="attempts-counter" class="attempts-counter hidden">
             Switching Attempts: <span id="attempts-count">0</span>/3
-        </div>
-
-        <!-- Timer Display -->
-        <div id="timer-display" class="timer-display hidden">
-            Time Left: 00:00
         </div>
 
         <!-- Custom Confirmation Modal -->
@@ -709,6 +741,16 @@
         document.getElementById('restart-quiz').addEventListener('click', restartQuiz);
         document.getElementById('view-results-btn').addEventListener('click', handleViewResultsClick);
 
+        // Auto-trim Quiz ID inputs on blur to prevent errors
+        ['student-quiz-id', 'results-quiz-id'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('blur', function() {
+                    this.value = this.value.trim();
+                });
+            }
+        });
+
         // One-time check to see if DevTools is open.
         function isDevToolsOpen() {
             const threshold = 160; // Milliseconds threshold. If DevTools is open, it will pause on `debugger` and the time difference will be large.
@@ -724,6 +766,15 @@
             if (isQuizActive) {
                 e.preventDefault();
             }
+        });
+
+        // Block copy, cut, and drag operations
+        ['copy', 'cut', 'dragstart'].forEach(event => {
+            window.addEventListener(event, (e) => {
+                if (isQuizActive) {
+                    e.preventDefault();
+                }
+            });
         });
 
         // Block keyboard shortcuts for DevTools
@@ -886,11 +937,12 @@
         function generateEncryptedFile() {
             const quizTitle = document.getElementById('quiz-title').value;
             const quizSubject = document.getElementById('quiz-subject').value;
-            const quizDuration = parseInt(document.getElementById('quiz-duration').value) || 0;
+            const quizDuration = parseFloat(document.getElementById('quiz-duration').value) || 0;
             const quizExpiry = document.getElementById('quiz-expiry').value;
             const instructionCountdownDuration = parseInt(document.getElementById('instruction-countdown-duration').value) || 30;
             const showResultsToStudent = document.getElementById('show-results-to-student').checked;
             const saveResultsToCloud = document.getElementById('save-results-to-cloud').checked;
+            const randomizeOrder = document.getElementById('randomize-order').checked;
             const secretKey = document.getElementById('secret-key').value;
             const questions = document.querySelectorAll('.quiz-question');
             
@@ -916,6 +968,7 @@
                 instructionCountdown: instructionCountdownDuration,
                 showResultsToStudent: showResultsToStudent,
                 saveResultsToCloud: saveResultsToCloud,
+                randomizeOrder: randomizeOrder,
                 id: quizId,
                 questions: []
             };
@@ -1233,6 +1286,24 @@
             }
         }
 
+        // Anti-screenshot functions
+        function togglePrivacyBlur(e) {
+            if (!isQuizActive) return;
+            if (e.type === 'blur') {
+                document.body.classList.add('privacy-blur');
+            } else if (e.type === 'focus') {
+                document.body.classList.remove('privacy-blur');
+            }
+        }
+
+        function handlePrintScreen(e) {
+            if (isQuizActive && e.key === 'PrintScreen') {
+                document.body.style.visibility = 'hidden';
+                alert('Screenshots are not allowed.');
+                document.body.style.visibility = 'visible';
+            }
+        }
+
         // Start the quiz for student
         async function startQuiz() {
             const quizId = document.getElementById('student-quiz-id').value.trim();
@@ -1342,7 +1413,9 @@
                     const countdownDuration = quizData.instructionCountdown || 30;
                     showInstructionModal(countdownDuration, () => {
                         // Shuffle questions and options before starting
-                        shuffleQuiz(quizData);
+                        if (quizData.randomizeOrder !== false) {
+                            shuffleQuiz(quizData);
+                        }
 
                         // Store student info
                         quizData.student = {
@@ -1369,8 +1442,8 @@
                         updateAttemptsDisplay();
 
                         // Start the timer if one is set
-                        if (quizData.duration > 0) {
-                            startQuizTimer(quizData.duration);
+                        if (quizData.duration > 0 || quizData.expiry) {
+                            startQuizTimer(quizData.duration, quizData.expiry);
                         }
 
                         // Activate quiz monitoring
@@ -1378,6 +1451,11 @@
                         isQuizActive = true;
                         window.addEventListener('blur', handleFocusLoss);
                         document.addEventListener('visibilitychange', handleVisibilityChange);
+                        
+                        // Add anti-screenshot listeners
+                        window.addEventListener('blur', togglePrivacyBlur);
+                        window.addEventListener('focus', togglePrivacyBlur);
+                        document.addEventListener('keyup', handlePrintScreen);
                         startDevToolsDetection(); // Start detecting DevTools
                         attemptsCounter.classList.remove('hidden');
                     });
@@ -1398,6 +1476,10 @@
             currentQuestionIndex = index;
             const question = quizData.questions[index];
             const quizQuestions = document.getElementById('quiz-questions');
+            
+            // Ensure review page is hidden and questions are shown
+            document.getElementById('quiz-review').classList.add('hidden');
+            quizQuestions.classList.remove('hidden');
             
             // Update progress bar
             const progress = ((index + 1) / quizData.questions.length) * 100;
@@ -1431,7 +1513,7 @@
                 <div style="display: flex; justify-content: space-between; margin-top: 20px;">
                     <button id="prev-question" class="btn" ${index === 0 ? 'disabled' : ''}>Previous</button>                    
                     ${index === quizData.questions.length - 1 
-                        ? `<button id="submit-quiz" class="btn btn-success">Submit Quiz</button>`
+                        ? `<button id="review-quiz" class="btn btn-info">Review Answers</button>`
                         : `<button id="next-question" class="btn">Next</button>`
                     }
                 </div>
@@ -1459,8 +1541,8 @@
             
             // Add event listener for Next or Submit button
             if (index === quizData.questions.length - 1) {
-                document.getElementById('submit-quiz').addEventListener('click', function() {
-                    submitQuiz(); // Call with no arguments to ensure isAutoSubmit is false
+                document.getElementById('review-quiz').addEventListener('click', function() {
+                    showReviewPage();
                 });
             } else {
                 document.getElementById('next-question').addEventListener('click', function() {
@@ -1469,10 +1551,75 @@
             }
         }
 
+        // Show the review page with all questions and selected answers
+        function showReviewPage() {
+            const quizQuestions = document.getElementById('quiz-questions');
+            const quizReview = document.getElementById('quiz-review');
+            
+            quizQuestions.classList.add('hidden');
+            quizReview.classList.remove('hidden');
+            
+            let reviewHTML = '<h2>Review Your Answers</h2><div class="info-message">Click on a question number to change your answer.</div>';
+            reviewHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-bottom: 20px;">';
+            
+            quizData.questions.forEach((q, i) => {
+                const answerIndex = studentAnswers[i];
+                const isAnswered = answerIndex !== null && answerIndex !== undefined;
+                // Truncate option text if it's too long
+                let answerText = 'Not Answered';
+                if (isAnswered) {
+                    answerText = q.options[answerIndex];
+                    if (answerText.length > 30) answerText = answerText.substring(0, 30) + '...';
+                }
+                
+                const cardStyle = isAnswered 
+                    ? 'border: 1px solid #2ecc71; background-color: #e8f5e9;' 
+                    : 'border: 1px solid #e74c3c; background-color: #fdecea;';
+                
+                // Truncate question text
+                const shortText = q.text.length > 50 ? q.text.substring(0, 50) + '...' : q.text;
+
+                reviewHTML += `
+                    <div onclick="displayQuestion(${i})" style="cursor: pointer; padding: 10px; border-radius: 5px; ${cardStyle}">
+                        <strong>Q${i + 1}:</strong> ${shortText}<br>
+                        <small>Answer: <strong>${answerText}</strong></small>
+                    </div>
+                `;
+            });
+            
+            reviewHTML += '</div>';
+            reviewHTML += `
+                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
+                    <button class="btn" onclick="displayQuestion(${quizData.questions.length - 1})">Back to Last Question</button>
+                    <button id="confirm-submit-quiz" class="btn btn-success">Submit Quiz</button>
+                </div>
+            `;
+            
+            quizReview.innerHTML = reviewHTML;
+            
+            document.getElementById('confirm-submit-quiz').addEventListener('click', function() {
+                submitQuiz();
+            });
+        }
+
         // Start and manage the quiz timer
-        function startQuizTimer(durationInMinutes) {
+        function startQuizTimer(durationInMinutes, expiryTimestamp) {
             timerDisplay.classList.remove('hidden');
-            const endTime = Date.now() + durationInMinutes * 60 * 1000;
+            
+            const now = Date.now();
+            let endTime;
+
+            // Calculate end time based on duration
+            if (durationInMinutes > 0) {
+                endTime = now + (durationInMinutes * 60 * 1000);
+            }
+
+            // If there is an expiry date, ensure the quiz ends no later than that
+            if (expiryTimestamp) {
+                if (!endTime || expiryTimestamp < endTime) {
+                    endTime = expiryTimestamp;
+                }
+            }
 
             timerInterval = setInterval(() => {
                 const remainingTime = endTime - Date.now();
@@ -1485,13 +1632,19 @@
                     return;
                 }
 
-                const minutes = Math.floor(remainingTime / (1000 * 60));
-                const seconds = Math.floor((remainingTime / 1000) % 60);
+                const hours = Math.floor(remainingTime / (1000 * 60 * 60));
+                const minutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((remainingTime % (1000 * 60)) / 1000);
 
+                const formattedHours = hours.toString().padStart(2, '0');
                 const formattedMinutes = minutes.toString().padStart(2, '0');
                 const formattedSeconds = seconds.toString().padStart(2, '0');
 
-                timerDisplay.textContent = `Time Left: ${formattedMinutes}:${formattedSeconds}`;
+                if (hours > 0) {
+                    timerDisplay.textContent = `Time Left: ${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
+                } else {
+                    timerDisplay.textContent = `Time Left: ${formattedMinutes}:${formattedSeconds}`;
+                }
             }, 1000);
         }
 
@@ -1705,6 +1858,12 @@
                 // Remove event listeners to prevent them from firing after the quiz
                 window.removeEventListener('blur', handleFocusLoss);
                 document.removeEventListener('visibilitychange', handleVisibilityChange);
+                
+                // Remove anti-screenshot listeners
+                window.removeEventListener('blur', togglePrivacyBlur);
+                window.removeEventListener('focus', togglePrivacyBlur);
+                document.removeEventListener('keyup', handlePrintScreen);
+                document.body.classList.remove('privacy-blur');
 
             };
 
@@ -1797,6 +1956,7 @@
             // Show student section
             resultsSection.classList.add('hidden');
             studentSection.classList.remove('hidden'); // Go back to student form
+            document.getElementById('quiz-review').classList.add('hidden');
             tabWarning.classList.add('hidden');
             document.getElementById('export-pdf-btn').classList.add('hidden');
             document.getElementById('download-student-pdf-btn').classList.add('hidden');
@@ -1806,6 +1966,12 @@
             // Ensure event listeners are removed on restart
             window.removeEventListener('blur', handleFocusLoss);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            
+            // Remove anti-screenshot listeners
+            window.removeEventListener('blur', togglePrivacyBlur);
+            window.removeEventListener('focus', togglePrivacyBlur);
+            document.removeEventListener('keyup', handlePrintScreen);
+            document.body.classList.remove('privacy-blur');
         }
 
         // Initialize the application
