@@ -1,2038 +1,250 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Firebase SDK -->
+    <title>Quizable | Modern Quiz Platform</title>
+
+    <!-- Dependencies -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/jspdf-autotable@3.5.23/dist/jspdf.plugin.autotable.min.js"></script>
 
-    <!-- jsPDF for PDF Export -->
-    <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js" crossorigin="anonymous"></script>
-    <script src="https://unpkg.com/jspdf-autotable@3.5.23/dist/jspdf.plugin.autotable.min.js" crossorigin="anonymous"></script>
-    <title>Quizable</title>
+    <!-- Styles -->
+    <link rel="stylesheet" href="style.css">
     <link rel="icon" href="logo.jpg" type="image/jpeg">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            background-color: #f5f7fa;
-            color: #333;
-            line-height: 1.6;
-        }
-        
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            padding: 30px;
-            margin-bottom: 20px;
-        }
-        
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        
-        h2 {
-            color: #3498db;
-            margin-bottom: 15px;
-        }
-        
-        h3 {
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }
-        
-        .hidden {
-            display: none !important;
-        }
-        
-        .btn {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s;
-            margin-right: 10px;
-            margin-bottom: 10px;
-            text-decoration: none;
-        }
-        
-        .btn:hover {
-            background-color: #2980b9;
-        }
-        
-        .btn-danger {
-            background-color: #e74c3c;
-        }
-        
-        .btn-danger:hover {
-            background-color: #c0392b;
-        }
-        
-        .btn-success {
-            background-color: #2ecc71;
-        }
-        
-        .btn-success:hover {
-            background-color: #27ae60;
-        }
-        
-        .btn-info {
-            background-color: #17a2b8;
-        }
-        
-        .btn-info:hover {
-            background-color: #138496;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-        
-        input[type="text"], input[type="file"], input[type="number"], input[type="datetime-local"], textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        
-        .quiz-question {
-            margin-bottom: 25px;
-            padding: 15px;
-            border: 1px solid #e1e1e1;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-
-        .quiz-figure {
-            margin-bottom: 15px;
-            text-align: center;
-            border: 1px solid #eee;
-            padding: 10px;
-        }
-
-        .quiz-figure svg {
-            max-width: 100%;
-            height: auto;
-            display: block;
-        }
-        
-        .quiz-options {
-            margin-top: 10px;
-        }
-        
-        .quiz-option {
-            margin-bottom: 10px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        
-        .quiz-option:hover {
-            background-color: #f8f9fa;
-        }
-        
-        .quiz-option.selected {
-            background-color: #e1f5fe;
-            border-color: #3498db;
-        }
-        
-        /* Prevent text selection in the quiz area */
-        #quiz-section {
-            -webkit-user-select: none; /* Safari */
-            -moz-user-select: none; /* Firefox */
-            -ms-user-select: none; /* IE10+/Edge */
-            user-select: none; /* Standard syntax */
-        }
-        
-        .warning {
-            background-color: #fff3cd;
-            color: #856404;
-            padding: 10px;
-            border-radius: 5px;
-            margin-bottom: 15px;
-            border: 1px solid #ffeaa7;
-        }
-        
-        .score-display {
-            text-align: center;
-            font-size: 24px;
-            margin: 20px 0;
-            padding: 20px;
-            background-color: #e8f5e9;
-            border-radius: 10px;
-        }
-        
-        .tab-warning {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            text-align: center;
-        }
-        
-        .tab-warning h2 {
-            color: white;
-            margin-bottom: 20px;
-        }
-        
-        .attempts-counter {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background-color: #e74c3c;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-        
-        .timer-display {
-            position: sticky;
-            top: 0;
-            background-color: #3498db;
-            color: white;
-            padding: 15px;
-            margin: -30px -30px 20px -30px;
-            border-radius: 10px 10px 0 0;
-            text-align: center;
-            z-index: 100;
-            font-weight: bold;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        .progress-bar {
-            height: 5px;
-            background-color: #ecf0f1;
-            margin-bottom: 20px;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-        
-        .progress {
-            height: 100%;
-            background-color: #3498db;
-            width: 0%;
-            transition: width 0.3s;
-        }
-        
-        .json-template {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 5px;
-            padding: 15px;
-            margin-top: 15px;
-            font-family: 'Courier New', monospace;
-            font-size: 14px;
-            white-space: pre-wrap;
-            overflow-x: auto;
-        }
-        
-        .section-tabs {
-            display: flex;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #ddd;
-        }
-        
-        .tab {
-            padding: 10px 20px;
-            cursor: pointer;
-            border: 1px solid transparent;
-            border-bottom: none;
-            border-radius: 5px 5px 0 0;
-            margin-right: 5px;
-        }
-        
-        .tab.active {
-            background-color: white;
-            border-color: #ddd;
-            font-weight: bold;
-        }
-        
-        .tab-content {
-            display: none;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        .info-message {
-            background-color: #d1ecf1;
-            color: #0c5460;
-            padding: 12px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            border: 1px solid #bee5eb;
-        }
-
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-        }
-
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-        }
-
-        .modal-actions { margin-top: 20px; }
-
-        .student-result-card {
-            background-color: #f9f9f9;
-            border: 1px solid #e1e1e1;
-            border-radius: 5px;
-            padding: 15px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .file-name-display {
-            margin-left: 15px;
-            color: #555;
-            font-style: italic;
-        }
-
-        .modal-content ul {
-            list-style-position: inside;
-            text-align: left;
-            margin-top: 15px;
-            margin-bottom: 15px;
-        }
-
-        .modal-content ul li {
-            margin-bottom: 8px;
-        }
-
-        .section-header {
-            background-color: #e9ecef;
-            padding: 10px 15px;
-            border-radius: 5px;
-            margin-top: 20px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .section-header h4 {
-            margin: 0;
-            color: #495057;
-        }
-
-        .section-content {
-            padding-left: 15px;
-            border-left: 2px solid #e9ecef;
-            margin-top: 10px;
-        }
-
-        .section-checkbox-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            background-color: #f9f9f9;
-            padding: 15px;
-            border-radius: 5px;
-            border: 1px solid #e1e1e1;
-        }
-
-        .section-checkbox-group label { display: flex; align-items: center; gap: 5px; margin-bottom: 0; }
-
-        /* Anti-screenshot / Privacy */
-        @media print {
-            html, body {
-                display: none !important;
-            }
-        }
-        
-        .privacy-blur {
-            filter: blur(10px);
-            -webkit-filter: blur(10px);
-            transition: filter 0.2s;
-        }
-    </style>
 </head>
+
 <body>
     <div class="container">
-        <!-- Welcome Section (Removed) -->
-        
-        <!-- Teacher Menu -->
+        <!-- Teacher Dashboard -->
         <div id="teacher-menu" class="card hidden">
             <h1>Teacher Dashboard</h1>
-            <p class="info-message" style="text-align: center;">What would you like to do?</p>
-            <div style="text-align: center; margin-top: 20px;">
-                <button id="go-to-create-quiz" class="btn btn-success" style="padding: 15px 30px; font-size: 18px;">Create a New Quiz</button>
-                <button id="go-to-view-results" class="btn btn-info" style="padding: 15px 30px; font-size: 18px;">View Student Scores</button>
+            <p style="text-align: center; color: var(--text-muted); margin-bottom: 30px;">Manage your quizzes and track
+                student progress with ease.</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <button id="go-to-create-quiz" class="btn btn-primary" style="height: 120px; flex-direction: column;">
+                    <span style="font-size: 1.5rem;">📝</span>
+                    Create New Quiz
+                </button>
+                <button id="go-to-view-results" class="btn btn-info" style="height: 120px; flex-direction: column;">
+                    <span style="font-size: 1.5rem;">📊</span>
+                    View Results
+                </button>
             </div>
         </div>
 
-        <!-- Teacher Create Quiz Section -->
+        <!-- Quiz Creator -->
         <div id="teacher-create-section" class="card hidden">
-            <button class="btn" onclick="showTeacherMenu()">&larr; Back to Dashboard</button>
-            <h1 style="margin-top: 15px;">Quiz Creator</h1>
-            <div class="info-message">
-                Create a quiz by filling out the form below, or load questions from a JSON file or pasted text.
-            </div>
-            <div class="form-group">
-                <h2>Load Questions</h2>
-                <label for="json-upload" class="btn btn-info">Choose JSON File</label>
-                <input type="file" id="json-upload" accept=".json" style="display: none;">
-                <span id="json-file-name" class="file-name-display">No file chosen</span>
-                <button id="load-from-json" class="btn btn-info" style="margin-top: 10px;">Load from JSON</button>
-                <hr style="margin: 20px 0; border-top: 1px solid #eee;">
-                <label for="pasted-json-input">Or Paste JSON Text Below:</label>
-                <textarea id="pasted-json-input" rows="8" placeholder="Paste your JSON quiz data here..."></textarea>
-                <button id="load-from-pasted-json" class="btn btn-info" style="margin-top: 10px;">Load from Pasted Text</button>
+            <button class="btn btn-outline" onclick="showTeacherMenu()">← Dashboard</button>
+            <h1 style="margin-top: 20px;">Quiz Creator</h1>
 
-                <div class="json-template">
-                    <strong>JSON Format Example:</strong>
-<pre>{
-  "title": "Sample Quiz",
-  "questions": [
-    { "text": "What is 2+2?", "options": ["3", "4", "5"], "correctAnswer": 1, "figure": "&lt;svg...&gt;" },
-    { "text": "Capital of France?", "options": ["Berlin", "Paris"], "correctAnswer": 1 }
-  ]
-}</pre></div>
+            <div class="card" style="background: var(--bg-body); padding: 25px; border-style: dashed;">
+                <h2>Import Questions</h2>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <label for="json-upload" class="btn btn-info">Upload JSON</label>
+                    <input type="file" id="json-upload" accept=".json" style="display: none;">
+                    <span id="json-file-name" style="color: var(--text-muted);">No file chosen</span>
+                    <button id="load-from-json" class="btn btn-outline">Load File</button>
+                </div>
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>Or Paste JSON</label>
+                    <textarea id="pasted-json-input" rows="4"
+                        placeholder="Paste your quiz JSON structure here..."></textarea>
+                    <button id="load-from-pasted-json" class="btn btn-outline" style="margin-top: 10px;">Load From
+                        Text</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Quiz Title</label>
+                <input type="text" id="quiz-title" placeholder="e.g., Final Examination - Web Dev">
             </div>
             <div class="form-group">
-                <label for="quiz-title">Quiz Title:</label>
-                <input type="text" id="quiz-title" placeholder="Enter quiz title">
+                <label>Subject</label>
+                <input type="text" id="quiz-subject" placeholder="e.g., Information Technology">
             </div>
-            <div class="form-group">
-                <label for="quiz-subject">Subject:</label>
-                <input type="text" id="quiz-subject" placeholder="e.g., Web Programming">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label>Duration (Minutes)</label>
+                    <input type="number" id="quiz-duration" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Expiry Date/Time</label>
+                    <input type="datetime-local" id="quiz-expiry">
+                </div>
             </div>
+
             <div class="form-group">
-                <label for="quiz-duration">Quiz Duration (in minutes, 0 for no limit):</label>
-                <input type="number" id="quiz-duration" min="0" value="0">
+                <label>Encryption Key (Secret)</label>
+                <input type="text" id="secret-key" placeholder="Enter a strong password for this quiz">
             </div>
-            <div class="form-group">
-                <label for="quiz-expiry">Quiz Expiry Date & Time (optional):</label>
-                <input type="datetime-local" id="quiz-expiry">
-            </div>
-            <div class="form-group">
-                <label for="instruction-countdown-duration">Instruction Countdown (in seconds):</label>
-                <input type="number" id="instruction-countdown-duration" min="5" value="30">
-            </div>
-            <div class="form-group">
-                <label for="secret-key">Secret Key (Password for Encryption):</label>
-                <input type="text" id="secret-key" placeholder="Enter a strong password">
-            </div>
-            <div class="form-group">
-                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                    <input type="checkbox" id="show-results-to-student" checked style="width: auto;">
-                    Allow students to see their score and summary after submission
+
+            <div style="margin-bottom: 30px;">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                    <input type="checkbox" id="show-results-to-student" checked> Show score to students after submission
+                </label>
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:10px;">
+                    <input type="checkbox" id="save-results-to-cloud" checked> Save results to Firebase Cloud
+                </label>
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-top:10px;">
+                    <input type="checkbox" id="randomize-order" checked> Randomize question & option order
                 </label>
             </div>
-            <div class="form-group">
-                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                    <input type="checkbox" id="save-results-to-cloud" checked style="width: auto;">
-                    Save student results to the cloud (Firebase)
-                </label>
+
+            <div id="questions-container"></div>
+
+            <div style="display: flex; gap: 15px; margin-top: 30px;">
+                <button id="add-question" class="btn btn-outline">Add Question</button>
+                <button id="generate-encrypted-file" class="btn btn-success" style="flex-grow: 1;">Save Quiz to
+                    Cloud</button>
             </div>
-            <div class="form-group">
-                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                    <input type="checkbox" id="randomize-order" checked style="width: auto;">
-                    Randomize question and option order for each student
-                </label>
-            </div>
-            <div id="questions-container">
-                <!-- Questions will be added here dynamically -->
-            </div>
-            <button id="add-question" class="btn">Add Question</button>
-            <button id="generate-encrypted-file" class="btn btn-success" style="margin-top: 20px;">Save Quiz to Cloud</button>
         </div>
 
-        <!-- Teacher View Results Section -->
+        <!-- Student Results Viewer -->
         <div id="teacher-results-section" class="card hidden">
-            <button class="btn" onclick="showTeacherMenu()">&larr; Back to Dashboard</button>
-            <h1 style="margin-top: 15px;">View Student Results</h1>
-            <div class="form-group">
-                <label for="results-quiz-id">Quiz ID to View Results:</label>
-                <input type="text" id="results-quiz-id" placeholder="Enter Quiz ID from generation step">
+            <button class="btn btn-outline" onclick="showTeacherMenu()">← Dashboard</button>
+            <h1 style="margin-top: 20px;">Analytics & Results</h1>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                <div class="form-group">
+                    <label>Quiz ID</label>
+                    <input type="text" id="results-quiz-id" placeholder="Paste the Quiz ID">
+                </div>
+                <div class="form-group">
+                    <label>Secret Key</label>
+                    <input type="text" id="results-secret-key" placeholder="Enter encryption key">
+                </div>
             </div>
-            <div class="form-group">
-                <label for="results-secret-key">Secret Key to View Results:</label>
-                <input type="text" id="results-secret-key" placeholder="Enter key used for the quiz">
+            <button id="view-results-btn" class="btn btn-primary" style="width: 100%;">Fetch Records</button>
+
+            <div id="section-selector-container" class="hidden"
+                style="margin-top: 30px; padding: 20px; background: var(--bg-body); border-radius: 12px;">
+                <h3>Filters</h3>
+                <div id="section-checkboxes" style="display: flex; gap: 15px; flex-wrap: wrap; margin: 15px 0;"></div>
+                <button id="merge-sections-btn" class="btn btn-outline">Apply Filter</button>
             </div>
-            <button id="view-results-btn" class="btn">View Results</button>
-            <div id="section-selector-container" class="form-group hidden" style="margin-top: 20px;">
-                <label for="section-selector">Filter by Section:</label>
-                <div id="section-checkboxes" class="section-checkbox-group"></div>
-                <button id="merge-sections-btn" class="btn btn-info" style="margin-top: 10px;">Merge Selected</button>
-            </div>
-            <div id="student-results-display" style="margin-top: 20px;">
-                <!-- Decrypted results will be shown here -->
-            </div>
-            <button id="export-pdf-btn" class="btn btn-info hidden" style="margin-top: 20px;">Export Scores to PDF</button>
+
+            <div id="student-results-display" style="margin-top: 30px;"></div>
+            <button id="export-pdf-btn" class="btn btn-info hidden" style="width: 100%; margin-top: 20px;">Export to
+                Professional PDF</button>
         </div>
 
-        <!-- Student Section -->
+        <!-- Student Entry Screen -->
         <div id="student-section" class="card">
-            <h1>Quiz Taker (Student)</h1>
+            <h1>Student Portal</h1>
+            <p style="text-align: center; color: var(--text-muted); margin-bottom: 30px;">Please enter the details
+                provided by your teacher to begin.</p>
+
             <div class="form-group">
-                <label for="student-quiz-id">Quiz ID (from your teacher):</label>
-                <input type="text" id="student-quiz-id" placeholder="Enter the Quiz ID">
+                <label>Quiz ID</label>
+                <input type="text" id="student-quiz-id" placeholder="Enter ID">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label>First Name</label>
+                    <input type="text" id="student-first-name" placeholder="John">
+                </div>
+                <div class="form-group">
+                    <label>Last Name</label>
+                    <input type="text" id="student-last-name" placeholder="Doe">
+                </div>
             </div>
             <div class="form-group">
-                <label for="student-year-section">Year & Section:</label>
-                <input type="text" id="student-year-section" placeholder="e.g., BSIT-4A">
+                <label>Year & Section</label>
+                <input type="text" id="student-year-section" placeholder="e.g., BSIT-3A">
             </div>
             <div class="form-group">
-                <label for="student-first-name">First Name:</label>
-                <input type="text" id="student-first-name" placeholder="Enter your first name">
+                <label>Access Key</label>
+                <input type="text" id="student-secret-key" placeholder="Provided by teacher">
             </div>
-            <div class="form-group">
-                <label for="student-last-name">Last Name:</label>
-                <input type="text" id="student-last-name" placeholder="Enter your last name">
-            </div>
-            <div class="form-group">
-                <label for="student-secret-key">Secret Key (from your teacher):</label>
-                <input type="text" id="student-secret-key" placeholder="Enter the secret key for this quiz">
-            </div>
-            <button id="start-quiz" class="btn">Start Quiz</button>
+            <button id="start-quiz" class="btn btn-primary"
+                style="width: 100%; height: 55px; font-size: 1.1rem; margin-top: 10px;">Verify & Start Quiz</button>
         </div>
 
-        <!-- Quiz Section -->
+        <!-- Quiz Interface -->
         <div id="quiz-section" class="card hidden">
             <div id="timer-display" class="timer-display hidden">
-                Time Left: 00:00
+                <span>⏱️</span> Time Left: 00:00
             </div>
-            <h1 id="quiz-title-display">Quiz Title</h1>
+            <h2 id="quiz-title-display" style="text-align: center; margin-bottom: 20px;">Quiz</h2>
             <div class="progress-bar">
                 <div class="progress" id="quiz-progress"></div>
             </div>
-            <div id="quiz-questions">
-                <!-- Questions will be displayed here -->
-            </div>
-            <div id="quiz-review" class="hidden">
-                <!-- Review content will be injected here -->
-            </div>
+            <div id="quiz-questions"></div>
+            <div id="quiz-review" class="hidden"></div>
         </div>
 
-        <!-- Results Section -->
+        <!-- Final Results Screen -->
         <div id="results-section" class="card hidden">
-            <h1>Quiz Results</h1>
-            <div id="submission-success-message" class="info-message" style="background-color: #e8f5e9; color: #155724; border-color: #c3e6cb; text-align: center;">
-                <p><strong>Submission Successful!</strong></p>
-                <p>Your results have been securely submitted to your teacher.</p>
-                <p>You may now close this window.</p>
+            <h1>Quiz Completed</h1>
+            <div id="submission-success-message" style="text-align: center; padding: 40px;">
+                <div style="font-size: 4rem; margin-bottom: 20px;">✅</div>
+                <h2>Success!</h2>
+                <p>Your responses have been securely encrypted and submitted to the cloud.</p>
             </div>
-            <div id="student-score-summary" class="hidden">
-                <!-- Score and summary will be injected here -->
+            <div id="student-score-summary" class="hidden"></div>
+            <div style="display: flex; gap: 15px; margin-top: 30px;">
+                <button id="restart-quiz" class="btn btn-outline" style="flex: 1;">Return Home</button>
+                <button id="download-student-pdf-btn" class="btn btn-primary hidden" style="flex: 2;">Download Results
+                    (PDF)</button>
             </div>
-            <!-- The download button is no longer needed as download is automatic -->
-            <button id="restart-quiz" class="btn">Take Another Quiz</button>
-            <button id="download-student-pdf-btn" class="btn btn-info hidden">Download Results as PDF</button>
         </div>
 
-        <!-- Tab Warning -->
+        <!-- Proctoring System -->
         <div id="tab-warning" class="tab-warning hidden">
-            <h2>Warning: Tab Switching Detected</h2>
-            <p>You are not allowed to switch tabs or open new windows during the quiz.</p>
-            <p>You have <span id="remaining-attempts">3</span> attempts remaining.</p>
-            <button id="return-to-quiz" class="btn">Return to Quiz</button>
+            <div style="font-size: 4rem; margin-bottom: 20px;">⚠️</div>
+            <h2>Tab Switch Detected</h2>
+            <p style="max-width: 400px; margin-bottom: 30px;">You are not allowed to leave this window during the quiz.
+                This attempt has been logged.</p>
+            <div style="font-size: 1.2rem; font-weight: 700; color: var(--danger); margin-bottom: 30px;">
+                Attempts remaining: <span id="remaining-attempts">3</span>
+            </div>
+            <button id="return-to-quiz" class="btn btn-primary">I Understand, Return to Quiz</button>
         </div>
 
-        <!-- Attempts Counter -->
-        <div id="attempts-counter" class="attempts-counter hidden">
-            Switching Attempts: <span id="attempts-count">0</span>/3
+        <div id="attempts-counter" class="attempts-counter hidden"
+            style="position: fixed; top: 20px; right: 20px; background: var(--danger); color: white; padding: 8px 16px; border-radius: 100px; font-weight: 700; z-index: 1000; box-shadow: var(--shadow);">
+            Attempts: 0/3
         </div>
 
-        <!-- Custom Confirmation Modal -->
-        <div id="confirmation-modal" class="modal-overlay hidden">
+        <!-- Modals -->
+        <div id="confirmation-modal" class="modal-overlay hidden"
+            style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
             <div class="modal-content">
-                <h2 id="modal-title">Confirm Submission</h2>
-                <p id="modal-message">Are you sure you want to submit?</p>
-                <div class="modal-actions">
-                    <button id="modal-confirm-btn" class="btn btn-success">Confirm</button>
-                    <button id="modal-cancel-btn" class="btn btn-danger">Cancel</button>
+                <h2 id="modal-title">Confirm</h2>
+                <p id="modal-message" style="color: var(--text-muted); margin: 15px 0 25px 0;"></p>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button id="modal-cancel-btn" class="btn btn-outline">Cancel</button>
+                    <button id="modal-confirm-btn" class="btn btn-primary">Confirm</button>
                 </div>
             </div>
         </div>
 
-        <!-- Instruction Modal -->
-        <div id="instruction-modal" class="modal-overlay hidden">
-            <div class="modal-content">
-                <h2 id="instruction-modal-title">Quiz Instructions</h2>
-                <p>Please read the following rules carefully before starting:</p>
-                <ul>
-                    <li>Do not switch tabs or minimize the browser window.</li>
-                    <li>Do not close the browser until you have submitted the quiz.</li>
-                    <li>Violating these rules will be recorded and may result in automatic submission.</li>
-                    <li>Your results will be automatically and securely submitted to your teacher upon completion.</li>
-                </ul>
-                <div style="margin-top: 20px; font-weight: bold;">
-                    <p>The quiz will begin in</p>
-                    <span id="instruction-countdown" style="font-size: 3em; color: #3498db; line-height: 1.2;">30</span>
+        <div id="instruction-modal" class="modal-overlay hidden"
+            style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
+            <div class="modal-content" style="max-width: 500px;">
+                <h2>Quiz Instructions</h2>
+                <div style="text-align: left; margin: 20px 0; line-height: 1.8;">
+                    <p>• Do not switch tabs or minimize the browser.</p>
+                    <p>• Right-click and copy/paste are disabled.</p>
+                    <p>• The quiz ends automatically when time expires.</p>
+                    <p>• DevTools detection is active.</p>
+                </div>
+                <div style="background: var(--bg-body); padding: 20px; border-radius: 12px; text-align: center;">
+                    <p style="font-weight: 600; color: var(--text-muted); margin-bottom: 5px;">Starting in</p>
+                    <div id="instruction-countdown" style="font-size: 3rem; font-weight: 800; color: var(--primary);">30
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // --- FIREBASE INITIALIZATION ---
-        // IMPORTANT: Replace this with your own Firebase project configuration.
-        const firebaseConfig = {
-            apiKey: "AIzaSyAuT2BclaexjC7dVfHmT43eB99GXgXOXB4",
-            authDomain: "quizable-gold.firebaseapp.com",
-            databaseURL: "https://quizable-gold-default-rtdb.firebaseio.com",
-            projectId: "quizable-gold",
-            storageBucket: "quizable-gold.firebasestorage.app",
-            messagingSenderId: "822610236715",
-            appId: "1:822610236715:web:d7f9feecf3d284a474a16e",
-            measurementId: "G-RP9FL5RG88"
-        };
-
-        
-
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
-
-        // Global variables
-        let quizData = null;
-        let currentQuestionIndex = 0;
-        let studentAnswers = [];
-        let focusLostCount = 0;
-        let isQuizActive = false;
-        let isHandlingFocusLoss = false; // Flag to prevent double counting
-        const MAX_ATTEMPTS = 3;
-        let timerInterval = null;
-        let devToolsInterval = null; // For DevTools detection
-        let allStudentResults = []; // To store all results for a quiz
-        let processedStudentResults = []; // To store results for PDF export
-        let quizStartTime = 0;
-        // DOM Elements (Teacher)
-        const teacherMenu = document.getElementById('teacher-menu');
-        const teacherCreateSection = document.getElementById('teacher-create-section');
-        const teacherResultsSection = document.getElementById('teacher-results-section');
-        const studentSection = document.getElementById('student-section');
-        const quizSection = document.getElementById('quiz-section');
-        const resultsSection = document.getElementById('results-section');
-        const tabWarning = document.getElementById('tab-warning');
-        const attemptsCounter = document.getElementById('attempts-counter');
-        const timerDisplay = document.getElementById('timer-display');
-        const attemptsCount = document.getElementById('attempts-count');
-        const remainingAttempts = document.getElementById('remaining-attempts');
-        const confirmationModal = document.getElementById('confirmation-modal');
-        const modalTitle = document.getElementById('modal-title');
-        const modalMessage = document.getElementById('modal-message');
-        const modalConfirmBtn = document.getElementById('modal-confirm-btn');
-        const modalCancelBtn = document.getElementById('modal-cancel-btn');
-        const instructionModal = document.getElementById('instruction-modal');
-        const instructionCountdown = document.getElementById('instruction-countdown');
-
-
-        // Initialize based on URL parameters
-        function initializeApp() {
-            const urlParams = new URLSearchParams(window.location.search);
-            // Ensure warning and counter are explicitly hidden on initialization
-            tabWarning.classList.add('hidden');
-            attemptsCounter.classList.add('hidden');
-            timerDisplay.classList.add('hidden');
-            confirmationModal.classList.add('hidden');
-            instructionModal.classList.add('hidden');
-            document.getElementById('export-pdf-btn').classList.add('hidden');
-            
-            const part = urlParams.get('part');
-            
-            if (part === 'teacher') {
-                showTeacherMenu();
-            } else {
-                // Show student section by default
-                teacherMenu.classList.add('hidden');
-                teacherCreateSection.classList.add('hidden');
-                teacherResultsSection.classList.add('hidden');
-                studentSection.classList.add('hidden');
-                studentSection.classList.remove('hidden');
-            }
-        }
-
-        function showTeacherMenu() {
-            teacherMenu.classList.remove('hidden');
-            teacherCreateSection.classList.add('hidden');
-            teacherResultsSection.classList.add('hidden');
-            studentSection.classList.add('hidden');
-        }
-
-        function showCreateQuiz() {
-            teacherMenu.classList.add('hidden');
-            teacherCreateSection.classList.remove('hidden');
-            // Add the first question form if none exist
-            if (document.getElementById('questions-container').children.length === 0) {
-                addQuestion();
-            }
-        }
-
-        function showViewResults() {
-            teacherMenu.classList.add('hidden');
-            teacherResultsSection.classList.remove('hidden');
-        }
-
-        // Teacher functionality
-        document.getElementById('add-question').addEventListener('click', () => addQuestion());
-        document.getElementById('generate-encrypted-file').addEventListener('click', generateEncryptedFile);
-        document.getElementById('load-from-json').addEventListener('click', loadQuizFromJson);
-        document.getElementById('load-from-pasted-json').addEventListener('click', loadQuizFromPastedText);
-
-        // Add listeners to display selected file names
-        document.getElementById('json-upload').addEventListener('change', function() {
-            const fileName = this.files[0] ? this.files[0].name : 'No file chosen';
-            document.getElementById('json-file-name').textContent = fileName;
-        });
-
-        document.getElementById('go-to-create-quiz').addEventListener('click', showCreateQuiz);
-        document.getElementById('go-to-view-results').addEventListener('click', showViewResults);
-
-        // Student functionality
-        document.getElementById('start-quiz').addEventListener('click', startQuiz);
-        document.getElementById('return-to-quiz').addEventListener('click', returnToQuiz);
-        document.getElementById('restart-quiz').addEventListener('click', restartQuiz);
-        document.getElementById('view-results-btn').addEventListener('click', handleViewResultsClick);
-
-        // Auto-trim Quiz ID inputs on blur to prevent errors
-        ['student-quiz-id', 'results-quiz-id'].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.addEventListener('blur', function() {
-                    this.value = this.value.trim();
-                });
-            }
-        });
-
-        // One-time check to see if DevTools is open.
-        function isDevToolsOpen() {
-            const threshold = 160; // Milliseconds threshold. If DevTools is open, it will pause on `debugger` and the time difference will be large.
-            const start = performance.now();
-            debugger;
-            const end = performance.now();
-            return end - start > threshold;
-        }
-
-        // --- DEVTOOLS & CHEATING PREVENTION ---
-        // Disable right-click context menu during the quiz
-        window.addEventListener('contextmenu', (e) => {
-            if (isQuizActive) {
-                e.preventDefault();
-            }
-        });
-
-        // Block copy, cut, and drag operations
-        ['copy', 'cut', 'dragstart'].forEach(event => {
-            window.addEventListener(event, (e) => {
-                if (isQuizActive) {
-                    e.preventDefault();
-                }
-            });
-        });
-
-        // Block keyboard shortcuts for DevTools
-        window.addEventListener('keydown', (e) => {
-            if (isQuizActive && (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')))) {
-                e.preventDefault();
-            }
-        });
-        document.getElementById('export-pdf-btn').addEventListener('click', exportResultsToPdf);
-
-
-        // Handle page visibility change
-        function handleVisibilityChange() {
-            if (document.hidden && isQuizActive) {
-                // Page is hidden (user switched tabs or minimized window)
-                handleFocusLoss();
-            }
-        }
-
-        // Question template for teacher
-        function addQuestion(questionData = null) {
-            const questionsContainer = document.getElementById('questions-container');
-            const questionIndex = questionsContainer.children.length;
-
-            // Pre-fill values from JSON if available, otherwise use defaults
-            const text = questionData ? questionData.text : '';
-            const figure = questionData ? (questionData.figure || '') : '';
-            const options = questionData ? questionData.options.join(' | ') : '';
-            const correctAnswer = questionData ? questionData.correctAnswer : 0;
-            
-            const questionDiv = document.createElement('div');
-            questionDiv.className = 'quiz-question';
-            questionDiv.innerHTML = `
-                <h3>Question ${questionIndex + 1}</h3>
-                <div class="form-group">
-                    <label>Question Text:</label>
-                    <textarea id="question-text-${questionIndex}" class="question-text" placeholder="Enter question text" rows="4"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="question-figure-${questionIndex}">Figure (optional, paste SVG/HTML here):</label>
-                    <textarea id="question-figure-${questionIndex}" class="question-figure" placeholder="e.g., <svg>...</svg> or <img src=...>" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Options (separated by a pipe character: |):</label>
-                    <input type="text" class="question-options" placeholder="Option A | Option B | Option C">
-                </div>
-                <div class="form-group">
-                    <label>Correct Answer (index, starting from 0):</label>
-                    <input type="number" class="correct-answer" min="0" value="${correctAnswer}">
-                </div>
-                <button class="btn btn-danger remove-question">Remove Question</button>
-            `;
-            
-            questionsContainer.appendChild(questionDiv);
-
-            // Safely set the value of the textarea to handle special characters and newlines
-            if (questionData) {
-                questionDiv.querySelector('.question-text').value = text;
-                questionDiv.querySelector('.question-figure').value = figure;
-                questionDiv.querySelector('.question-options').value = questionData.options.join(' | ');
-            }
-            
-            // Add event listener for remove button
-            questionDiv.querySelector('.remove-question').addEventListener('click', function() {
-                questionsContainer.removeChild(questionDiv);
-                // Update question numbers
-                const questions = questionsContainer.querySelectorAll('.quiz-question');
-                questions.forEach((q, index) => {
-                    q.querySelector('h3').textContent = `Question ${index + 1}`;
-                });
-            });
-        }
-
-        // Load quiz data from a JSON file into the teacher form
-        function loadQuizFromJson() {
-            const fileInput = document.getElementById('json-upload');
-            if (!fileInput.files[0]) {
-                alert('Please select a JSON file to upload.');
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const reader = new FileReader();
-
-            reader.onload = function(e) {
-                try {
-                    const quizJson = JSON.parse(e.target.result);
-
-                    if (!quizJson.title || !Array.isArray(quizJson.questions)) {
-                        throw new Error('Invalid JSON format. "title" and "questions" array are required.');
-                    }
-
-                    if (quizJson.questions.length === 0) {
-                        throw new Error('The JSON file must contain at least one question.');
-                    }
-
-                    // Populate the form with the loaded data
-                    document.getElementById('quiz-title').value = quizJson.title;
-
-                    const questionsContainer = document.getElementById('questions-container');
-                    questionsContainer.innerHTML = ''; // Clear existing questions
-
-                    quizJson.questions.forEach(questionData => {
-                        addQuestion(questionData);
-                    });
-
-                    alert('Quiz loaded successfully from JSON file!');
-
-                } catch (error) {
-                    alert('Failed to load or parse JSON file. Please check the file format and content.');
-                    console.error('JSON Load Error:', error);
-                }
-            };
-
-            reader.readAsText(file);
-        }
-
-        // Load quiz data from pasted JSON text
-        function loadQuizFromPastedText() {
-            const jsonText = document.getElementById('pasted-json-input').value;
-            if (!jsonText.trim()) {
-                alert('Please paste your JSON data into the text area before loading.');
-                return;
-            }
-            processJsonData(jsonText);
-        }
-
-        // Central function to process JSON data (from file or text) and populate the form
-        function processJsonData(jsonDataString) {
-            try {
-                const quizJson = JSON.parse(jsonDataString);
-
-                if (!quizJson.title || !Array.isArray(quizJson.questions)) {
-                    throw new Error('Invalid JSON format. "title" and "questions" array are required.');
-                }
-
-                if (quizJson.questions.length === 0) {
-                    throw new Error('The JSON file must contain at least one question.');
-                }
-
-                // Populate the form with the loaded data
-                document.getElementById('quiz-title').value = quizJson.title;
-
-                const questionsContainer = document.getElementById('questions-container');
-                questionsContainer.innerHTML = ''; // Clear existing questions
-
-                quizJson.questions.forEach(questionData => {
-                    addQuestion(questionData);
-                });
-
-                alert('Quiz loaded successfully from JSON!');
-
-            } catch (error) {
-                alert('Failed to load or parse JSON. Please check the format and content.');
-                console.error('JSON Load Error:', error);
-            }
-        }
-
-        // Generate encrypted quiz file
-        function generateEncryptedFile() {
-            const quizTitle = document.getElementById('quiz-title').value;
-            const quizSubject = document.getElementById('quiz-subject').value;
-            const quizDuration = parseFloat(document.getElementById('quiz-duration').value) || 0;
-            const quizExpiry = document.getElementById('quiz-expiry').value;
-            const instructionCountdownDuration = parseInt(document.getElementById('instruction-countdown-duration').value) || 30;
-            const showResultsToStudent = document.getElementById('show-results-to-student').checked;
-            const saveResultsToCloud = document.getElementById('save-results-to-cloud').checked;
-            const randomizeOrder = document.getElementById('randomize-order').checked;
-            const secretKey = document.getElementById('secret-key').value;
-            const questions = document.querySelectorAll('.quiz-question');
-            
-            if (questions.length === 0) {
-                alert('Please add at least one question.');
-                return;
-            }
-            
-            if (!secretKey) {
-                alert('Please enter a Secret Key to encrypt the quiz.');
-                return;
-            }
-
-            let allQuestionsValid = true;
-            // Generate a unique ID for this quiz instance to prevent re-takes.
-            const quizId = 'quiz-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
-
-            const quiz = {
-                title: quizTitle,
-                subject: quizSubject,
-                duration: quizDuration,
-                expiry: quizExpiry ? new Date(quizExpiry).getTime() : null, // Store as timestamp
-                instructionCountdown: instructionCountdownDuration,
-                showResultsToStudent: showResultsToStudent,
-                saveResultsToCloud: saveResultsToCloud,
-                randomizeOrder: randomizeOrder,
-                id: quizId,
-                questions: []
-            };
-            
-            questions.forEach((q, index) => {
-                const text = q.querySelector('.question-text').value;
-                const figure = q.querySelector('.question-figure').value;
-                // Filter out any empty strings that result from trailing commas or extra spaces
-                const options = q.querySelector('.question-options').value.split('|')
-                                 .map(opt => opt.trim()).filter(opt => opt !== '');
-                const correctAnswer = parseInt(q.querySelector('.correct-answer').value);
-                
-                // Add a check to ensure the correct answer index is valid for the number of options
-                if (text && options.length >= 2 && !isNaN(correctAnswer) && correctAnswer >= 0 && correctAnswer < options.length) {
-                    quiz.questions.push({
-                        text,
-                        figure: figure || null,
-                        options,
-                        correctAnswer
-                    });
-                } else {
-                    // If a question is invalid, stop the process and alert the user.
-                    alert(`Error in Question ${index + 1}: Please ensure it has text, at least two options, and a valid correct answer index (between 0 and ${options.length - 1}).`);
-                    allQuestionsValid = false;
-                }
-            });
-            
-            // Only proceed if all questions were validated successfully
-            if (!allQuestionsValid) {
-                return;
-            }
-            
-            // Encrypt the data
-            encryptData(JSON.stringify(quiz), secretKey).then(encryptedQuizData => {
-                // Save to Firebase
-                database.ref('quizzes/' + quiz.id).set({
-                    encryptedQuizData: encryptedQuizData
-                }).then(() => {
-                    // Create and download a file with the quiz credentials
-                    const credentialsContent = `Quiz Title: ${quizTitle}\nQuiz ID: ${quiz.id}\nSecret Key: ${secretKey}`;
-                    const blob = new Blob([credentialsContent], { type: 'text/plain;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `quiz_credentials_${quizTitle.replace(/\s+/g, '_') || 'quiz'}.txt`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-
-                    // Show a confirmation modal informing the teacher about the download
-                    showConfirmationModal('Quiz Saved!', `The quiz has been saved to the cloud. A file named "${a.download}" containing the Quiz ID and Secret Key has been automatically downloaded for you.`, null);
-                }).catch(error => {
-                    console.error("Firebase save error:", error);
-                    alert("Failed to save quiz to Firebase. See console for details.");
-                });
-            }).catch(err => {
-                console.error("Encryption failed:", err);
-                alert("Encryption failed. See console for details.");
-            });
-        }
-
-        function handleViewResultsClick() {
-            const quizId = document.getElementById('results-quiz-id').value.trim();
-            const secretKey = document.getElementById('results-secret-key').value.trim();
-
-            if (!quizId || !secretKey) {
-                alert('Please enter both the Quiz ID and the Secret Key.');
-                return;
-            }
-
-            fetchAndDisplayResults(quizId, secretKey);
-        }
-
-        // Decrypt a single result file and return a promise
-        function decryptResultFile(file, secretKey) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    decryptData(e.target.result, secretKey).then(decryptedData => {
-                        resolve(JSON.parse(decryptedData));
-                    }).catch(err => { // This catch handles decryption errors (wrong key)
-                        console.error(`Failed to decrypt file: ${file.name}`, err);
-                        // Reject with an object containing the file name for better error reporting
-                        reject({ fileName: file.name, error: err });
-                    });
-                };
-                reader.onerror = (error) => {
-                    // This onerror handles file reading errors
-                    console.error(`Failed to read file: ${file.name}`, error);
-                    reject({ fileName: file.name, error: error });
-                };
-                reader.readAsText(file);
-            });
-        }
-
-        // Fetch results from Firebase, decrypt, sort, and display them
-        async function fetchAndDisplayResults(quizId, secretKey) {
-            const resultsDisplay = document.getElementById('student-results-display');
-            const sectionSelectorContainer = document.getElementById('section-selector-container');
-            const sectionCheckboxes = document.getElementById('section-checkboxes');
-            resultsDisplay.innerHTML = '<p>Fetching results from Firebase...</p>';
-
-            const resultsRef = database.ref(`results/${quizId}`);
-            const snapshot = await resultsRef.once('value');
-            const encryptedResults = snapshot.val();
-
-            if (!encryptedResults) {
-                resultsDisplay.innerHTML = '<p>No results found for this Quiz ID.</p>';
-                sectionSelectorContainer.classList.add('hidden');
-                document.getElementById('export-pdf-btn').classList.add('hidden');
-                return;
-            }
-
-            const decryptionPromises = Object.values(encryptedResults).map(encryptedData => 
-                decryptData(encryptedData, secretKey).then(JSON.parse).catch(() => null)
-            );
-
-            const validResults = (await Promise.all(decryptionPromises)).filter(Boolean);
-            allStudentResults = validResults; // Store all results globally
-
-            // Group results by section
-            const resultsBySection = validResults.reduce((acc, result) => {
-                const section = result.student.section || 'No Section Specified';
-                if (!acc[section]) {
-                    acc[section] = { students: [], total: 0 };
-                }
-                acc[section].students.push(result);
-                acc[section].total++;
-                return acc;
-            }, {});
-
-            // Sort students within each section by last name
-            for (const section in resultsBySection) {
-                resultsBySection[section].students.sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
-            }
-
-            // Sort sections alphabetically
-            const sortedSections = Object.keys(resultsBySection).sort();
-
-            // Populate the section checkboxes
-            sectionCheckboxes.innerHTML = '';
-            sortedSections.forEach(section => {
-                sectionCheckboxes.innerHTML += `
-                    <label>
-                        <input type="checkbox" class="section-checkbox" value="${section}" checked>
-                        ${section}
-                    </label>
-                `;
-            });
-            sectionSelectorContainer.classList.remove('hidden');
-
-            // Function to render results based on selected section
-            const renderResults = (selectedSections) => {
-                let resultsToExport = [];
-                selectedSections.forEach(section => {
-                    if (resultsBySection[section]) {
-                        resultsToExport.push(...resultsBySection[section].students);
-                    }
-                });
-
-                processedStudentResults = resultsToExport; // Update for PDF export
-                document.getElementById('export-pdf-btn').classList.toggle('hidden', resultsToExport.length === 0);
-
-                // Sort the merged list by last name
-                resultsToExport.sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
-
-                let resultsHTML = `<h3>Student Scores (${resultsToExport.length} total submissions)</h3>`;
-                resultsHTML += `<div class="section-header"><h4>Merged Sections: ${selectedSections.join(', ')}</h4></div>`;
-                resultsHTML += `<div class="section-content">`;
-                resultsToExport.forEach(res => {
-                    resultsHTML += `
-                        <div class="student-result-card">
-                            <div>
-                                <span><strong>${res.student.lastName}, ${res.student.firstName}</strong> (${res.student.section})</span><br>
-                                <small style="color: #555;">Subject: ${res.subject}</small>
-                            </div>
-                            <span style="font-weight: bold; color: #3498db;">${res.score} / ${res.totalQuestions}</span>
-                        </div>
-                    `;
-                });
-                resultsHTML += `</div>`;
-                resultsDisplay.innerHTML = resultsHTML;
-            };
-
-            // Add event listener to the merge button
-            document.getElementById('merge-sections-btn').onclick = () => {
-                const selectedSections = Array.from(document.querySelectorAll('.section-checkbox:checked')).map(cb => cb.value);
-                if (selectedSections.length === 0) {
-                    alert('Please select at least one section to view.');
-                    return;
-                }
-                renderResults(selectedSections);
-            };
-
-            // Initial render for all sections
-            document.getElementById('merge-sections-btn').click();
-        }
-
-        // Export the processed results to a PDF file
-        function exportResultsToPdf() {
-            if (processedStudentResults.length === 0) {
-                alert('No results to export.');
-                return;
-            }
-
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-
-            const quizTitle = processedStudentResults[0]?.quizTitle || 'Quiz Results';
-            const quizSubject = processedStudentResults[0]?.subject || 'N/A';
-
-            // Main title
-            doc.setFontSize(18);
-            doc.text(quizTitle, 14, 22);
-            doc.setFontSize(11);
-            doc.setTextColor(100);
-            doc.text(`Summary for ${processedStudentResults.length} students.`, 14, 30);
-
-            // Summary Table
-            const summaryHead = [['Last Name', 'First Name', 'Year & Section', 'Subject', 'Score']];
-            const summaryBody = processedStudentResults.map(res => [
-                res.student.lastName,
-                res.student.firstName,
-                res.student.section,
-                res.subject,
-                `${res.score} / ${res.totalQuestions}`
-            ]);
-
-            doc.autoTable({
-                head: summaryHead,
-                body: summaryBody,
-                startY: 35,
-            });
-
-            // Detailed per-student results
-            processedStudentResults.forEach(res => {
-                doc.addPage();
-                doc.setFontSize(16);
-                doc.text(`Detailed Results for: ${res.student.lastName}, ${res.student.firstName}`, 14, 22);
-                doc.text(`(Section: ${res.student.section}, Subject: ${res.subject})`, 14, 28);
-                const detailHead = [['#', 'Question', 'Student Answer', 'Correct Answer', 'Result']];
-                const detailBody = res.detailedAnswers.map((ans, i) => [
-                    i + 1,
-                    ans.questionText,
-                    ans.studentAnswerText,
-                    ans.correctAnswerText,
-                    ans.isCorrect ? '✓' : '✗'
-                ]);
-                doc.autoTable({ head: detailHead, body: detailBody, startY: 35 });
-            });
-
-            doc.save(`${quizTitle.replace(/\s/g, '_')}_Results.pdf`);
-        }
-
-        // Show instruction modal with countdown
-        function shuffleQuiz(quiz) {
-            // Fisher-Yates shuffle for the questions array
-            for (let i = quiz.questions.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [quiz.questions[i], quiz.questions[j]] = [quiz.questions[j], quiz.questions[i]];
-            }
-
-            // Shuffle options for each question and update the correct answer index
-            quiz.questions.forEach(question => {
-                if (question.options && question.correctAnswer !== undefined) {
-                    const correctAnswerText = question.options[question.correctAnswer];
-
-                    // Fisher-Yates shuffle for the options array
-                    for (let i = question.options.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [question.options[i], question.options[j]] = [question.options[j], question.options[i]];
-                    }
-
-                    // Find the new index of the correct answer and update it
-                    question.correctAnswer = question.options.indexOf(correctAnswerText);
-                }
-            });
-        }
-        function showInstructionModal(countdownDuration, onComplete) {
-            instructionModal.classList.remove('hidden');
-            let countdown = countdownDuration || 30;
-            instructionCountdown.textContent = countdown;
-
-            const countdownInterval = setInterval(() => {
-                countdown--;
-                instructionCountdown.textContent = countdown;
-                if (countdown <= 0) {
-                    clearInterval(countdownInterval);
-                    instructionModal.classList.add('hidden');
-                    if (onComplete) {
-                        onComplete();
-                    }
-                }
-            }, 1000);
-        }
-
-        // Fetches the current time from a reliable server to prevent client-side manipulation
-        async function getServerTime() {
-            try {
-                // Use a temporary Firebase location to get the server timestamp.
-                // This is more reliable than a third-party API.
-                const offsetRef = database.ref(".info/serverTimeOffset");
-                const offsetSnap = await offsetRef.once("value");
-                const offset = offsetSnap.val() || 0;
-
-                // The server time is the current client time plus the offset.
-                return Date.now() + offset;
-            } catch (error) {
-                console.error("Could not get Firebase server time:", error);
-                // Fallback to client time with a warning if Firebase time fails.
-                // This is less secure but better than blocking the quiz entirely.
-                alert('Warning: Could not verify server time. Using local time, which may be inaccurate.');
-                return Date.now();
-            }
-        }
-
-        // Anti-screenshot functions
-        function togglePrivacyBlur(e) {
-            if (!isQuizActive) return;
-            if (e.type === 'blur') {
-                document.body.classList.add('privacy-blur');
-            } else if (e.type === 'focus') {
-                document.body.classList.remove('privacy-blur');
-            }
-        }
-
-        function handlePrintScreen(e) {
-            if (isQuizActive && e.key === 'PrintScreen') {
-                document.body.style.visibility = 'hidden';
-                alert('Screenshots are not allowed.');
-                document.body.style.visibility = 'visible';
-            }
-        }
-
-        // Start the quiz for student
-        async function startQuiz() {
-            const quizId = document.getElementById('student-quiz-id').value.trim();
-            const firstName = document.getElementById('student-first-name').value.trim();
-            const lastName = document.getElementById('student-last-name').value.trim();
-            const section = document.getElementById('student-year-section').value.trim();
-            const secretKey = document.getElementById('student-secret-key').value.trim();
-            
-            // First, check if developer tools are open before proceeding.
-            if (isDevToolsOpen()) {
-                alert('Please close the developer tools before starting the quiz.');
-                return;
-            }
-
-            if (!quizId) {
-                alert('Please enter the Quiz ID from your teacher.');
-                return;
-            }
-            if (!firstName || !lastName) {
-                alert('Please enter your first and last name.');
-                return;
-            }
-            if (!section) {
-                alert('Please enter your Year & Section.');
-                return;
-            }
-            if (!secretKey) {
-                alert('Please enter the Secret Key provided by your teacher.');
-                return;
-            }
-
-            // --- Firebase Double Check ---
-            // Check if a result already exists for this student on Firebase before proceeding.
-            // This is a more robust check than localStorage.
-            const studentIdentifier = `${lastName}_${firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
-            const resultRef = database.ref(`results/${quizId}/${studentIdentifier}`);
-            const snapshot = await resultRef.once('value');
-
-            if (snapshot.exists()) {
-                alert('Our records indicate that you have already submitted this quiz. You cannot take it again. Please contact your teacher if you believe this is an error.');
-                restartQuiz();
-                return;
-            }
-            // --- End Firebase Double Check ---
-
-            // Fetch quiz from Firebase
-            database.ref('quizzes/' + quizId).once('value').then(snapshot => {
-                const data = snapshot.val();
-                if (!data || !data.encryptedQuizData) {
-                    alert('Quiz not found. Please check the Quiz ID.');
-                    return;
-                }
-
-                decryptData(data.encryptedQuizData, secretKey).then(async decryptedData => {
-                    if (!decryptedData) {
-                        alert('Decryption failed. Please check the Secret Key and file.');
-                        return;
-                    }
-
-                    quizData = JSON.parse(decryptedData);
-
-                    // Check for quiz expiration using server time for accuracy
-                    if (quizData.expiry) {
-                        const currentTime = await getServerTime();
-                        if (currentTime === null) {
-                            alert('Could not verify the current time. Please check your internet connection and try again.');
-                            return; // Block quiz start if time can't be verified
-                        }
-
-                        if (currentTime > quizData.expiry) {
-                            const expiryDate = new Date(quizData.expiry).toLocaleString();
-                            alert(`This quiz has expired. The deadline was ${expiryDate}. You can no longer take this quiz.`);
-                            restartQuiz();
-                            return;
-                        }
-                    }
-
-
-                    // Validate the structure of the quiz data
-                    if (!quizData || typeof quizData.title !== 'string' || !Array.isArray(quizData.questions)) {
-                        alert('The data for this quiz is invalid. Please check the Quiz ID and Secret Key.');
-                        restartQuiz(); // Reset the interface
-                        return;
-                    }
-
-                    // Safely check if the student has already taken this quiz BEFORE showing instructions
-                    try {
-                        if (quizData.id) {
-                            const attemptRecord = localStorage.getItem(quizData.id);
-                            if (attemptRecord) {
-                                const record = JSON.parse(attemptRecord);
-                                const timeSinceAttempt = Date.now() - record.timestamp;
-                                const threeHoursInMillis = 3 * 60 * 60 * 1000;
-
-                                if (timeSinceAttempt < threeHoursInMillis) {
-                                    alert('You have already submitted this quiz. Please ask your teacher for a new quiz file if you need to retake it.');
-                                    restartQuiz(); // Reset the interface
-                                    return; // Stop the quiz from starting
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        console.warn("Could not check for previous quiz attempt. This might happen if localStorage is disabled.", e);
-                    }
-
-                    // If the check passes, show the instruction modal, then proceed with the quiz setup.
-                    const countdownDuration = quizData.instructionCountdown || 30;
-                    showInstructionModal(countdownDuration, () => {
-                        // Shuffle questions and options before starting
-                        if (quizData.randomizeOrder !== false) {
-                            shuffleQuiz(quizData);
-                        }
-
-                        // Store student info
-                        quizData.student = {
-                            firstName,
-                            lastName,
-                            section
-                        };
-
-                        // Store the secret key with the quiz data for encrypting the results later
-                        quizData.secretKey = secretKey;
-
-                        // Initialize answers array
-                        studentAnswers = new Array(quizData.questions.length).fill(null);
-
-                        // Show quiz section
-                        studentSection.classList.add('hidden');
-                        quizSection.classList.remove('hidden');
-                        
-                        // Display quiz title
-                        document.getElementById('quiz-title-display').textContent = quizData.title;
-                        
-                        // Display first question
-                        displayQuestion(0);
-                        updateAttemptsDisplay();
-
-                        // Start the timer if one is set
-                        if (quizData.duration > 0 || quizData.expiry) {
-                            startQuizTimer(quizData.duration, quizData.expiry);
-                        }
-
-                        // Activate quiz monitoring
-                        quizStartTime = Date.now();
-                        isQuizActive = true;
-                        window.addEventListener('blur', handleFocusLoss);
-                        document.addEventListener('visibilitychange', handleVisibilityChange);
-                        
-                        // Add anti-screenshot listeners
-                        window.addEventListener('blur', togglePrivacyBlur);
-                        window.addEventListener('focus', togglePrivacyBlur);
-                        document.addEventListener('keyup', handlePrintScreen);
-                        startDevToolsDetection(); // Start detecting DevTools
-                        attemptsCounter.classList.remove('hidden');
-                    });
-                }).catch(err => {
-                    alert('Decryption failed. Please make sure you have the correct Secret Key. The quiz data might also be corrupted.');
-                    console.error("Decryption Error:", err);
-                });
-            }).catch(error => {
-                alert('Error fetching quiz from the database. Please check your connection and the Quiz ID.');
-                console.error("Firebase fetch error:", error);
-            });
-        }
-
-        // Display a specific question
-        function displayQuestion(index) {
-            if (!quizData || index < 0 || index >= quizData.questions.length) return;
-            
-            currentQuestionIndex = index;
-            const question = quizData.questions[index];
-            const quizQuestions = document.getElementById('quiz-questions');
-            
-            // Ensure review page is hidden and questions are shown
-            document.getElementById('quiz-review').classList.add('hidden');
-            quizQuestions.classList.remove('hidden');
-            
-            // Update progress bar
-            const progress = ((index + 1) / quizData.questions.length) * 100;
-            document.getElementById('quiz-progress').style.width = `${progress}%`;
-            
-            // Create question HTML
-            let figureHTML = '';
-            if (question.figure) {
-                figureHTML = `<div class="quiz-figure">${question.figure}</div>`;
-            }
-
-            let optionsHTML = '';
-            question.options.forEach((option, i) => {
-                const isSelected = studentAnswers[index] === i;
-                optionsHTML += `
-                    <div class="quiz-option ${isSelected ? 'selected' : ''}" data-index="${i}">
-                        ${option}
-                    </div>
-                `;
-            });
-            
-            quizQuestions.innerHTML = `
-                <div class="quiz-question">
-                    <h3>Question ${index + 1} of ${quizData.questions.length}</h3>
-                    <p>${question.text}</p>
-                    ${figureHTML}
-                    <div class="quiz-options">
-                        ${optionsHTML}
-                    </div>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                    <button id="prev-question" class="btn" ${index === 0 ? 'disabled' : ''}>Previous</button>                    
-                    ${index === quizData.questions.length - 1 
-                        ? `<button id="review-quiz" class="btn btn-info">Review Answers</button>`
-                        : `<button id="next-question" class="btn">Next</button>`
-                    }
-                </div>
-            `;
-            
-            // Add event listener for options
-            const optionElements = quizQuestions.querySelectorAll('.quiz-option');
-            optionElements.forEach(option => {
-                option.addEventListener('click', function() {
-                    // Remove selected class from all options
-                    optionElements.forEach(opt => opt.classList.remove('selected'));
-                    // Add selected class to clicked option
-                    this.classList.add('selected');
-                    // Store the answer
-                    studentAnswers[index] = parseInt(this.getAttribute('data-index'));
-                });
-            });
-            
-            // Add event listeners for navigation buttons
-            document.getElementById('prev-question').addEventListener('click', function() {
-                if (currentQuestionIndex > 0) {
-                    displayQuestion(currentQuestionIndex - 1);
-                }
-            });
-            
-            // Add event listener for Next or Submit button
-            if (index === quizData.questions.length - 1) {
-                document.getElementById('review-quiz').addEventListener('click', function() {
-                    showReviewPage();
-                });
-            } else {
-                document.getElementById('next-question').addEventListener('click', function() {
-                    displayQuestion(currentQuestionIndex + 1);
-                });
-            }
-        }
-
-        // Show the review page with all questions and selected answers
-        function showReviewPage() {
-            const quizQuestions = document.getElementById('quiz-questions');
-            const quizReview = document.getElementById('quiz-review');
-            
-            quizQuestions.classList.add('hidden');
-            quizReview.classList.remove('hidden');
-            
-            let reviewHTML = '<h2>Review Your Answers</h2><div class="info-message">Click on a question number to change your answer.</div>';
-            reviewHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-bottom: 20px;">';
-            
-            quizData.questions.forEach((q, i) => {
-                const answerIndex = studentAnswers[i];
-                const isAnswered = answerIndex !== null && answerIndex !== undefined;
-                // Truncate option text if it's too long
-                let answerText = 'Not Answered';
-                if (isAnswered) {
-                    answerText = q.options[answerIndex];
-                    if (answerText.length > 30) answerText = answerText.substring(0, 30) + '...';
-                }
-                
-                const cardStyle = isAnswered 
-                    ? 'border: 1px solid #2ecc71; background-color: #e8f5e9;' 
-                    : 'border: 1px solid #e74c3c; background-color: #fdecea;';
-                
-                // Truncate question text
-                const shortText = q.text.length > 50 ? q.text.substring(0, 50) + '...' : q.text;
-
-                reviewHTML += `
-                    <div onclick="displayQuestion(${i})" style="cursor: pointer; padding: 10px; border-radius: 5px; ${cardStyle}">
-                        <strong>Q${i + 1}:</strong> ${shortText}<br>
-                        <small>Answer: <strong>${answerText}</strong></small>
-                    </div>
-                `;
-            });
-            
-            reviewHTML += '</div>';
-            reviewHTML += `
-                <div style="display: flex; justify-content: space-between; margin-top: 20px;">
-                    <button class="btn" onclick="displayQuestion(${quizData.questions.length - 1})">Back to Last Question</button>
-                    <button id="confirm-submit-quiz" class="btn btn-success">Submit Quiz</button>
-                </div>
-            `;
-            
-            quizReview.innerHTML = reviewHTML;
-            
-            document.getElementById('confirm-submit-quiz').addEventListener('click', function() {
-                submitQuiz();
-            });
-        }
-
-        // Start and manage the quiz timer
-        function startQuizTimer(durationInMinutes, expiryTimestamp) {
-            timerDisplay.classList.remove('hidden');
-            
-            const now = Date.now();
-            let endTime;
-
-            // Calculate end time based on duration
-            if (durationInMinutes > 0) {
-                endTime = now + (durationInMinutes * 60 * 1000);
-            }
-
-            // If there is an expiry date, ensure the quiz ends no later than that
-            if (expiryTimestamp) {
-                if (!endTime || expiryTimestamp < endTime) {
-                    endTime = expiryTimestamp;
-                }
-            }
-
-            timerInterval = setInterval(() => {
-                const remainingTime = endTime - Date.now();
-
-                if (remainingTime <= 0) {
-                    clearInterval(timerInterval);
-                    timerDisplay.textContent = 'Time\'s Up!';
-                    alert('Time is up! The quiz will now be submitted.');
-                    submitQuiz(true); // Auto-submit without confirmation
-                    return;
-                }
-
-                const hours = Math.floor(remainingTime / (1000 * 60 * 60));
-                const minutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((remainingTime % (1000 * 60)) / 1000);
-
-                const formattedHours = hours.toString().padStart(2, '0');
-                const formattedMinutes = minutes.toString().padStart(2, '0');
-                const formattedSeconds = seconds.toString().padStart(2, '0');
-
-                if (hours > 0) {
-                    timerDisplay.textContent = `Time Left: ${formattedHours}:${formattedMinutes}:${formattedSeconds}`;
-                } else {
-                    timerDisplay.textContent = `Time Left: ${formattedMinutes}:${formattedSeconds}`;
-                }
-            }, 1000);
-        }
-
-        function stopQuizTimer() {
-            if (timerInterval) {
-                clearInterval(timerInterval);
-            }
-        }
-
-        // Periodically checks if developer tools are open.
-        function startDevToolsDetection() {
-            const threshold = 160; // Milliseconds threshold
-            const devToolsDetector = () => {
-                const start = performance.now();
-                debugger; // This line will pause execution if DevTools is open
-                const end = performance.now();
-                if (end - start > threshold) {
-                    handleFocusLoss();
-                }
-            };
-
-            // Run the check every 2 seconds
-            devToolsInterval = setInterval(devToolsDetector, 2000);
-        }
-
-        function stopDevToolsDetection() {
-            if (devToolsInterval) {
-                clearInterval(devToolsInterval);
-            }
-        }
-
-        // Handle focus loss (tab switching)
-        function handleFocusLoss() {
-            // Use a flag to prevent blur and visibilitychange from firing together and double-counting
-            if (isQuizActive && !isHandlingFocusLoss) {
-                // Ignore focus loss within the first second (1000ms) of the quiz starting.
-                // This acts as a grace period to prevent false positives on load.
-                if (Date.now() - quizStartTime < 1000) {
-                    return;
-                }
-
-                isHandlingFocusLoss = true;
-                focusLostCount++;
-                updateAttemptsDisplay();
-                
-                if (focusLostCount <= MAX_ATTEMPTS) {
-                    tabWarning.classList.remove('hidden');
-                    remainingAttempts.textContent = MAX_ATTEMPTS - focusLostCount;
-                } else {
-                    // Block the quiz after exceeding attempts
-                    alert('You have exceeded the allowed number of tab switches. The quiz will now be submitted.');
-                    submitQuiz(true);
-                }
-
-                // Reset the flag after a short delay
-                setTimeout(() => {
-                    isHandlingFocusLoss = false;
-                }, 100);
-            }
-        }
-
-        // Return to quiz from warning
-        function returnToQuiz() {
-            tabWarning.classList.add('hidden');
-        }
-
-        // Update attempts display
-        function updateAttemptsDisplay() {
-            attemptsCount.textContent = focusLostCount;
-            document.querySelector('#attempts-counter').textContent = `Switching Attempts: ${focusLostCount}/${MAX_ATTEMPTS}`;
-        }
-
-        // Custom confirmation modal handler
-        function showConfirmationModal(title, message, onConfirm) {
-            modalTitle.textContent = title;
-            modalMessage.textContent = message;
-            modalCancelBtn.style.display = 'inline-block'; // Always show cancel
-            modalConfirmBtn.textContent = onConfirm ? 'Confirm' : 'OK';
-            
-            // Always get the current buttons from the DOM before manipulating them
-            let currentConfirmBtn = document.getElementById('modal-confirm-btn');
-            let currentCancelBtn = document.getElementById('modal-cancel-btn');
-            
-            // Use .cloneNode to remove old event listeners and prevent stacking
-            const newConfirmBtn = currentConfirmBtn.cloneNode(true);
-            currentConfirmBtn.parentNode.replaceChild(newConfirmBtn, currentConfirmBtn);
-            
-            const newCancelBtn = currentCancelBtn.cloneNode(true);
-            currentCancelBtn.parentNode.replaceChild(newCancelBtn, currentCancelBtn);
-            
-            newConfirmBtn.addEventListener('click', () => {
-                confirmationModal.classList.add('hidden');
-                if (onConfirm) onConfirm();
-            });
-
-            newCancelBtn.addEventListener('click', () => {
-                confirmationModal.classList.add('hidden');
-            });
-
-            confirmationModal.classList.remove('hidden');
-        }
-
-        // Submit the quiz
-        function submitQuiz(isAutoSubmit = false) {
-            if (!quizData) return;
-            
-            const performActualSubmission = () => {
-                // Calculate score
-                let score = 0;
-                quizData.questions.forEach((question, index) => {
-                    if (studentAnswers[index] === question.correctAnswer) {
-                        score++;
-                    }
-                });
-                
-                // Create the results data object
-                const resultsData = {
-                    student: quizData.student,
-                    quizTitle: quizData.title,
-                    subject: quizData.subject,
-                    score: score,
-                    totalQuestions: quizData.questions.length,
-                    detailedAnswers: quizData.questions.map((q, i) => ({
-                        questionText: q.text,
-                        figure: q.figure,
-                        studentAnswerText: studentAnswers[i] !== null ? q.options[studentAnswers[i]] : 'Not Answered',
-                        correctAnswerText: q.options[q.correctAnswer],
-                        isCorrect: studentAnswers[i] === q.correctAnswer
-                    }))
-                };
-
-                // Make resultsData available for the PDF download function
-                window.studentResultsDataForPdf = resultsData;
-
-                // Conditionally show score and summary to the student
-                if (quizData.showResultsToStudent) {
-                    document.getElementById('submission-success-message').classList.add('hidden');
-                    const scoreSummaryContainer = document.getElementById('student-score-summary');
-                    
-                    let summaryHTML = `
-                        <div class="score-display">
-                            Your Score: ${score} / ${quizData.questions.length}
-                        </div>
-                        <h3>Answer Summary</h3>
-                    `;
-
-                    resultsData.detailedAnswers.forEach((answer, index) => {
-                        const resultClass = answer.isCorrect ? 'btn-success' : 'btn-danger';
-                        const resultIcon = answer.isCorrect ? '✓ Correct' : '✗ Incorrect';
-                        
-                        let figureHTML = '';
-                        if (answer.figure) {
-                            figureHTML = `<div class="quiz-figure">${answer.figure}</div>`;
-                        }
-
-                        summaryHTML += `
-                            <div class="quiz-question">
-                                <p><strong>Question ${index + 1}:</strong> ${answer.questionText}</p>
-                                ${figureHTML}
-                                <p>Your Answer: ${answer.studentAnswerText || '<em>Not Answered</em>'}</p>
-                                <p>Correct Answer: ${answer.correctAnswerText}</p>
-                                <p><span class="btn ${resultClass}" style="cursor: default; font-size: 12px; padding: 3px 8px;">${resultIcon}</span></p>
-                            </div>
-                        `;
-                    });
-
-                    scoreSummaryContainer.innerHTML = summaryHTML;
-                    scoreSummaryContainer.classList.remove('hidden');
-                    document.getElementById('download-student-pdf-btn').classList.remove('hidden');
-                } else {
-                    // Default behavior: hide summary and show generic success message
-                    document.getElementById('submission-success-message').classList.remove('hidden');
-                    document.getElementById('student-score-summary').classList.add('hidden');
-                    document.getElementById('download-student-pdf-btn').classList.add('hidden');
-                }
-
-
-                // Display results
-                quizSection.classList.add('hidden');
-                resultsSection.classList.remove('hidden');
-                
-                // Save a record of the quiz attempt in localStorage to prevent re-takes
-                try {
-                    if (quizData.id) {
-                        const attemptRecord = { timestamp: Date.now() };
-                        localStorage.setItem(quizData.id, JSON.stringify(attemptRecord));
-                    }
-                } catch (e) {
-                    console.warn("Could not save quiz attempt record. This might happen if localStorage is disabled.", e);
-                }
-
-                // Encrypt and trigger download
-                if (quizData.saveResultsToCloud !== false) { // Default to true if undefined for older quizzes
-                    encryptData(JSON.stringify(resultsData), quizData.secretKey).then(encryptedResultData => {
-                        // Save result to Firebase
-                        const studentIdentifier = `${quizData.student.lastName}_${quizData.student.firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
-                        database.ref(`results/${quizData.id}/${studentIdentifier}`).set(encryptedResultData)
-                            .catch(error => {
-                                console.error("Firebase result submission error:", error);
-                                alert("There was an error submitting your results. Please check your internet connection and try again, or contact your teacher.");
-                            });
-                    });
-                }
-
-                // Deactivate quiz monitoring
-                isQuizActive = false;
-                stopDevToolsDetection(); // Stop DevTools detection
-                attemptsCounter.classList.add('hidden');
-                timerDisplay.classList.add('hidden');
-
-                // Remove event listeners to prevent them from firing after the quiz
-                window.removeEventListener('blur', handleFocusLoss);
-                document.removeEventListener('visibilitychange', handleVisibilityChange);
-                
-                // Remove anti-screenshot listeners
-                window.removeEventListener('blur', togglePrivacyBlur);
-                window.removeEventListener('focus', togglePrivacyBlur);
-                document.removeEventListener('keyup', handlePrintScreen);
-                document.body.classList.remove('privacy-blur');
-
-            };
-
-            // Stop the timer if it's running
-            stopQuizTimer();
-
-            if (isAutoSubmit) {
-                performActualSubmission();
-            } else {
-                const unansweredCount = studentAnswers.filter(answer => answer === null).length;
-                if (unansweredCount > 0) {
-                    const plural = unansweredCount === 1 ? 'question' : 'questions';
-                    // Show a warning modal that does not allow submission
-                    showConfirmationModal('Unanswered Questions', `You have ${unansweredCount} unanswered ${plural}. Please answer all questions before submitting.`, null);
-                } else {
-                    let confirmationMessage = 'You have answered all questions. Are you sure you want to submit?';
-                    if (timerInterval) {
-                        confirmationMessage += ' You still have time left to review your answers.';
-                    } else {
-                        confirmationMessage += ' You can click Cancel to review your answers first.';
-                    }
-                    showConfirmationModal('Confirm Submission', confirmationMessage, performActualSubmission);
-                }
-            }
-        }
-
-        // Generate a PDF for the student's own results
-        function downloadStudentResultsAsPdf() {
-            const res = window.studentResultsDataForPdf;
-            if (!res) {
-                alert('Result data is not available for download.');
-                return;
-            }
-
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-
-            // Main title
-            doc.setFontSize(18);
-            doc.text(res.quizTitle || 'Quiz Results', 14, 22);
-
-            // Student Info
-            doc.setFontSize(12);
-            doc.setTextColor(50);
-            doc.text(`Student: ${res.student.firstName} ${res.student.lastName}`, 14, 32);
-            doc.text(`Section: ${res.student.section}`, 14, 38);
-            doc.text(`Subject: ${res.subject || 'N/A'}`, 14, 44);
-
-            // Score
-            doc.setFontSize(14);
-            doc.setTextColor(0);
-            doc.text(`Final Score: ${res.score} / ${res.totalQuestions}`, 14, 54);
-
-            // Detailed Answers Table
-            const detailHead = [['#', 'Question', 'Your Answer', 'Correct Answer', 'Result']];
-            const detailBody = res.detailedAnswers.map((ans, i) => [
-                i + 1,
-                ans.questionText,
-                ans.studentAnswerText,
-                ans.correctAnswerText,
-                ans.isCorrect ? '✓ Correct' : '✗ Incorrect'
-            ]);
-
-            doc.autoTable({ head: detailHead, body: detailBody, startY: 65 });
-
-            const fileName = `My_Quiz_Results_${res.quizTitle.replace(/\s/g, '_') || 'Quiz'}.pdf`;
-            doc.save(fileName);
-        }
-
-        // Restart the quiz
-        function restartQuiz() {
-            // Reset all state
-            quizData = null;
-            currentQuestionIndex = 0;
-            studentAnswers = [];
-            focusLostCount = 0;
-            stopQuizTimer();
-            stopDevToolsDetection();
-            isQuizActive = false;
-            quizStartTime = 0;
-            window.studentResultsDataForPdf = null; // Clear the results data
-            
-            // Clear form inputs
-            document.getElementById('student-quiz-id').value = '';
-            document.getElementById('student-first-name').value = '';
-            document.getElementById('student-last-name').value = '';
-            document.getElementById('student-section').value = '';
-            document.getElementById('student-secret-key').value = '';
-            
-            // Show student section
-            resultsSection.classList.add('hidden');
-            studentSection.classList.remove('hidden'); // Go back to student form
-            document.getElementById('quiz-review').classList.add('hidden');
-            tabWarning.classList.add('hidden');
-            document.getElementById('export-pdf-btn').classList.add('hidden');
-            document.getElementById('download-student-pdf-btn').classList.add('hidden');
-            attemptsCounter.classList.add('hidden');
-            timerDisplay.classList.add('hidden');
-
-            // Ensure event listeners are removed on restart
-            window.removeEventListener('blur', handleFocusLoss);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-            
-            // Remove anti-screenshot listeners
-            window.removeEventListener('blur', togglePrivacyBlur);
-            window.removeEventListener('focus', togglePrivacyBlur);
-            document.removeEventListener('keyup', handlePrintScreen);
-            document.body.classList.remove('privacy-blur');
-        }
-
-        // Initialize the application
-        window.onload = function() {
-            initializeApp();
-            document.getElementById('download-student-pdf-btn').addEventListener('click', downloadStudentResultsAsPdf);
-        };
-    </script>
-
-    <script>
-        // --- CRYPTOGRAPHY HELPER FUNCTIONS ---
-
-        // Derives a key from a password using PBKDF2
-        async function getKey(password, salt) {
-            const enc = new TextEncoder();
-            const keyMaterial = await window.crypto.subtle.importKey(
-                'raw',
-                enc.encode(password),
-                { name: 'PBKDF2' },
-                false,
-                ['deriveKey']
-            );
-            return window.crypto.subtle.deriveKey(
-                {
-                    name: 'PBKDF2',
-                    salt: salt,
-                    iterations: 100000,
-                    hash: 'SHA-256'
-                },
-                keyMaterial,
-                { name: 'AES-GCM', length: 256 },
-                true,
-                ['encrypt', 'decrypt']
-            );
-        }
-
-        // Encrypts a string using a password
-        async function encryptData(data, password) {
-            const salt = window.crypto.getRandomValues(new Uint8Array(16));
-            const iv = window.crypto.getRandomValues(new Uint8Array(12));
-            const key = await getKey(password, salt);
-            const enc = new TextEncoder();
-            const encryptedContent = await window.crypto.subtle.encrypt(
-                { name: 'AES-GCM', iv: iv },
-                key,
-                enc.encode(data)
-            );
-            const encryptedArr = new Uint8Array([...salt, ...iv, ...new Uint8Array(encryptedContent)]);
-            return btoa(String.fromCharCode.apply(null, encryptedArr));
-        }
-
-        // Decrypts a string using a password
-        async function decryptData(encryptedString, password) {
-            const encryptedArr = new Uint8Array(atob(encryptedString).split('').map(c => c.charCodeAt(0)));
-            const salt = encryptedArr.slice(0, 16);
-            const iv = encryptedArr.slice(16, 28);
-            const data = encryptedArr.slice(28);
-            const key = await getKey(password, salt);
-            const decryptedContent = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, data);
-            return new TextDecoder().decode(decryptedContent);
-        }
-    </script>
+    <!-- Logic -->
+    <script src="script.js"></script>
 </body>
+
 </html>
