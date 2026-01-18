@@ -11,6 +11,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
     <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/jspdf-autotable@3.5.23/dist/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
@@ -139,6 +140,13 @@
             </div>
             <button id="view-results-btn" class="btn btn-primary" style="width: 100%;">Fetch Records</button>
 
+            <!-- Recent Quizzes List -->
+            <div id="recent-quizzes-container" class="hidden" style="margin-top: 20px;">
+                <label style="color:var(--text-muted); font-size:0.9rem;">Recent Quizzes</label>
+                <div id="recent-quizzes-list" style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                </div>
+            </div>
+
             <div id="section-selector-container" class="hidden"
                 style="margin-top: 30px; padding: 20px; background: var(--bg-body); border-radius: 12px;">
                 <h3>Filters</h3>
@@ -198,7 +206,7 @@
                         <option value="H">Section H</option>
                         <option value="I">Section I</option>
                         <option value="J">Section J</option>
-                        <option value="TAB">TAB</option>
+                        <option value="TAB">Section TAB</option>
                     </select>
                 </div>
             </div>
@@ -251,9 +259,11 @@
             <button id="return-to-quiz" class="btn btn-primary">I Understand, Return to Quiz</button>
         </div>
 
-        <div id="attempts-counter" class="attempts-counter hidden"
-            style="position: fixed; top: 20px; right: 20px; background: var(--danger); color: white; padding: 8px 16px; border-radius: 100px; font-weight: 700; z-index: 1000; box-shadow: var(--shadow);">
-            Attempts: 0/3
+        <div id="attempts-widget" class="attempts-widget hidden">
+            <div class="widget-content">
+                <span id="attempts-number" class="widget-number">0</span>
+                <span id="attempts-text" class="widget-text">attempts to cheat, you will get disqualified on 3</span>
+            </div>
         </div>
 
         <!-- Modals -->

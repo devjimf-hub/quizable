@@ -56,12 +56,23 @@ const modalConfirmBtn = document.getElementById('modal-confirm-btn');
 const modalCancelBtn = document.getElementById('modal-cancel-btn');
 const instructionModal = document.getElementById('instruction-modal');
 const instructionCountdown = document.getElementById('instruction-countdown');
+// MAX_ATTEMPTS is already defined globally
+let persistenceKey = '';
+
+// Attempts Widget Elements
+const attemptsWidget = document.getElementById('attempts-widget');
+const attemptsNumber = document.getElementById('attempts-number');
+const attemptsText = document.getElementById('attempts-text');
+const attemptsMessage = document.getElementById('attempts-message');
+
+let widgetTimeout;
 
 // Initialize based on URL parameters
 function initializeApp() {
     const urlParams = new URLSearchParams(window.location.search);
     tabWarning.classList.add('hidden');
-    attemptsCounter.classList.add('hidden');
+    // attemptsCounter.classList.add('hidden'); // Removed old element logic if needed, but keeping for safety
+    if (attemptsWidget) attemptsWidget.classList.add('hidden');
     timerDisplay.classList.add('hidden');
     confirmationModal.classList.add('hidden');
     instructionModal.classList.add('hidden');
@@ -76,6 +87,35 @@ function initializeApp() {
         teacherCreateSection.classList.add('hidden');
         teacherResultsSection.classList.add('hidden');
         studentSection.classList.remove('hidden');
+
+        // Auto-Login Check
+        checkAutoLogin();
+    }
+}
+
+function checkAutoLogin() {
+    const activeSession = localStorage.getItem('quizable_active_session');
+    if (activeSession) {
+        try {
+            const session = JSON.parse(activeSession);
+            // Check if session is recent (e.g., less than 4 hours)
+            if (Date.now() - session.timestamp < 14400000) {
+                console.log("Found active session, auto-logging in...");
+
+                // Populate fields
+                document.getElementById('student-quiz-id').value = session.quizId;
+                document.getElementById('student-first-name').value = session.firstName;
+                document.getElementById('student-last-name').value = session.lastName;
+                document.getElementById('student-year').value = session.yearVal || '1'; // Default backup
+                document.getElementById('student-section-select').value = session.sectionVal || 'A';
+                document.getElementById('student-secret-key').value = session.secretKey;
+
+                // Trigger Start
+                startQuiz();
+            }
+        } catch (e) {
+            console.error("Auto-login failed:", e);
+        }
     }
 }
 
@@ -99,7 +139,48 @@ function showCreateQuiz() {
 function showViewResults() {
     teacherMenu.classList.add('hidden');
     teacherResultsSection.classList.remove('hidden');
+    loadTeacherHistory();
 }
+
+function saveTeacherHistory(title, id, key) {
+    const history = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
+    // Avoid duplicates
+    const newHistory = history.filter(h => h.id !== id);
+    newHistory.unshift({ title, id, key, timestamp: Date.now() });
+    // Keep last 5
+    if (newHistory.length > 5) newHistory.pop();
+    localStorage.setItem('quizable_teacher_history', JSON.stringify(newHistory));
+}
+
+function loadTeacherHistory() {
+    const history = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
+    const container = document.getElementById('recent-quizzes-container');
+    const list = document.getElementById('recent-quizzes-list');
+
+    if (history.length === 0) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    container.classList.remove('hidden');
+    list.innerHTML = history.map(h => `
+        <div class="card" style="padding:15px; margin-bottom:0; cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="fillCredentials('${h.id}', '${h.key}')">
+            <div>
+                <div style="font-weight:600;">${h.title}</div>
+                <div style="font-size:0.8rem; color:var(--text-muted);">${new Date(h.timestamp).toLocaleDateString()}</div>
+            </div>
+            <span style="font-size:1.2rem;">↪</span>
+        </div>
+    `).join('');
+}
+
+// Global scope helper for onclick
+window.fillCredentials = (id, key) => {
+    document.getElementById('results-quiz-id').value = id;
+    document.getElementById('results-secret-key').value = key;
+    // Optional: Auto fetch?
+    // fetchAndDisplayResults(id, key);
+};
 
 // Teacher functionality
 document.getElementById('add-question').addEventListener('click', () => addQuestion());
@@ -125,7 +206,26 @@ document.getElementById('view-results-btn').addEventListener('click', handleView
     const element = document.getElementById(id);
     if (element) {
         element.addEventListener('blur', function () {
-            this.value = this.value.trim();
+            this.value = this.value.trim().replace(/^Quiz ID:\s*/i, '');
+        });
+        element.addEventListener('paste', function () {
+            setTimeout(() => {
+                this.value = this.value.trim().replace(/^Quiz ID:\s*/i, '');
+            }, 100);
+        });
+    }
+});
+
+['student-secret-key', 'results-secret-key'].forEach(id => {
+    const element = document.getElementById(id);
+    if (element) {
+        element.addEventListener('blur', function () {
+            this.value = this.value.trim().replace(/^Secret Key:\s*/i, '');
+        });
+        element.addEventListener('paste', function () {
+            setTimeout(() => {
+                this.value = this.value.trim().replace(/^Secret Key:\s*/i, '');
+            }, 100);
         });
     }
 });
@@ -288,6 +388,7 @@ function generateEncryptedFile() {
         database.ref('quizzes/' + quiz.id).set({ encryptedQuizData: encrypted }).then(() => {
             hideLoading();
             const credentials = `Quiz Title: ${quizTitle}\nQuiz ID: ${quiz.id}\nSecret Key: ${secretKey}`;
+            saveTeacherHistory(quizTitle, quiz.id, secretKey); // Save to history
             const blob = new Blob([credentials], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -306,8 +407,12 @@ function generateEncryptedFile() {
 }
 
 function handleViewResultsClick() {
-    const quizId = document.getElementById('results-quiz-id').value.trim();
-    const secretKey = document.getElementById('results-secret-key').value.trim();
+    let quizId = document.getElementById('results-quiz-id').value.trim();
+    quizId = quizId.replace(/^Quiz ID:\s*/i, '');
+
+    let secretKey = document.getElementById('results-secret-key').value.trim();
+    secretKey = secretKey.replace(/^Secret Key:\s*/i, '');
+
     if (quizId && secretKey) fetchAndDisplayResults(quizId, secretKey);
 }
 
@@ -400,7 +505,7 @@ function exportResultsToPdf() {
             startY: 30
         });
     });
-    doc.save(`${res0.quizTitle}_Results.pdf`);
+    doc.save(`${res0.quizTitle}_Results_${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
 function shuffleQuiz(quiz) {
@@ -454,7 +559,8 @@ function handlePrintScreen(e) {
 }
 
 async function startQuiz() {
-    const quizId = document.getElementById('student-quiz-id').value.trim();
+    let quizId = document.getElementById('student-quiz-id').value.trim();
+    quizId = quizId.replace(/^Quiz ID:\s*/i, '');
     const firstName = document.getElementById('student-first-name').value.trim();
     const lastName = document.getElementById('student-last-name').value.trim();
 
@@ -467,7 +573,8 @@ async function startQuiz() {
     // Combine them (e.g. "3A" or "4TAB")
     const section = (yearVal && sectionVal) ? `${yearVal}${sectionVal}` : '';
 
-    const secretKey = document.getElementById('student-secret-key').value.trim();
+    let secretKey = document.getElementById('student-secret-key').value.trim();
+    secretKey = secretKey.replace(/^Secret Key:\s*/i, '');
 
     if (isDevToolsOpen()) { alert('Close DevTools.'); return; }
     if (!quizId || !firstName || !lastName || !section || !secretKey) { alert('Fill all fields.'); return; }
@@ -495,9 +602,10 @@ async function startQuiz() {
         quizData = JSON.parse(decrypted);
 
         const serverTime = await getServerTime();
+        // Strict Check: active or expired?
         if (quizData.expiry && serverTime > quizData.expiry) {
             hideLoading();
-            alert('Quiz expired.');
+            alert('This quiz has expired and is no longer accepting submissions.');
             return;
         }
 
@@ -513,16 +621,56 @@ async function startQuiz() {
             if (quizData.randomizeOrder !== false) shuffleQuiz(quizData);
             quizData.student = { firstName, lastName, section };
             quizData.secretKey = secretKey;
-            studentAnswers = new Array(quizData.questions.length).fill(null);
+
+            // Persistence: Check for existing session
+            persistenceKey = `quiz_progress_${quizData.id}_${studentId}`;
+            const savedState = localStorage.getItem(persistenceKey);
+
+            if (savedState) {
+                try {
+                    const state = JSON.parse(savedState);
+                    // Validate basic integrity
+                    if (state.answers && state.answers.length === quizData.questions.length) {
+                        console.log("Restoring session...");
+                        quizStartTime = state.startTime;
+                        studentAnswers = state.answers;
+                        focusLostCount = state.attempts || 0;
+                        // If we restore attempts, update display immediately
+                        if (focusLostCount > 0) {
+                            isHandlingFocusLoss = true; // prevent double trigger on load
+                            setTimeout(() => isHandlingFocusLoss = false, 1000);
+                        }
+                    } else {
+                        // Invalid state, start fresh
+                        studentAnswers = new Array(quizData.questions.length).fill(null);
+                        quizStartTime = Date.now();
+                    }
+                } catch (e) {
+                    console.error("Error restoring state", e);
+                    studentAnswers = new Array(quizData.questions.length).fill(null);
+                    quizStartTime = Date.now();
+                }
+            } else {
+                studentAnswers = new Array(quizData.questions.length).fill(null);
+                quizStartTime = Date.now();
+            }
 
             studentSection.classList.add('hidden');
             quizSection.classList.remove('hidden');
             document.getElementById('quiz-title-display').textContent = quizData.title;
             displayQuestion(0);
 
-            if (quizData.duration > 0 || quizData.expiry) startQuizTimer(quizData.duration, quizData.expiry);
+            // If restoring, we might need to adjust the timer duration passed
+            // The timer function uses "end = Date.now() + duration", but we want "end = startTime + duration"
+            // So we need to handle this in startQuizTimer or pass the calculated end time.
+            // Let's modify startQuizTimer to accept an absolute End Time optionally or handle it via logic.
+            // Actually, easier: pass persistence-aware arguments.
 
-            quizStartTime = Date.now();
+            if (quizData.duration > 0 || quizData.expiry) {
+                startQuizTimer(quizData.duration, quizData.expiry, quizStartTime); // Changed signature
+            }
+
+            // quizStartTime = Date.now(); // REMOVED: Managed above
             isQuizActive = true;
             window.addEventListener('blur', handleFocusLoss);
             document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -535,8 +683,22 @@ async function startQuiz() {
             document.addEventListener('fullscreenchange', handleFullscreenChange);
 
             startDevToolsDetection();
-            attemptsCounter.classList.remove('hidden');
-            updateAttemptsDisplay();
+
+            // Show new widget
+            if (attemptsWidget) {
+                attemptsWidget.classList.remove('hidden');
+                updateAttemptsDisplay();
+                // If we restored attempts, maybe show the widget?
+                if (focusLostCount > 0) expandWidget();
+            }
+
+            // Save Session Logic (Auto-Login Data)
+            localStorage.setItem('quizable_active_session', JSON.stringify({
+                quizId, firstName, lastName,
+                yearVal, sectionVal, secretKey,
+                timestamp: Date.now()
+            }));
+
         });
     } catch (err) {
         hideLoading();
@@ -577,6 +739,7 @@ function displayQuestion(index) {
             container.querySelectorAll('.quiz-option').forEach(o => o.classList.remove('selected'));
             el.classList.add('selected');
             studentAnswers[index] = parseInt(el.dataset.index);
+            saveProgress();
         };
     });
 
@@ -610,23 +773,60 @@ function showReviewPage() {
     document.getElementById('submit-btn').onclick = () => submitQuiz();
 }
 
-function startQuizTimer(mins, expiry) {
+// function startQuizTimer(mins, expiry) { // Old signature
+function startQuizTimer(mins, expiry, startTime) {
     timerDisplay.classList.remove('hidden');
-    let end = Date.now() + (mins * 60000);
-    if (expiry && expiry < end) end = expiry;
+    // Calculate End Time: Strictly use Server Time logic if possible, but localized start time + duration works for duration-based.
+    // For Fixed Expiry, we must compare against current Time.
 
-    timerInterval = setInterval(() => {
-        const diff = end - Date.now();
+    // Logic: The "End Time" is determined once.
+    let absoluteEndTime = startTime + (mins * 60000);
+
+    // If strict expiry date is set, it overrides duration if it's sooner
+    if (expiry && expiry < absoluteEndTime) absoluteEndTime = expiry;
+
+    // If duration is 0 but expiry exists, use expiry
+    if (mins === 0 && expiry) absoluteEndTime = expiry;
+
+    timerInterval = setInterval(async () => {
+        // Use local time for smooth UI updates (seconds ticking), but fallback to server check?
+        // Checking server time every second is too heavy.
+        // We'll trust local time for UI, but if local time "jumps" (cheat attempt), we catch it?
+        // Better: We rely on the "Absolute End Time" vs "Current Time".
+        // If user changes system clock, 'Date.now()' changes.
+        // To strictly prevent system clock hacks, we need 'performance.now()' relative to a trusted start,
+        // OR fetch server time offset periodically.
+
+        // Lightweight approach: We already calculate 'diff'.
+        const now = Date.now();
+        const diff = absoluteEndTime - now;
+
         if (diff <= 0) {
             clearInterval(timerInterval);
-            alert('Time is up!');
-            submitQuiz(true);
+            showConfirmationModal('Time is up!', 'The quiz has expired. Submitting now.', () => submitQuiz(true), true);
             return;
         }
+
+        // Low Time Warning (Under 60 seconds)
+        if (diff <= 60000) {
+            timerDisplay.classList.add('timer-warning');
+        } else {
+            timerDisplay.classList.remove('timer-warning');
+        }
+
         const h = Math.floor(diff / 3600000);
         const m = Math.floor((diff % 3600000) / 60000);
         const s = Math.floor((diff % 60000) / 1000);
         timerDisplay.textContent = `Time Left: ${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+        // Periodic Server Check (every 30s) to detect system clock manipulation
+        if (s % 30 === 0) {
+            const serverNow = await getServerTime();
+            if (serverNow > absoluteEndTime) {
+                clearInterval(timerInterval);
+                showConfirmationModal('Time is up!', 'Quiz expired (Server Time).', () => submitQuiz(true), true);
+            }
+        }
     }, 1000);
 }
 
@@ -644,19 +844,41 @@ function stopDevToolsDetection() { if (devToolsInterval) clearInterval(devToolsI
 
 function handleFocusLoss() {
     if (isQuizActive && !isHandlingFocusLoss) {
-        if (Date.now() - quizStartTime < 1000) return;
+        if (Date.now() - quizStartTime < 2000) return; // Increased grace period to 2s
         isHandlingFocusLoss = true;
         focusLostCount++;
+
         updateAttemptsDisplay();
-        if (focusLostCount <= MAX_ATTEMPTS) {
-            tabWarning.classList.remove('hidden');
-            remainingAttempts.textContent = MAX_ATTEMPTS - focusLostCount;
-        } else {
+
+        // Show expanded warning
+        if (focusLostCount < MAX_ATTEMPTS) {
+            expandWidget();
+        }
+
+        if (focusLostCount >= MAX_ATTEMPTS) {
             alert('Attempts exceeded (Tab Switching/DevTools).');
             submitQuiz(true);
         }
-        setTimeout(() => isHandlingFocusLoss = false, 100);
+
+        setTimeout(() => isHandlingFocusLoss = false, 500); // Increased debounce
     }
+}
+
+function expandWidget() {
+    if (!attemptsWidget) return;
+
+    // Set message
+    attemptsText.textContent = `${focusLostCount} attempts to cheat, you will get disqualified on ${MAX_ATTEMPTS}`;
+
+    attemptsWidget.classList.add('expanded');
+
+    // Clear existing timeout
+    if (widgetTimeout) clearTimeout(widgetTimeout);
+
+    // Auto collapse after 5 seconds
+    widgetTimeout = setTimeout(() => {
+        attemptsWidget.classList.remove('expanded');
+    }, 5000);
 }
 
 function handleFullscreenChange() {
@@ -667,19 +889,13 @@ function handleFullscreenChange() {
         isHandlingFocusLoss = true;
         focusLostCount++;
         updateAttemptsDisplay();
+        expandWidget();
 
-        if (focusLostCount <= MAX_ATTEMPTS) {
-            tabWarning.innerHTML = `
-                <div style="font-size: 4rem; margin-bottom: 20px;">⚠️</div>
-                <h2>Fullscreen Exited</h2>
-                <p>You must stay in fullscreen mode.</p>
-                <button id="return-to-quiz-fs" class="btn btn-primary">Return to Fullscreen</button>
-            `;
-            document.getElementById('return-to-quiz-fs').onclick = () => {
-                document.documentElement.requestFullscreen();
-                tabWarning.classList.add('hidden');
-            };
-            tabWarning.classList.remove('hidden');
+        // Optional: Force them back?
+        // distinct warning for FS exit?
+        if (focusLostCount < MAX_ATTEMPTS) {
+            attemptsText.textContent = "Fullscreen Exited! Return immediately. " + attemptsText.textContent;
+            attemptsWidget.classList.add('expanded');
         } else {
             alert('Attempts exceeded (Fullscreen Exit).');
             submitQuiz(true);
@@ -690,17 +906,34 @@ function handleFullscreenChange() {
 
 function returnToQuiz() { tabWarning.classList.add('hidden'); }
 function updateAttemptsDisplay() {
-    attemptsCount.textContent = focusLostCount;
-    attemptsCounter.textContent = `Attempts: ${focusLostCount}/${MAX_ATTEMPTS}`;
+    if (attemptsNumber) attemptsNumber.textContent = focusLostCount;
+    // Old counter fallback
+    if (attemptsCount) attemptsCount.textContent = focusLostCount;
+    if (remainingAttempts) remainingAttempts.textContent = MAX_ATTEMPTS - focusLostCount;
+    saveProgress();
 }
 
-function showConfirmationModal(title, msg, onConfirm) {
+function saveProgress() {
+    if (!persistenceKey || !isQuizActive) return;
+    const state = {
+        startTime: quizStartTime,
+        answers: studentAnswers,
+        attempts: focusLostCount
+    };
+    localStorage.setItem(persistenceKey, JSON.stringify(state));
+}
+
+// function startQuizTimer(mins, expiry) { // Old signature
+function showConfirmationModal(title, msg, onConfirm, isAlert = false) {
     modalTitle.textContent = title;
     modalMessage.textContent = msg;
     const conf = modalConfirmBtn.cloneNode(true);
     modalConfirmBtn.replaceWith(conf);
     const canc = modalCancelBtn.cloneNode(true);
     modalCancelBtn.replaceWith(canc);
+
+    conf.innerText = isAlert ? "OK" : "Confirm";
+    canc.classList.toggle('hidden', isAlert);
 
     conf.onclick = () => { confirmationModal.classList.add('hidden'); if (onConfirm) onConfirm(); };
     canc.onclick = () => confirmationModal.classList.add('hidden');
@@ -732,10 +965,22 @@ function submitQuiz(auto = false) {
         if (quizData.showResultsToStudent) {
             document.getElementById('submission-success-message').classList.add('hidden');
             const summary = document.getElementById('student-score-summary');
+
+            // Rich Feedback Calculation
+            const percentage = Math.round((score / res.totalQuestions) * 100);
+            let gradeLabel = 'Participant';
+            let gradeColor = 'var(--text-muted)';
+
+            if (percentage >= 90) { gradeLabel = 'Excellent!'; gradeColor = 'var(--success)'; }
+            else if (percentage >= 75) { gradeLabel = 'Good Job!'; gradeColor = 'var(--primary)'; }
+            else if (percentage >= 50) { gradeLabel = 'Fair'; gradeColor = 'var(--warning)'; }
+            else { gradeLabel = 'Needs Improvement'; gradeColor = 'var(--danger)'; }
+
             summary.innerHTML = `
                 <div style="text-align:center; padding:30px; background:var(--bg-body); border-radius:15px; margin-bottom:20px;">
                     <div style="font-size:3rem; font-weight:800; color:var(--primary);">${score} / ${res.totalQuestions}</div>
-                    <div style="color:var(--text-muted);">Final Result</div>
+                    <div style="font-size:1.5rem; font-weight:700; color:${gradeColor}; margin-top:5px;">${gradeLabel} (${percentage}%)</div>
+                    <div style="color:var(--text-muted); margin-top:5px;">Final Result</div>
                 </div>
                 ${detail.map((a, i) => `
                     <div class="quiz-question" style="border-left:5px solid ${a.isCorrect ? 'var(--success)' : 'var(--danger)'};">
@@ -773,15 +1018,48 @@ function submitQuiz(auto = false) {
         isQuizActive = false;
         stopDevToolsDetection();
         stopQuizTimer();
-        attemptsCounter.classList.add('hidden');
+        stopDevToolsDetection();
+        stopQuizTimer();
+        // attemptsCounter.classList.add('hidden');
+        if (attemptsWidget) attemptsWidget.classList.add('hidden');
         timerDisplay.classList.add('hidden');
+
+        // Clear Persistence
+        if (persistenceKey) localStorage.removeItem(persistenceKey);
+        // Clear Active Session
+        localStorage.removeItem('quizable_active_session');
+
+        // Celebration!
+        if (window.confetti) {
+            const duration = 3000;
+            const animationEnd = Date.now() + duration;
+            const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+            const randomInRange = (min, max) => Math.random() * (max - min) + min;
+
+            const interval = setInterval(function () {
+                const timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                    return clearInterval(interval);
+                }
+
+                const particleCount = 50 * (timeLeft / duration);
+                // since particles fall down, start a bit higher than random
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+                confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+            }, 250);
+        }
     };
 
     if (auto) exec();
     else {
         const missing = studentAnswers.filter(a => a === null).length;
-        if (missing > 0) alert(`Answer all questions! (${missing} left)`);
-        else showConfirmationModal('Submit?', 'Sure?', exec);
+        if (missing > 0) {
+            // Replaced alert with Modal
+            showConfirmationModal('Incomplete Quiz', `You haven't answered all questions yet! (${missing} remaining)`, null, true);
+        }
+        else showConfirmationModal('Submit Quiz?', 'Are you sure you want to submit your answers?', exec);
     }
 }
 
