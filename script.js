@@ -406,6 +406,7 @@ function generateEncryptedFile() {
             a.href = url;
             a.download = `quiz_credentials_${quizTitle.replace(/\s+/g, '_')}.txt`;
             a.click();
+            resetQuizForm();
             showConfirmationModal('Quiz Saved!', 'Quiz ID and Secret Key file downloaded.', null);
         }).catch(err => {
             hideLoading();
@@ -415,6 +416,21 @@ function generateEncryptedFile() {
         hideLoading();
         alert('Encryption failed: ' + err.message);
     });
+}
+
+function resetQuizForm() {
+    document.getElementById('quiz-title').value = '';
+    document.getElementById('quiz-subject').value = '';
+    document.getElementById('quiz-duration').value = '0';
+    document.getElementById('quiz-expiry').value = '';
+    document.getElementById('secret-key').value = '';
+    document.getElementById('pasted-json-input').value = '';
+    document.getElementById('json-upload').value = '';
+    document.getElementById('json-file-name').textContent = 'No file chosen';
+    document.getElementById('questions-container').innerHTML = '';
+    // Add one empty question to start fresh
+    addQuestion();
+    alert("Form cleared.");
 }
 
 function handleViewResultsClick() {
