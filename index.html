@@ -171,9 +171,36 @@
                     <input type="text" id="student-last-name" placeholder="Doe">
                 </div>
             </div>
-            <div class="form-group">
-                <label>Year & Section</label>
-                <input type="text" id="student-year-section" placeholder="e.g., BSIT-3A">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div class="form-group">
+                    <label>Year Level</label>
+                    <select id="student-year"
+                        style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: white; outline: none;">
+                        <option value="" disabled selected>Select Year</option>
+                        <option value="1">1st Year</option>
+                        <option value="2">2nd Year</option>
+                        <option value="3">3rd Year</option>
+                        <option value="4">4th Year</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Section</label>
+                    <select id="student-section-select"
+                        style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: white; outline: none;">
+                        <option value="" disabled selected>Select Section</option>
+                        <option value="A">Section A</option>
+                        <option value="B">Section B</option>
+                        <option value="C">Section C</option>
+                        <option value="D">Section D</option>
+                        <option value="E">Section E</option>
+                        <option value="F">Section F</option>
+                        <option value="G">Section G</option>
+                        <option value="H">Section H</option>
+                        <option value="I">Section I</option>
+                        <option value="J">Section J</option>
+                        <option value="TAB">TAB</option>
+                    </select>
+                </div>
             </div>
             <div class="form-group">
                 <label>Access Key</label>

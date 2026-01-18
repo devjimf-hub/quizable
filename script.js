@@ -457,7 +457,16 @@ async function startQuiz() {
     const quizId = document.getElementById('student-quiz-id').value.trim();
     const firstName = document.getElementById('student-first-name').value.trim();
     const lastName = document.getElementById('student-last-name').value.trim();
-    const section = document.getElementById('student-year-section').value.trim();
+
+    // Get Year and Section
+    const yearSelect = document.getElementById('student-year');
+    const sectionSelect = document.getElementById('student-section-select');
+    const yearVal = yearSelect.value;
+    const sectionVal = sectionSelect.value;
+
+    // Combine them (e.g. "3A" or "4TAB")
+    const section = (yearVal && sectionVal) ? `${yearVal}${sectionVal}` : '';
+
     const secretKey = document.getElementById('student-secret-key').value.trim();
 
     if (isDevToolsOpen()) { alert('Close DevTools.'); return; }
