@@ -60,8 +60,10 @@
                 <!-- JSON Example -->
                 <details style="margin-top: 15px; cursor: pointer;">
                     <summary style="font-weight: 600; color: var(--primary);">View JSON Structure Example</summary>
-                    <div class="json-template">
-                        <pre>{
+                    <div class="json-template" style="position:relative;">
+                        <button onclick="copyJsonTemplate()" class="btn btn-outline"
+                            style="position:absolute; top:10px; right:10px; padding:5px 10px; font-size:0.8rem;">Copy</button>
+                        <pre id="json-example-code">{
                             "title": "Sample Quiz",
                             "questions": [
                                 { 

@@ -182,6 +182,17 @@ window.fillCredentials = (id, key) => {
     // fetchAndDisplayResults(id, key);
 };
 
+// function saveTeacherHistory(title, id, key) ...
+
+window.copyJsonTemplate = function () {
+    const text = document.getElementById('json-example-code').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('JSON Example copied to clipboard!');
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
+};
+
 // Teacher functionality
 document.getElementById('add-question').addEventListener('click', () => addQuestion());
 document.getElementById('generate-encrypted-file').addEventListener('click', generateEncryptedFile);
