@@ -29,6 +29,14 @@ let allStudentResults = []; // To store all results for a quiz
 let processedStudentResults = []; // To store results for PDF export
 let quizStartTime = 0;
 
+function showLoading() {
+    document.getElementById('loading-overlay').classList.remove('hidden');
+}
+
+function hideLoading() {
+    document.getElementById('loading-overlay').classList.add('hidden');
+}
+
 // DOM Elements
 const teacherMenu = document.getElementById('teacher-menu');
 const teacherCreateSection = document.getElementById('teacher-create-section');
@@ -58,9 +66,9 @@ function initializeApp() {
     confirmationModal.classList.add('hidden');
     instructionModal.classList.add('hidden');
     document.getElementById('export-pdf-btn').classList.add('hidden');
-    
+
     const part = urlParams.get('part');
-    
+
     if (part === 'teacher') {
         showTeacherMenu();
     } else {
@@ -99,7 +107,7 @@ document.getElementById('generate-encrypted-file').addEventListener('click', gen
 document.getElementById('load-from-json').addEventListener('click', loadQuizFromJson);
 document.getElementById('load-from-pasted-json').addEventListener('click', loadQuizFromPastedText);
 
-document.getElementById('json-upload').addEventListener('change', function() {
+document.getElementById('json-upload').addEventListener('change', function () {
     const fileName = this.files[0] ? this.files[0].name : 'No file chosen';
     document.getElementById('json-file-name').textContent = fileName;
 });
@@ -116,7 +124,7 @@ document.getElementById('view-results-btn').addEventListener('click', handleView
 ['student-quiz-id', 'results-quiz-id'].forEach(id => {
     const element = document.getElementById(id);
     if (element) {
-        element.addEventListener('blur', function() {
+        element.addEventListener('blur', function () {
             this.value = this.value.trim();
         });
     }
@@ -154,7 +162,7 @@ function addQuestion(questionData = null) {
     const figure = questionData ? (questionData.figure || '') : '';
     const options = questionData ? questionData.options.join(' | ') : '';
     const correctAnswer = questionData ? questionData.correctAnswer : 0;
-    
+
     const questionDiv = document.createElement('div');
     questionDiv.className = 'quiz-question';
     questionDiv.innerHTML = `
@@ -177,7 +185,7 @@ function addQuestion(questionData = null) {
         </div>
         <button class="btn btn-danger remove-question">Remove Question</button>
     `;
-    
+
     questionsContainer.appendChild(questionDiv);
 
     if (questionData) {
@@ -185,8 +193,8 @@ function addQuestion(questionData = null) {
         questionDiv.querySelector('.question-figure').value = figure;
         questionDiv.querySelector('.question-options').value = options;
     }
-    
-    questionDiv.querySelector('.remove-question').addEventListener('click', function() {
+
+    questionDiv.querySelector('.remove-question').addEventListener('click', function () {
         questionsContainer.removeChild(questionDiv);
         const questions = questionsContainer.querySelectorAll('.quiz-question');
         questions.forEach((q, index) => {
@@ -242,7 +250,7 @@ function generateEncryptedFile() {
     const randomizeOrder = document.getElementById('randomize-order').checked;
     const secretKey = document.getElementById('secret-key').value;
     const questions = document.querySelectorAll('.quiz-question');
-    
+
     if (questions.length === 0) { alert('Add at least one question.'); return; }
     if (!secretKey) { alert('Enter a Secret Key.'); return; }
 
@@ -257,14 +265,14 @@ function generateEncryptedFile() {
         id: quizId,
         questions: []
     };
-    
+
     let allValid = true;
     questions.forEach((q, index) => {
         const text = q.querySelector('.question-text').value;
         const figure = q.querySelector('.question-figure').value;
         const options = q.querySelector('.question-options').value.split('|').map(opt => opt.trim()).filter(Boolean);
         const correctAnswer = parseInt(q.querySelector('.correct-answer').value);
-        
+
         if (text && options.length >= 2 && !isNaN(correctAnswer) && correctAnswer >= 0 && correctAnswer < options.length) {
             quiz.questions.push({ text, figure, options, correctAnswer });
         } else {
@@ -272,11 +280,13 @@ function generateEncryptedFile() {
             allValid = false;
         }
     });
-    
+
     if (!allValid) return;
 
+    showLoading();
     encryptData(JSON.stringify(quiz), secretKey).then(encrypted => {
         database.ref('quizzes/' + quiz.id).set({ encryptedQuizData: encrypted }).then(() => {
+            hideLoading();
             const credentials = `Quiz Title: ${quizTitle}\nQuiz ID: ${quiz.id}\nSecret Key: ${secretKey}`;
             const blob = new Blob([credentials], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
@@ -285,7 +295,13 @@ function generateEncryptedFile() {
             a.download = `quiz_credentials_${quizTitle.replace(/\s+/g, '_')}.txt`;
             a.click();
             showConfirmationModal('Quiz Saved!', 'Quiz ID and Secret Key file downloaded.', null);
+        }).catch(err => {
+            hideLoading();
+            alert('Failed to save quiz: ' + err.message);
         });
+    }).catch(err => {
+        hideLoading();
+        alert('Encryption failed: ' + err.message);
     });
 }
 
@@ -298,58 +314,67 @@ function handleViewResultsClick() {
 async function fetchAndDisplayResults(quizId, secretKey) {
     const resultsDisplay = document.getElementById('student-results-display');
     const sectionContainer = document.getElementById('section-selector-container');
+
+    showLoading();
     const resultsRef = database.ref(`results/${quizId}`);
-    const snapshot = await resultsRef.once('value');
-    const encryptedResults = snapshot.val();
+    try {
+        const snapshot = await resultsRef.once('value');
+        const encryptedResults = snapshot.val();
 
-    if (!encryptedResults) {
-        resultsDisplay.innerHTML = '<p>No results found.</p>';
-        return;
+        if (!encryptedResults) {
+            hideLoading();
+            resultsDisplay.innerHTML = '<p>No results found.</p>';
+            return;
+        }
+
+        const promises = Object.values(encryptedResults).map(data =>
+            decryptData(data, secretKey).then(JSON.parse).catch(() => null)
+        );
+        const validResults = (await Promise.all(promises)).filter(Boolean);
+        allStudentResults = validResults;
+
+        const resultsBySection = validResults.reduce((acc, res) => {
+            const sec = res.student.section || 'Unspecified';
+            if (!acc[sec]) acc[sec] = [];
+            acc[sec].push(res);
+            return acc;
+        }, {});
+
+        const sortedSections = Object.keys(resultsBySection).sort();
+        const checkboxGroup = document.getElementById('section-checkboxes');
+        checkboxGroup.innerHTML = sortedSections.map(sec => `
+            <label><input type="checkbox" class="section-checkbox" value="${sec}" checked> ${sec}</label>
+        `).join('');
+        sectionContainer.classList.remove('hidden');
+
+        const render = (selected) => {
+            let list = [];
+            selected.forEach(s => list.push(...resultsBySection[s]));
+            list.sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
+            processedStudentResults = list;
+            document.getElementById('export-pdf-btn').classList.toggle('hidden', list.length === 0);
+
+            resultsDisplay.innerHTML = `
+                <h3>Results (${list.length})</h3>
+                ${list.map(res => `
+                    <div class="student-result-card" style="display:flex; justify-content:space-between; padding:15px; border-bottom:1px solid #eee;">
+                        <div><strong>${res.student.lastName}, ${res.student.firstName}</strong> (${res.student.section})</div>
+                        <div style="color:var(--primary); font-weight:700;">${res.score}/${res.totalQuestions}</div>
+                    </div>
+                `).join('')}
+            `;
+        };
+
+        document.getElementById('merge-sections-btn').onclick = () => {
+            const selected = Array.from(document.querySelectorAll('.section-checkbox:checked')).map(cb => cb.value);
+            render(selected);
+        };
+        render(sortedSections);
+        hideLoading();
+    } catch (error) {
+        hideLoading();
+        alert('Error fetching results: ' + error.message);
     }
-
-    const promises = Object.values(encryptedResults).map(data => 
-        decryptData(data, secretKey).then(JSON.parse).catch(() => null)
-    );
-    const validResults = (await Promise.all(promises)).filter(Boolean);
-    allStudentResults = validResults;
-
-    const resultsBySection = validResults.reduce((acc, res) => {
-        const sec = res.student.section || 'Unspecified';
-        if (!acc[sec]) acc[sec] = [];
-        acc[sec].push(res);
-        return acc;
-    }, {});
-
-    const sortedSections = Object.keys(resultsBySection).sort();
-    const checkboxGroup = document.getElementById('section-checkboxes');
-    checkboxGroup.innerHTML = sortedSections.map(sec => `
-        <label><input type="checkbox" class="section-checkbox" value="${sec}" checked> ${sec}</label>
-    `).join('');
-    sectionContainer.classList.remove('hidden');
-
-    const render = (selected) => {
-        let list = [];
-        selected.forEach(s => list.push(...resultsBySection[s]));
-        list.sort((a,b) => a.student.lastName.localeCompare(b.student.lastName));
-        processedStudentResults = list;
-        document.getElementById('export-pdf-btn').classList.toggle('hidden', list.length === 0);
-
-        resultsDisplay.innerHTML = `
-            <h3>Results (${list.length})</h3>
-            ${list.map(res => `
-                <div class="student-result-card" style="display:flex; justify-content:space-between; padding:15px; border-bottom:1px solid #eee;">
-                    <div><strong>${res.student.lastName}, ${res.student.firstName}</strong> (${res.student.section})</div>
-                    <div style="color:var(--primary); font-weight:700;">${res.score}/${res.totalQuestions}</div>
-                </div>
-            `).join('')}
-        `;
-    };
-
-    document.getElementById('merge-sections-btn').onclick = () => {
-        const selected = Array.from(document.querySelectorAll('.section-checkbox:checked')).map(cb => cb.value);
-        render(selected);
-    };
-    render(sortedSections);
 }
 
 function exportResultsToPdf() {
@@ -357,7 +382,7 @@ function exportResultsToPdf() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const res0 = processedStudentResults[0];
-    
+
     doc.setFontSize(18);
     doc.text(res0.quizTitle, 14, 22);
     doc.autoTable({
@@ -371,7 +396,7 @@ function exportResultsToPdf() {
         doc.text(`Detail: ${res.student.lastName}, ${res.student.firstName}`, 14, 20);
         doc.autoTable({
             head: [['#', 'Question', 'Student', 'Correct', 'Result']],
-            body: res.detailedAnswers.map((a, i) => [i+1, a.questionText, a.studentAnswerText, a.correctAnswerText, a.isCorrect ? '✓' : '✗']),
+            body: res.detailedAnswers.map((a, i) => [i + 1, a.questionText, a.studentAnswerText, a.correctAnswerText, a.isCorrect ? '✓' : '✗']),
             startY: 30
         });
     });
@@ -412,7 +437,9 @@ async function getServerTime() {
     try {
         const offsetSnap = await database.ref(".info/serverTimeOffset").once("value");
         return Date.now() + (offsetSnap.val() || 0);
-    } catch { return Date.now(); }
+    } catch {
+        return Date.now();
+    }
 }
 
 function togglePrivacyBlur(e) {
@@ -432,56 +459,80 @@ async function startQuiz() {
     const lastName = document.getElementById('student-last-name').value.trim();
     const section = document.getElementById('student-year-section').value.trim();
     const secretKey = document.getElementById('student-secret-key').value.trim();
-    
+
     if (isDevToolsOpen()) { alert('Close DevTools.'); return; }
     if (!quizId || !firstName || !lastName || !section || !secretKey) { alert('Fill all fields.'); return; }
 
     const studentId = `${lastName}_${firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
-    const snap = await database.ref(`results/${quizId}/${studentId}`).once('value');
-    if (snap.exists()) { alert('Already submitted.'); return; }
 
-    database.ref('quizzes/' + quizId).once('value', async (s) => {
-        const data = s.val();
-        if (!data) { alert('Quiz not found.'); return; }
-        try {
-            const decrypted = await decryptData(data.encryptedQuizData, secretKey);
-            quizData = JSON.parse(decrypted);
-            
-            if (quizData.expiry && (await getServerTime()) > quizData.expiry) {
-                alert('Quiz expired.'); return;
-            }
+    showLoading();
+    try {
+        const snap = await database.ref(`results/${quizId}/${studentId}`).once('value');
+        if (snap.exists()) {
+            hideLoading();
+            alert('Already submitted.');
+            return;
+        }
 
-            const record = localStorage.getItem(quizData.id);
-            if (record && (Date.now() - JSON.parse(record).timestamp < 10800000)) {
-                alert('Already submitted (local).'); return;
-            }
+        const quizSnap = await database.ref('quizzes/' + quizId).once('value');
+        const data = quizSnap.val();
+        if (!data) {
+            hideLoading();
+            alert('Quiz not found.');
+            return;
+        }
 
-            showInstructionModal(quizData.instructionCountdown, () => {
-                if (quizData.randomizeOrder !== false) shuffleQuiz(quizData);
-                quizData.student = { firstName, lastName, section };
-                quizData.secretKey = secretKey;
-                studentAnswers = new Array(quizData.questions.length).fill(null);
-                
-                studentSection.classList.add('hidden');
-                quizSection.classList.remove('hidden');
-                document.getElementById('quiz-title-display').textContent = quizData.title;
-                displayQuestion(0);
-                
-                if (quizData.duration > 0 || quizData.expiry) startQuizTimer(quizData.duration, quizData.expiry);
-                
-                quizStartTime = Date.now();
-                isQuizActive = true;
-                window.addEventListener('blur', handleFocusLoss);
-                document.addEventListener('visibilitychange', handleVisibilityChange);
-                window.addEventListener('blur', togglePrivacyBlur);
-                window.addEventListener('focus', togglePrivacyBlur);
-                document.addEventListener('keyup', handlePrintScreen);
-                startDevToolsDetection();
-                attemptsCounter.classList.remove('hidden');
-                updateAttemptsDisplay();
-            });
-        } catch { alert('Decryption failed.'); }
-    });
+        const decrypted = await decryptData(data.encryptedQuizData, secretKey);
+        quizData = JSON.parse(decrypted);
+
+        const serverTime = await getServerTime();
+        if (quizData.expiry && serverTime > quizData.expiry) {
+            hideLoading();
+            alert('Quiz expired.');
+            return;
+        }
+
+        const record = localStorage.getItem(quizData.id);
+        if (record && (Date.now() - JSON.parse(record).timestamp < 10800000)) {
+            hideLoading();
+            alert('Already submitted (local record).');
+            return;
+        }
+
+        hideLoading();
+        showInstructionModal(quizData.instructionCountdown, () => {
+            if (quizData.randomizeOrder !== false) shuffleQuiz(quizData);
+            quizData.student = { firstName, lastName, section };
+            quizData.secretKey = secretKey;
+            studentAnswers = new Array(quizData.questions.length).fill(null);
+
+            studentSection.classList.add('hidden');
+            quizSection.classList.remove('hidden');
+            document.getElementById('quiz-title-display').textContent = quizData.title;
+            displayQuestion(0);
+
+            if (quizData.duration > 0 || quizData.expiry) startQuizTimer(quizData.duration, quizData.expiry);
+
+            quizStartTime = Date.now();
+            isQuizActive = true;
+            window.addEventListener('blur', handleFocusLoss);
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            window.addEventListener('blur', togglePrivacyBlur);
+            window.addEventListener('focus', togglePrivacyBlur);
+            document.addEventListener('keyup', handlePrintScreen);
+
+            // Enforce Fullscreen
+            document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen blocked:', e));
+            document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+            startDevToolsDetection();
+            attemptsCounter.classList.remove('hidden');
+            updateAttemptsDisplay();
+        });
+    } catch (err) {
+        hideLoading();
+        alert('Failed to start quiz: ' + err.message);
+    }
 }
 
 function displayQuestion(index) {
@@ -490,9 +541,9 @@ function displayQuestion(index) {
     document.getElementById('quiz-review').classList.add('hidden');
     const container = document.getElementById('quiz-questions');
     container.classList.remove('hidden');
-    
-    document.getElementById('quiz-progress').style.width = `${((index+1)/quizData.questions.length)*100}%`;
-    
+
+    document.getElementById('quiz-progress').style.width = `${((index + 1) / quizData.questions.length) * 100}%`;
+
     container.innerHTML = `
         <div class="quiz-question">
             <h3>Question ${index + 1} of ${quizData.questions.length}</h3>
@@ -506,12 +557,12 @@ function displayQuestion(index) {
         </div>
         <div style="display:flex; justify-content:space-between;">
             <button class="btn btn-outline" ${index === 0 ? 'disabled' : ''} id="prev-btn">Previous</button>
-            ${index === quizData.questions.length - 1 
-                ? '<button class="btn btn-info" id="review-btn">Review Answers</button>' 
-                : '<button class="btn btn-primary" id="next-btn">Next</button>'}
+            ${index === quizData.questions.length - 1
+            ? '<button class="btn btn-info" id="review-btn">Review Answers</button>'
+            : '<button class="btn btn-primary" id="next-btn">Next</button>'}
         </div>
     `;
-    
+
     container.querySelectorAll('.quiz-option').forEach(el => {
         el.onclick = () => {
             container.querySelectorAll('.quiz-option').forEach(o => o.classList.remove('selected'));
@@ -519,7 +570,7 @@ function displayQuestion(index) {
             studentAnswers[index] = parseInt(el.dataset.index);
         };
     });
-    
+
     const prev = document.getElementById('prev-btn');
     if (prev) prev.onclick = () => displayQuestion(index - 1);
     const next = document.getElementById('next-btn');
@@ -532,18 +583,18 @@ function showReviewPage() {
     document.getElementById('quiz-questions').classList.add('hidden');
     const review = document.getElementById('quiz-review');
     review.classList.remove('hidden');
-    
+
     review.innerHTML = `
         <h2>Review Answers</h2>
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;">
             ${quizData.questions.map((q, i) => `
-                <div onclick="displayQuestion(${i})" style="padding:15px; border-radius:10px; cursor:pointer; border:1px solid ${studentAnswers[i]!==null ? 'var(--success)' : 'var(--danger)'}; background:${studentAnswers[i]!==null ? '#f0fdf4' : '#fef2f2'};">
-                    <strong>Q${i+1}</strong>: ${studentAnswers[i]!==null ? 'Answered' : 'Missing'}
+                <div onclick="displayQuestion(${i})" style="padding:15px; border-radius:10px; cursor:pointer; border:1px solid ${studentAnswers[i] !== null ? 'var(--success)' : 'var(--danger)'}; background:${studentAnswers[i] !== null ? '#f0fdf4' : '#fef2f2'};">
+                    <strong>Q${i + 1}</strong>: ${studentAnswers[i] !== null ? 'Answered' : 'Missing'}
                 </div>
             `).join('')}
         </div>
         <div style="display:flex; justify-content:space-between;">
-            <button class="btn btn-outline" onclick="displayQuestion(${quizData.questions.length-1})">Back</button>
+            <button class="btn btn-outline" onclick="displayQuestion(${quizData.questions.length - 1})">Back</button>
             <button class="btn btn-success" id="submit-btn" style="padding:15px 40px;">Final Submit</button>
         </div>
     `;
@@ -563,10 +614,10 @@ function startQuizTimer(mins, expiry) {
             submitQuiz(true);
             return;
         }
-        const h = Math.floor(diff/3600000);
-        const m = Math.floor((diff%3600000)/60000);
-        const s = Math.floor((diff%60000)/1000);
-        timerDisplay.textContent = `Time Left: ${h > 0 ? h+':' : ''}${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        timerDisplay.textContent = `Time Left: ${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     }, 1000);
 }
 
@@ -592,7 +643,36 @@ function handleFocusLoss() {
             tabWarning.classList.remove('hidden');
             remainingAttempts.textContent = MAX_ATTEMPTS - focusLostCount;
         } else {
-            alert('Attempts exceeded.');
+            alert('Attempts exceeded (Tab Switching/DevTools).');
+            submitQuiz(true);
+        }
+        setTimeout(() => isHandlingFocusLoss = false, 100);
+    }
+}
+
+function handleFullscreenChange() {
+    if (isQuizActive && !document.fullscreenElement) {
+        // User exited fullscreen
+        if (Date.now() - quizStartTime < 1000) return; // Grace period
+
+        isHandlingFocusLoss = true;
+        focusLostCount++;
+        updateAttemptsDisplay();
+
+        if (focusLostCount <= MAX_ATTEMPTS) {
+            tabWarning.innerHTML = `
+                <div style="font-size: 4rem; margin-bottom: 20px;">⚠️</div>
+                <h2>Fullscreen Exited</h2>
+                <p>You must stay in fullscreen mode.</p>
+                <button id="return-to-quiz-fs" class="btn btn-primary">Return to Fullscreen</button>
+            `;
+            document.getElementById('return-to-quiz-fs').onclick = () => {
+                document.documentElement.requestFullscreen();
+                tabWarning.classList.add('hidden');
+            };
+            tabWarning.classList.remove('hidden');
+        } else {
+            alert('Attempts exceeded (Fullscreen Exit).');
             submitQuiz(true);
         }
         setTimeout(() => isHandlingFocusLoss = false, 100);
@@ -612,7 +692,7 @@ function showConfirmationModal(title, msg, onConfirm) {
     modalConfirmBtn.replaceWith(conf);
     const canc = modalCancelBtn.cloneNode(true);
     modalCancelBtn.replaceWith(canc);
-    
+
     conf.onclick = () => { confirmationModal.classList.add('hidden'); if (onConfirm) onConfirm(); };
     canc.onclick = () => confirmationModal.classList.add('hidden');
     confirmationModal.classList.remove('hidden');
@@ -632,9 +712,9 @@ function submitQuiz(auto = false) {
                 isCorrect: correct
             };
         });
-        
-        const res = { 
-            student: quizData.student, quizTitle: quizData.title, 
+
+        const res = {
+            student: quizData.student, quizTitle: quizData.title,
             subject: quizData.subject, score, totalQuestions: quizData.questions.length,
             detailedAnswers: detail, quizId: quizData.id
         };
@@ -650,7 +730,7 @@ function submitQuiz(auto = false) {
                 </div>
                 ${detail.map((a, i) => `
                     <div class="quiz-question" style="border-left:5px solid ${a.isCorrect ? 'var(--success)' : 'var(--danger)'};">
-                        <strong>Q${i+1}</strong>: ${a.questionText}<br>
+                        <strong>Q${i + 1}</strong>: ${a.questionText}<br>
                         Your: ${a.studentAnswerText} | Correct: ${a.correctAnswerText}
                     </div>
                 `).join('')}
@@ -663,12 +743,21 @@ function submitQuiz(auto = false) {
 
         quizSection.classList.add('hidden');
         resultsSection.classList.remove('hidden');
-        try { localStorage.setItem(quizData.id, JSON.stringify({ timestamp: Date.now() })); } catch {}
+        try { localStorage.setItem(quizData.id, JSON.stringify({ timestamp: Date.now() })); } catch { }
 
         if (quizData.saveResultsToCloud !== false) {
+            showLoading();
             encryptData(JSON.stringify(res), quizData.secretKey).then(enc => {
                 const id = `${quizData.student.lastName}_${quizData.student.firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
-                database.ref(`results/${quizData.id}/${id}`).set(enc);
+                database.ref(`results/${quizData.id}/${id}`).set(enc).then(() => {
+                    hideLoading();
+                }).catch(err => {
+                    hideLoading();
+                    console.error('Submission error:', err);
+                });
+            }).catch(err => {
+                hideLoading();
+                console.error('Encryption error:', err);
             });
         }
 
@@ -697,7 +786,7 @@ function downloadStudentResultsAsPdf() {
     doc.text(`Score: ${res.score}/${res.totalQuestions}`, 14, 40);
     doc.autoTable({
         head: [['#', 'Question', 'Your Answer', 'Result']],
-        body: res.detailedAnswers.map((a, i) => [i+1, a.questionText, a.studentAnswerText, a.isCorrect ? 'Correct' : 'Incorrect']),
+        body: res.detailedAnswers.map((a, i) => [i + 1, a.questionText, a.studentAnswerText, a.isCorrect ? 'Correct' : 'Incorrect']),
         startY: 50
     });
     doc.save('My_Results.pdf');
@@ -708,7 +797,7 @@ function restartQuiz() {
 }
 
 // Initialization
-window.onload = function() {
+window.onload = function () {
     initializeApp();
     document.getElementById('download-student-pdf-btn').addEventListener('click', downloadStudentResultsAsPdf);
 };
