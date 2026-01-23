@@ -446,8 +446,36 @@ function handleViewResultsClick() {
 async function fetchAndDisplayResults(quizId, secretKey) {
     const resultsDisplay = document.getElementById('student-results-display');
     const sectionContainer = document.getElementById('section-selector-container');
+    const quizManagementContainer = document.getElementById('quiz-management-container');
+    const modifyExpiryInput = document.getElementById('modify-quiz-expiry');
 
     showLoading();
+    quizManagementContainer.classList.add('hidden');
+
+    // Fetch Quiz Details for Management
+    try {
+        const quizSnap = await database.ref('quizzes/' + quizId).once('value');
+        const quizDataEnc = quizSnap.val();
+        if (quizDataEnc) {
+            const decrypted = await decryptData(quizDataEnc.encryptedQuizData, secretKey);
+            const quizDetails = JSON.parse(decrypted);
+
+            quizManagementContainer.classList.remove('hidden');
+            if (quizDetails.expiry) {
+                const date = new Date(quizDetails.expiry);
+                const offset = date.getTimezoneOffset() * 60000;
+                const localISOTime = new Date(date.getTime() - offset).toISOString().slice(0, 16);
+                modifyExpiryInput.value = localISOTime;
+            }
+
+            document.getElementById('update-expiry-btn').onclick = () => {
+                updateQuizExpiry(quizId, secretKey, modifyExpiryInput.value, quizDetails);
+            };
+        }
+    } catch (e) {
+        console.warn("Could not fetch quiz details for management:", e);
+    }
+
     const resultsRef = database.ref(`results/${quizId}`);
     try {
         const snapshot = await resultsRef.once('value');
@@ -488,12 +516,18 @@ async function fetchAndDisplayResults(quizId, secretKey) {
 
             resultsDisplay.innerHTML = `
                 <h3>Results (${list.length})</h3>
-                ${list.map(res => `
-                    <div class="student-result-card" style="display:flex; justify-content:space-between; padding:15px; border-bottom:1px solid #eee;">
-                        <div><strong>${res.student.lastName}, ${res.student.firstName}</strong> (${res.student.section})</div>
-                        <div style="color:var(--primary); font-weight:700;">${res.score}/${res.totalQuestions}</div>
+                ${list.map(res => {
+                const submissionDate = res.submittedAt ? new Date(res.submittedAt).toLocaleString() : 'N/A';
+                return `
+                    <div class="student-result-card" style="display:flex; justify-content:space-between; align-items:center; padding:15px; border-bottom:1px solid #eee;">
+                        <div>
+                            <strong>${res.student.lastName}, ${res.student.firstName}</strong> (${res.student.section})
+                            <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">Submitted: ${submissionDate}</div>
+                        </div>
+                        <div style="color:var(--primary); font-weight:700; font-size:1.1rem;">${res.score}/${res.totalQuestions}</div>
                     </div>
-                `).join('')}
+                    `;
+            }).join('')}
             `;
         };
 
@@ -509,6 +543,31 @@ async function fetchAndDisplayResults(quizId, secretKey) {
     }
 }
 
+async function updateQuizExpiry(quizId, secretKey, newExpiryStr, currentQuizData) {
+    if (!confirm('Are you sure you want to update the expiration date?')) return;
+
+    showLoading();
+    try {
+        // Update the expiry in the quiz object
+        const newExpiry = newExpiryStr ? new Date(newExpiryStr).getTime() : null;
+        currentQuizData.expiry = newExpiry;
+
+        // Re-encrypt the entire quiz data
+        const encrypted = await encryptData(JSON.stringify(currentQuizData), secretKey);
+
+        // Save back to Firebase
+        await database.ref('quizzes/' + quizId).update({
+            encryptedQuizData: encrypted
+        });
+
+        hideLoading();
+        showConfirmationModal('Success!', 'Quiz expiration date has been updated.', null, true);
+    } catch (error) {
+        hideLoading();
+        alert('Failed to update expiry: ' + error.message);
+    }
+}
+
 function exportResultsToPdf() {
     if (processedStudentResults.length === 0) return;
     const { jsPDF } = window.jspdf;
@@ -518,8 +577,14 @@ function exportResultsToPdf() {
     doc.setFontSize(18);
     doc.text(res0.quizTitle, 14, 22);
     doc.autoTable({
-        head: [['Last Name', 'First Name', 'Section', 'Score']],
-        body: processedStudentResults.map(r => [r.student.lastName, r.student.firstName, r.student.section, `${r.score}/${r.totalQuestions}`]),
+        head: [['Last Name', 'First Name', 'Section', 'Score', 'Submitted At']],
+        body: processedStudentResults.map(r => [
+            r.student.lastName,
+            r.student.firstName,
+            r.student.section,
+            `${r.score}/${r.totalQuestions}`,
+            r.submittedAt ? new Date(r.submittedAt).toLocaleString() : 'N/A'
+        ]),
         startY: 30
     });
 
@@ -985,7 +1050,8 @@ function submitQuiz(auto = false) {
         const res = {
             student: quizData.student, quizTitle: quizData.title,
             subject: quizData.subject, score, totalQuestions: quizData.questions.length,
-            detailedAnswers: detail, quizId: quizData.id
+            detailedAnswers: detail, quizId: quizData.id,
+            submittedAt: Date.now()
         };
         window.studentResultsDataForPdf = res;
 
@@ -1096,12 +1162,14 @@ function downloadStudentResultsAsPdf() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     doc.text(res.quizTitle, 14, 20);
-    doc.text(`Student: ${res.student.firstName} ${res.student.lastName}`, 14, 30);
+    doc.text(`Student: ${res.student.firstName} ${res.student.lastName} (${res.student.section})`, 14, 30);
     doc.text(`Score: ${res.score}/${res.totalQuestions}`, 14, 40);
+    const submissionDate = res.submittedAt ? new Date(res.submittedAt).toLocaleString() : 'N/A';
+    doc.text(`Submitted At: ${submissionDate}`, 14, 50);
     doc.autoTable({
         head: [['#', 'Question', 'Your Answer', 'Result']],
         body: res.detailedAnswers.map((a, i) => [i + 1, a.questionText, a.studentAnswerText, a.isCorrect ? 'Correct' : 'Incorrect']),
-        startY: 50
+        startY: 60
     });
     doc.save('My_Results.pdf');
 }

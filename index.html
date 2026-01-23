@@ -159,8 +159,23 @@
             </div>
 
             <div id="student-results-display" style="margin-top: 30px;"></div>
+
+            <!-- Quiz Management (New Feature) -->
+            <div id="quiz-management-container" class="hidden"
+                style="margin-top: 30px; padding: 20px; background: var(--bg-body); border-radius: 12px; border: 1px solid var(--border);">
+                <h3>Quiz Management</h3>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label>Modify Expiry Date/Time</label>
+                    <div style="display: flex; gap: 10px; margin-top: 5px;">
+                        <input type="datetime-local" id="modify-quiz-expiry" style="flex-grow: 1;">
+                        <button id="update-expiry-btn" class="btn btn-warning">Update Expiry</button>
+                    </div>
+                </div>
+            </div>
+
             <button id="export-pdf-btn" class="btn btn-info hidden" style="width: 100%; margin-top: 20px;">Export to
                 Professional PDF</button>
+
         </div>
 
         <!-- Student Entry Screen -->
