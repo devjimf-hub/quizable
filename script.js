@@ -357,18 +357,18 @@ function addQuestion(questionData = null) {
     questionDiv.id = `question-card-${questionIndex}`;
 
     questionDiv.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <div class="question-card-header">
             <h3 class="question-number-title">Question ${questionIndex + 1}</h3>
-            <div style="display:flex; gap:10px;">
-                <button class="btn btn-outline preview-toggle-btn" style="padding:5px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+            <div class="question-card-actions">
+                <button class="btn btn-outline preview-toggle-btn">
                     <svg class="icon-eye" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
                     <span>Preview</span>
                 </button>
-                <button class="btn btn-outline duplicate-question" style="padding:5px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                <button class="btn btn-outline duplicate-question">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                     <span>Duplicate</span>
                 </button>
-                <button class="btn btn-danger remove-question" style="padding:5px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                <button class="btn btn-danger remove-question">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                     <span>Remove</span>
                 </button>
@@ -380,20 +380,20 @@ function addQuestion(questionData = null) {
             <textarea class="question-text" placeholder="What is the result of...?" rows="3">${text}</textarea>
         </div>
         
-        <details class="form-group figure-collapsible" ${figure ? 'open' : ''} style="margin-bottom: 20px;">
-            <summary style="cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); outline: none; margin-bottom: 5px; display: flex; align-items: center; gap: 8px;">
+        <details class="form-group figure-collapsible" ${figure ? 'open' : ''}>
+            <summary class="figure-summary">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                 Add Figure / Illustration (HTML/SVG)
             </summary>
-            <div style="display: flex; gap: 15px; margin-top: 10px; align-items: stretch;">
-                <div style="flex: 1; position: relative; display: flex;">
-                    <textarea class="question-figure" placeholder="e.g. <svg>...</svg> or <b>Code Snippet</b>" rows="3" style="flex: 1; margin: 0; padding-top: 25px;">${figure}</textarea>
-                    <button class="clear-figure-btn" style="position: absolute; top: 5px; right: 8px; padding: 2px 8px; font-size: 0.65rem; border-radius: 4px; border: 1px solid var(--danger); background: #fff; color: var(--danger); cursor: pointer; z-index: 1; display: flex; align-items: center; gap: 4px;">
+            <div class="figure-editor-layout">
+                <div class="figure-input-wrapper">
+                    <textarea class="question-figure" placeholder="e.g. <svg>...</svg> or <b>Code Snippet</b>" rows="3">${figure}</textarea>
+                    <button class="clear-figure-btn">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         Clear content
                     </button>
                 </div>
-                <div class="figure-editor-preview" style="flex: 1; border: 1px dashed var(--border); border-radius: 8px; padding: 10px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: auto; min-height: 100px; max-height: 200px;">
+                <div class="figure-editor-preview">
                     <small style="color:var(--text-muted)">Figure Preview</small>
                 </div>
             </div>
@@ -405,10 +405,9 @@ function addQuestion(questionData = null) {
         </div>
         
         <div class="form-group">
-            <label style="display:flex; justify-content:space-between; align-items:center;">
-                Options
-                <small style="color:var(--text-muted); font-weight:normal;">Click a number (0, 1...) to mark it as correct</small>
-                <button class="btn btn-outline add-option-btn" style="padding:2px 8px; font-size:0.75rem;">+ Add Option</button>
+            <label class="options-header">
+                <span>Options <small style="color:var(--text-muted); font-weight:normal;">(Click a number to mark as correct)</small></span>
+                <button class="btn btn-outline btn-sm add-option-btn">+ Add Option</button>
             </label>
             <div class="options-builder"></div>
         </div>
@@ -487,9 +486,9 @@ function addOptionInput(container, value = '', isCorrect = false) {
     const div = document.createElement('div');
     div.className = 'option-input-group';
     div.innerHTML = `
-        <span class="option-index-badge" style="background: ${isCorrect ? 'var(--success)' : 'var(--bg-body)'}; border: 1px solid ${isCorrect ? 'var(--success)' : 'var(--border)'}; color: ${isCorrect ? 'white' : 'var(--text-main)'}; padding: 5px 10px; border-radius: 6px; font-weight: 700; min-width: 40px; text-align: center; cursor: pointer;" title="Set as correct answer">${index}</span>
+        <span class="option-index-badge ${isCorrect ? 'correct' : ''}" title="Set as correct answer">${index}</span>
         <input type="text" class="option-val" placeholder="Possible answer..." value="${value}">
-        <span class="remove-option-btn" style="display: flex; align-items: center; justify-content: center;">
+        <span class="remove-option-btn">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </span>
     `;
@@ -504,9 +503,8 @@ function addOptionInput(container, value = '', isCorrect = false) {
         container.querySelectorAll('.option-input-group').forEach((group, i) => {
             const badge = group.querySelector('.option-index-badge');
             const match = (i === index);
-            badge.style.background = match ? 'var(--success)' : 'var(--bg-body)';
-            badge.style.borderColor = match ? 'var(--success)' : 'var(--border)';
-            badge.style.color = match ? 'white' : 'var(--text-main)';
+            if (match) badge.classList.add('correct');
+            else badge.classList.remove('correct');
         });
         saveDraft();
     });
