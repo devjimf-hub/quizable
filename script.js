@@ -934,11 +934,19 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             const passCount = scores.filter(s => s >= 75).length;
             const passRate = scores.length ? ((passCount / scores.length) * 100).toFixed(1) : 0;
 
+            const times = list.map(r => r.timeTakenMs || 0).filter(t => t > 0);
+            const avgTimeMs = times.length ? (times.reduce((a, b) => a + b, 0) / times.length) : 0;
+            const avgTimeMins = (avgTimeMs / 60000).toFixed(1);
+
             resultsDisplay.innerHTML = `
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:30px;">
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:15px; margin-bottom:30px;">
                     <div class="card" style="padding:15px; margin-bottom:0; text-align:center; background:var(--bg-body); border:1px solid var(--border);">
                         <div style="font-size:0.8rem; color:var(--text-muted);">Avg. Score</div>
                         <div style="font-size:1.5rem; font-weight:700; color:var(--primary);">${avgScore}%</div>
+                    </div>
+                    <div class="card" style="padding:15px; margin-bottom:0; text-align:center; background:var(--bg-body); border:1px solid var(--border);">
+                        <div style="font-size:0.8rem; color:var(--text-muted);">Avg. Duration</div>
+                        <div style="font-size:1.5rem; font-weight:700; color:var(--info);">${avgTimeMins}m</div>
                     </div>
                     <div class="card" style="padding:15px; margin-bottom:0; text-align:center; background:var(--bg-body); border:1px solid var(--border);">
                         <div style="font-size:0.8rem; color:var(--text-muted);">Highest</div>
@@ -950,7 +958,7 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                     </div>
                     <div class="card" style="padding:15px; margin-bottom:0; text-align:center; background:var(--bg-body); border:1px solid var(--border);">
                         <div style="font-size:0.8rem; color:var(--text-muted);">Students</div>
-                        <div style="font-size:1.5rem; font-weight:700; color:var(--info);">${list.length}</div>
+                        <div style="font-size:1.5rem; font-weight:700; color:var(--text-main);">${list.length}</div>
                     </div>
                 </div>
 
@@ -969,7 +977,7 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                         </div>
                         <div style="text-align:right;">
                             <div style="color:var(--primary); font-weight:800; font-size:1.2rem;">${res.score}/${res.totalQuestions}</div>
-                            <div style="font-size:0.7rem; color:var(--text-muted);">${submissionDate}</div>
+                            <div style="font-size:0.7rem; color:var(--text-muted);">${res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A'} | ${submissionDate}</div>
                         </div>
                     </div>
                     `;
@@ -1033,6 +1041,9 @@ function exportResultsToPdf() {
     const passCount = scores.filter(s => s >= 75).length;
     const passRate = scores.length ? ((passCount / scores.length) * 100).toFixed(1) : 0;
 
+    const times = processedStudentResults.map(r => r.timeTakenMs || 0).filter(t => t > 0);
+    const avgTimeMins = times.length ? (times.reduce((a, b) => a + b, 0) / times.length / 60000).toFixed(1) : 0;
+
     // Header
     doc.setFontSize(22);
     doc.setTextColor(16, 185, 129); // var(--primary)
@@ -1048,6 +1059,7 @@ function exportResultsToPdf() {
         head: [['Class Performance Summary', 'Value']],
         body: [
             ['Average Score', `${avgScore}%`],
+            ['Average Duration', `${avgTimeMins}m`],
             ['Highest Score', `${highest}%`],
             ['Pass Rate (75%+)', `${passRate}%`],
             ['Total Students', processedStudentResults.length]
@@ -1063,13 +1075,14 @@ function exportResultsToPdf() {
     doc.text('Student Performance List', 14, doc.lastAutoTable.finalY + 15);
 
     doc.autoTable({
-        head: [['Last Name', 'First Name', 'ID', 'Section', 'Score', 'Violations', 'Submitted At']],
+        head: [['Last Name', 'First Name', 'ID', 'Section', 'Score', 'Duration', 'Violations', 'Submitted At']],
         body: processedStudentResults.map(r => [
             r.student.lastName,
             r.student.firstName,
             r.student.institutionalId || 'N/A',
             r.student.section,
             `${r.score}/${r.totalQuestions}`,
+            r.timeTakenMs ? (r.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A',
             r.securityViolations || 0,
             r.submittedAt ? new Date(r.submittedAt).toLocaleString() : 'N/A'
         ]),
@@ -1087,7 +1100,8 @@ function exportResultsToPdf() {
         doc.setFontSize(11);
         doc.setTextColor(100, 116, 139);
         doc.text(`Institutional ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}`, 14, 28);
-        doc.text(`Final Score: ${res.score}/${res.totalQuestions} (${((res.score / res.totalQuestions) * 100).toFixed(1)}%)`, 14, 35);
+        const duration = res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A';
+        doc.text(`Final Score: ${res.score}/${res.totalQuestions} (${((res.score / res.totalQuestions) * 100).toFixed(1)}%) | Duration: ${duration}`, 14, 35);
 
         doc.autoTable({
             head: [['#', 'Question', 'Student Answer', 'Correct Answer', 'Result']],
@@ -1582,7 +1596,8 @@ function submitQuiz(auto = false) {
             subject: quizData.subject, score, totalQuestions: quizData.questions.length,
             detailedAnswers: detail, quizId: quizData.id,
             securityViolations: focusLostCount, // Track tab switches
-            submittedAt: Date.now()
+            submittedAt: Date.now(),
+            timeTakenMs: Date.now() - quizStartTime
         };
         window.studentResultsDataForPdf = res;
 
@@ -1724,7 +1739,8 @@ function downloadStudentResultsAsPdf() {
     doc.setFontSize(13);
     doc.setTextColor(6, 78, 59);
     doc.text(`${res.student.lastName}, ${res.student.firstName}`, 18, 55);
-    doc.text(`ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}`, 18, 62);
+    const durationStr = res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A';
+    doc.text(`ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section} | Duration: ${durationStr}`, 18, 62);
     doc.text(`Submitted: ${res.submittedAt ? new Date(res.submittedAt).toLocaleString() : 'N/A'}`, 18, 69);
 
     // Score Circle/Badge representation
