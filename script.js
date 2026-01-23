@@ -37,6 +37,30 @@ function hideLoading() {
     document.getElementById('loading-overlay').classList.add('hidden');
 }
 
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    const icons = {
+        success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success)"><polyline points="20 6 9 17 4 12"></polyline></svg>',
+        info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--info)"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
+        error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--danger)"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>'
+    };
+
+    toast.innerHTML = `
+        ${icons[type] || icons.info}
+        <span style="font-size:0.9rem; font-weight:500;">${message}</span>
+    `;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100%)';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
 // DOM Elements
 const teacherMenu = document.getElementById('teacher-menu');
 const teacherCreateSection = document.getElementById('teacher-create-section');
@@ -126,14 +150,25 @@ function showTeacherMenu() {
     studentSection.classList.add('hidden');
     quizSection.classList.add('hidden');
     resultsSection.classList.add('hidden');
+    document.getElementById('quiz-navigator').classList.add('hidden');
 }
 
 function showCreateQuiz() {
     teacherMenu.classList.add('hidden');
     teacherCreateSection.classList.remove('hidden');
-    if (document.getElementById('questions-container').children.length === 0) {
-        addQuestion();
+    document.getElementById('quiz-navigator').classList.remove('hidden');
+
+    // Attempt to load draft first
+    const hasQuestions = document.getElementById('questions-container').children.length > 0;
+    if (!hasQuestions) {
+        const saved = localStorage.getItem('quizable_quiz_draft');
+        if (saved) {
+            loadDraft();
+        } else {
+            addQuestion();
+        }
     }
+    updateQuestionNumbers();
 }
 
 function showViewResults() {
@@ -141,6 +176,15 @@ function showViewResults() {
     teacherResultsSection.classList.remove('hidden');
     loadTeacherHistory();
 }
+
+// Attach Auto-Save to Main Inputs
+['quiz-title', 'quiz-subject', 'quiz-duration', 'quiz-expiry', 'secret-key', 'show-results-to-student', 'save-results-to-cloud', 'randomize-order'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        const eventType = (el.type === 'checkbox') ? 'change' : 'input';
+        el.addEventListener(eventType, saveDraft);
+    }
+});
 
 function saveTeacherHistory(title, id, key) {
     const history = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
@@ -164,22 +208,44 @@ function loadTeacherHistory() {
 
     container.classList.remove('hidden');
     list.innerHTML = history.map(h => `
-        <div class="card" style="padding:15px; margin-bottom:0; cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="fillCredentials('${h.id}', '${h.key}')">
-            <div>
+        <div class="card" style="padding:15px; margin-bottom:0; display:flex; justify-content:space-between; align-items:center;">
+            <div onclick="fillCredentials('${h.id}', '${h.key}')" style="cursor:pointer; flex-grow:1;">
                 <div style="font-weight:600;">${h.title}</div>
-                <div style="font-size:0.8rem; color:var(--text-muted);">${new Date(h.timestamp).toLocaleDateString()}</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">${new Date(h.timestamp).toLocaleDateString()}</div>
             </div>
-            <span style="font-size:1.2rem;">↪</span>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-outline" style="padding:5px; border-radius:6px;" onclick="copyToClipboard('${h.id}', 'Quiz ID copied!')" title="Copy ID">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                </button>
+                <button class="btn btn-outline" style="padding:5px; border-radius:6px; color:var(--danger);" onclick="deleteFromHistory('${h.id}')" title="Delete from history">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+            </div>
         </div>
     `).join('');
 }
+
+window.copyToClipboard = (text, message) => {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast(message, 'success');
+    });
+};
+
+window.deleteFromHistory = (id) => {
+    if (!confirm('Remove this quiz from your recent history?')) return;
+    let history = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
+    history = history.filter(h => h.id !== id);
+    localStorage.setItem('quizable_teacher_history', JSON.stringify(history));
+    loadTeacherHistory();
+    showToast('Removed from history', 'info');
+};
 
 // Global scope helper for onclick
 window.fillCredentials = (id, key) => {
     document.getElementById('results-quiz-id').value = id;
     document.getElementById('results-secret-key').value = key;
-    // Optional: Auto fetch?
-    // fetchAndDisplayResults(id, key);
+    // Auto fetch the results immediately
+    fetchAndDisplayResults(id, key);
 };
 
 // function saveTeacherHistory(title, id, key) ...
@@ -187,9 +253,7 @@ window.fillCredentials = (id, key) => {
 window.copyJsonTemplate = function () {
     const text = document.getElementById('json-example-code').innerText;
     navigator.clipboard.writeText(text).then(() => {
-        alert('JSON Example copied to clipboard!');
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
+        showToast('JSON Example copied!', 'success');
     });
 };
 
@@ -243,10 +307,17 @@ document.getElementById('view-results-btn').addEventListener('click', handleView
 
 function isDevToolsOpen() {
     const threshold = 160;
+
+    // Method 1: Debugger delay
     const start = performance.now();
     debugger;
-    const end = performance.now();
-    return end - start > threshold;
+    if (performance.now() - start > threshold) return true;
+
+    // Method 2: Window size difference (detects docked DevTools)
+    const widthDiff = window.outerWidth - window.innerWidth > threshold;
+    const heightDiff = window.outerHeight - window.innerHeight > threshold;
+
+    return widthDiff || heightDiff;
 }
 
 // --- CHEATING PREVENTION ---
@@ -255,7 +326,12 @@ window.addEventListener('contextmenu', (e) => { if (isQuizActive) e.preventDefau
     window.addEventListener(event, (e) => { if (isQuizActive) e.preventDefault(); });
 });
 window.addEventListener('keydown', (e) => {
+    // Block DevTools
     if (isQuizActive && (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')))) {
+        e.preventDefault();
+    }
+    // Block Save, View Source, Select All
+    if (isQuizActive && e.ctrlKey && (e.key === 's' || e.key === 'u' || e.key === 'a')) {
         e.preventDefault();
     }
 });
@@ -271,48 +347,294 @@ function addQuestion(questionData = null) {
 
     const text = questionData ? questionData.text : '';
     const figure = questionData ? (questionData.figure || '') : '';
-    const options = questionData ? questionData.options.join(' | ') : '';
+    const options = (questionData && questionData.options) ?
+        (Array.isArray(questionData.options) ? questionData.options : questionData.options.split('|').map(o => o.trim()))
+        : ['', '', '', ''];
     const correctAnswer = questionData ? questionData.correctAnswer : 0;
 
     const questionDiv = document.createElement('div');
     questionDiv.className = 'quiz-question';
+    questionDiv.id = `question-card-${questionIndex}`;
+
     questionDiv.innerHTML = `
-        <h3>Question ${questionIndex + 1}</h3>
-        <div class="form-group">
-            <label>Question Text:</label>
-            <textarea class="question-text" placeholder="Enter question text" rows="4"></textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h3 class="question-number-title">Question ${questionIndex + 1}</h3>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-outline preview-toggle-btn" style="padding:5px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                    <svg class="icon-eye" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <span>Preview</span>
+                </button>
+                <button class="btn btn-outline duplicate-question" style="padding:5px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <span>Duplicate</span>
+                </button>
+                <button class="btn btn-danger remove-question" style="padding:5px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    <span>Remove</span>
+                </button>
+            </div>
         </div>
+        
         <div class="form-group">
-            <label>Figure (optional, paste SVG/HTML here):</label>
-            <textarea class="question-figure" placeholder="e.g., <svg>...</svg> or <img src=...>" rows="3"></textarea>
+            <label>Question Text</label>
+            <textarea class="question-text" placeholder="What is the result of...?" rows="3">${text}</textarea>
         </div>
+        
+        <details class="form-group figure-collapsible" ${figure ? 'open' : ''} style="margin-bottom: 20px;">
+            <summary style="cursor: pointer; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); outline: none; margin-bottom: 5px; display: flex; align-items: center; gap: 8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                Add Figure / Illustration (HTML/SVG)
+            </summary>
+            <div style="display: flex; gap: 15px; margin-top: 10px; align-items: stretch;">
+                <div style="flex: 1; position: relative; display: flex;">
+                    <textarea class="question-figure" placeholder="e.g. <svg>...</svg> or <b>Code Snippet</b>" rows="3" style="flex: 1; margin: 0; padding-top: 25px;">${figure}</textarea>
+                    <button class="clear-figure-btn" style="position: absolute; top: 5px; right: 8px; padding: 2px 8px; font-size: 0.65rem; border-radius: 4px; border: 1px solid var(--danger); background: #fff; color: var(--danger); cursor: pointer; z-index: 1; display: flex; align-items: center; gap: 4px;">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        Clear content
+                    </button>
+                </div>
+                <div class="figure-editor-preview" style="flex: 1; border: 1px dashed var(--border); border-radius: 8px; padding: 10px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: auto; min-height: 100px; max-height: 200px;">
+                    <small style="color:var(--text-muted)">Figure Preview</small>
+                </div>
+            </div>
+        </details>
+
+        <div class="preview-container">
+            <span class="preview-badge">Student View Preview</span>
+            <div class="preview-content"></div>
+        </div>
+        
         <div class="form-group">
-            <label>Options (separated by |):</label>
-            <input type="text" class="question-options" placeholder="Option A | Option B | Option C">
+            <label style="display:flex; justify-content:space-between; align-items:center;">
+                Options
+                <small style="color:var(--text-muted); font-weight:normal;">Click a number (0, 1...) to mark it as correct</small>
+                <button class="btn btn-outline add-option-btn" style="padding:2px 8px; font-size:0.75rem;">+ Add Option</button>
+            </label>
+            <div class="options-builder"></div>
         </div>
-        <div class="form-group">
-            <label>Correct Answer Index (0, 1, 2...):</label>
-            <input type="number" class="correct-answer" min="0" value="${correctAnswer}">
-        </div>
-        <button class="btn btn-danger remove-question">Remove Question</button>
+        
+        <input type="hidden" class="correct-answer" value="${correctAnswer}">
     `;
 
     questionsContainer.appendChild(questionDiv);
 
-    if (questionData) {
-        questionDiv.querySelector('.question-text').value = text;
-        questionDiv.querySelector('.question-figure').value = figure;
-        questionDiv.querySelector('.question-options').value = options;
-    }
+    const optionsBuilder = questionDiv.querySelector('.options-builder');
+    options.forEach((opt, i) => addOptionInput(optionsBuilder, opt, i === correctAnswer));
 
+    // Event Listeners
     questionDiv.querySelector('.remove-question').addEventListener('click', function () {
         questionsContainer.removeChild(questionDiv);
-        const questions = questionsContainer.querySelectorAll('.quiz-question');
-        questions.forEach((q, index) => {
-            q.querySelector('h3').textContent = `Question ${index + 1}`;
+        updateQuestionNumbers();
+        saveDraft();
+    });
+
+    questionDiv.querySelector('.duplicate-question').addEventListener('click', function () {
+        const currentData = getQuestionData(questionDiv);
+        addQuestion(currentData);
+        updateQuestionNumbers();
+        saveDraft();
+    });
+
+    questionDiv.querySelector('.add-option-btn').addEventListener('click', function () {
+        addOptionInput(optionsBuilder, '');
+        saveDraft();
+    });
+
+    const previewToggle = questionDiv.querySelector('.preview-toggle-btn');
+    const previewContainer = questionDiv.querySelector('.preview-container');
+    previewToggle.addEventListener('click', function () {
+        const isActive = previewContainer.classList.toggle('active');
+        previewToggle.innerHTML = isActive ?
+            `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> <span>Edit</span>` :
+            `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg> <span>Preview</span>`;
+        if (isActive) updateLivePreview(questionDiv);
+    });
+
+    const figureInput = questionDiv.querySelector('.question-figure');
+    const figurePreview = questionDiv.querySelector('.figure-editor-preview');
+    const clearFigureBtn = questionDiv.querySelector('.clear-figure-btn');
+
+    clearFigureBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm('Clear the illustration/figure for this question?')) {
+            figureInput.value = '';
+            refreshEditorFigure();
+            saveDraft();
+        }
+    });
+
+    const refreshEditorFigure = () => {
+        const val = figureInput.value.trim();
+        figurePreview.innerHTML = val || '<small style="color:var(--text-muted)">Figure Preview</small>';
+    };
+
+    // Initial load
+    if (figure) refreshEditorFigure();
+
+    // Auto-save and live preview logic
+    questionDiv.addEventListener('input', (e) => {
+        if (e.target.classList.contains('question-figure')) refreshEditorFigure();
+        if (previewContainer.classList.contains('active')) updateLivePreview(questionDiv);
+        saveDraft();
+    });
+
+    updateQuestionNumbers();
+}
+
+function addOptionInput(container, value = '', isCorrect = false) {
+    const index = container.children.length;
+    const div = document.createElement('div');
+    div.className = 'option-input-group';
+    div.innerHTML = `
+        <span class="option-index-badge" style="background: ${isCorrect ? 'var(--success)' : 'var(--bg-body)'}; border: 1px solid ${isCorrect ? 'var(--success)' : 'var(--border)'}; color: ${isCorrect ? 'white' : 'var(--text-main)'}; padding: 5px 10px; border-radius: 6px; font-weight: 700; min-width: 40px; text-align: center; cursor: pointer;" title="Set as correct answer">${index}</span>
+        <input type="text" class="option-val" placeholder="Possible answer..." value="${value}">
+        <span class="remove-option-btn" style="display: flex; align-items: center; justify-content: center;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </span>
+    `;
+    container.appendChild(div);
+
+    div.querySelector('.option-index-badge').addEventListener('click', () => {
+        const card = container.closest('.quiz-question');
+        const hiddenInput = card.querySelector('.correct-answer');
+        hiddenInput.value = index;
+
+        // Update visual state for all options in this card
+        container.querySelectorAll('.option-input-group').forEach((group, i) => {
+            const badge = group.querySelector('.option-index-badge');
+            const match = (i === index);
+            badge.style.background = match ? 'var(--success)' : 'var(--bg-body)';
+            badge.style.borderColor = match ? 'var(--success)' : 'var(--border)';
+            badge.style.color = match ? 'white' : 'var(--text-main)';
         });
+        saveDraft();
+    });
+
+    div.querySelector('.remove-option-btn').addEventListener('click', () => {
+        if (container.children.length > 2) {
+            container.removeChild(div);
+            updateOptionIndices(container);
+            saveDraft();
+        } else {
+            alert("Minimum 2 options required.");
+        }
+    });
+
+    // Save draft on every keystroke
+    div.querySelector('.option-val').addEventListener('input', saveDraft);
+}
+
+function updateOptionIndices(container) {
+    const groups = container.querySelectorAll('.option-input-group');
+    groups.forEach((group, i) => {
+        const badge = group.querySelector('.option-index-badge');
+        if (badge) badge.textContent = i;
     });
 }
+
+function updateLivePreview(card) {
+    const text = card.querySelector('.question-text').value;
+    const figure = card.querySelector('.question-figure').value;
+    const options = Array.from(card.querySelectorAll('.option-val')).map(i => i.value);
+    const previewContent = card.querySelector('.preview-content');
+
+    previewContent.innerHTML = `
+        <p style="font-size:1.1rem; margin-bottom:15px;">${text || '<i style="color:var(--text-muted)">No question text...</i>'}</p>
+        ${figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${figure}</div>` : ''}
+        <div class="quiz-options">
+            ${options.map((opt, i) => `
+                <div class="quiz-option" style="cursor:default;">${opt || '<i style="color:var(--text-muted)">Empty option...</i>'}</div>
+            `).join('')}
+        </div>
+    `;
+}
+
+function getQuestionData(card) {
+    return {
+        text: card.querySelector('.question-text').value,
+        figure: card.querySelector('.question-figure').value,
+        options: Array.from(card.querySelectorAll('.option-val')).map(i => i.value).filter(v => v.trim() !== ''),
+        correctAnswer: parseInt(card.querySelector('.correct-answer').value) || 0
+    };
+}
+
+function updateQuestionNumbers() {
+    const questionsContainer = document.getElementById('questions-container');
+    const navigatorContainer = document.getElementById('quiz-navigator');
+    const questions = questionsContainer.querySelectorAll('.quiz-question');
+
+    navigatorContainer.innerHTML = '';
+
+    questions.forEach((q, index) => {
+        const titleEl = q.querySelector('.question-number-title');
+        if (titleEl) titleEl.textContent = `Question ${index + 1}`;
+        q.id = `question-card-${index}`;
+
+        // Update Navigator
+        const dot = document.createElement('div');
+        dot.className = 'nav-dot';
+        dot.textContent = index + 1;
+        dot.title = `Jump to Question ${index + 1}`;
+        dot.onclick = () => {
+            document.querySelectorAll('.nav-dot').forEach(d => d.classList.remove('active'));
+            dot.classList.add('active');
+            q.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            q.style.outline = '2px solid var(--primary)';
+            setTimeout(() => q.style.outline = 'none', 1500);
+        };
+        navigatorContainer.appendChild(dot);
+    });
+}
+
+// --- ADVANCED SECURITY HELPERS ---
+
+function generateWatermark(firstName, lastName, section, studentId) {
+    const createLayer = (w, h, opacity, rotate, scale = 1) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.font = `bold ${14 * scale}px Inter, system-ui, sans-serif`;
+        ctx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
+        ctx.textAlign = 'center';
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(rotate);
+
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const text1 = `${lastName.toUpperCase()}, ${firstName}`;
+        const text2 = `${studentId} | ${section}`;
+        const text3 = `UNAUTHORIZED COPY - ${timestamp}`;
+
+        ctx.fillText(text1, 0, -20 * scale);
+        ctx.fillText(text2, 0, 0);
+        ctx.fillText(text3, 0, 20 * scale);
+        return canvas.toDataURL();
+    };
+
+    const staticLayer = createLayer(400, 300, 0.5, -Math.PI / 4);
+    const dynamicLayer = createLayer(600, 450, 0.3, -Math.PI / 6, 1.5);
+
+    document.getElementById('quiz-watermark').style.backgroundImage = `url(${staticLayer})`;
+    document.getElementById('quiz-watermark-dynamic').style.backgroundImage = `url(${dynamicLayer})`;
+}
+
+function clearClipboard() {
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(' ').catch(() => { });
+        }
+    } catch (e) { }
+}
+
+// Handle Ctrl+P
+window.addEventListener('keydown', (e) => {
+    if (isQuizActive && (e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        handleFocusLoss(); // Log as violation
+        alert('Printing is disabled for security. This attempt has been logged.');
+    }
+});
 
 function loadQuizFromJson() {
     const fileInput = document.getElementById('json-upload');
@@ -379,15 +701,11 @@ function generateEncryptedFile() {
 
     let allValid = true;
     questions.forEach((q, index) => {
-        const text = q.querySelector('.question-text').value;
-        const figure = q.querySelector('.question-figure').value;
-        const options = q.querySelector('.question-options').value.split('|').map(opt => opt.trim()).filter(Boolean);
-        const correctAnswer = parseInt(q.querySelector('.correct-answer').value);
-
-        if (text && options.length >= 2 && !isNaN(correctAnswer) && correctAnswer >= 0 && correctAnswer < options.length) {
-            quiz.questions.push({ text, figure, options, correctAnswer });
+        const data = getQuestionData(q);
+        if (data.text && data.options.length >= 2 && !isNaN(data.correctAnswer) && data.correctAnswer >= 0 && data.correctAnswer < data.options.length) {
+            quiz.questions.push(data);
         } else {
-            alert(`Error in Question ${index + 1}.`);
+            alert(`Error in Question ${index + 1}. Please ensure text is provided, at least 2 options exist, and correct answer index is valid.`);
             allValid = false;
         }
     });
@@ -430,8 +748,93 @@ function resetQuizForm() {
     document.getElementById('questions-container').innerHTML = '';
     // Add one empty question to start fresh
     addQuestion();
+    localStorage.removeItem('quizable_quiz_draft');
     alert("Form cleared.");
 }
+
+// --- DRAFT SYSTEM ---
+function saveDraft() {
+    const questions = document.querySelectorAll('.quiz-question');
+    const draft = {
+        title: document.getElementById('quiz-title').value,
+        subject: document.getElementById('quiz-subject').value,
+        duration: document.getElementById('quiz-duration').value,
+        expiry: document.getElementById('quiz-expiry').value,
+        secretKey: document.getElementById('secret-key').value,
+        showResults: document.getElementById('show-results-to-student').checked,
+        saveCloud: document.getElementById('save-results-to-cloud').checked,
+        randomize: document.getElementById('randomize-order').checked,
+        questions: []
+    };
+
+    questions.forEach(q => {
+        draft.questions.push(getQuestionData(q));
+    });
+
+    localStorage.setItem('quizable_quiz_draft', JSON.stringify(draft));
+}
+
+function loadDraft() {
+    const saved = localStorage.getItem('quizable_quiz_draft');
+    if (!saved) return;
+
+    try {
+        const draft = JSON.parse(saved);
+        if (draft.questions.length === 0) return;
+
+        document.getElementById('quiz-title').value = draft.title || '';
+        document.getElementById('quiz-subject').value = draft.subject || '';
+        document.getElementById('quiz-duration').value = draft.duration || '0';
+        document.getElementById('quiz-expiry').value = draft.expiry || '';
+        document.getElementById('secret-key').value = draft.secretKey || '';
+        document.getElementById('show-results-to-student').checked = draft.showResults !== false;
+        document.getElementById('save-results-to-cloud').checked = draft.saveCloud !== false;
+        document.getElementById('randomize-order').checked = draft.randomize !== false;
+
+        const container = document.getElementById('questions-container');
+        container.innerHTML = '';
+        draft.questions.forEach(q => addQuestion(q));
+
+        updateQuestionNumbers();
+        console.log("Draft loaded successfully.");
+    } catch (e) {
+        console.error("Failed to load draft:", e);
+    }
+}
+
+function exportDraftAsJson() {
+    const questions = document.querySelectorAll('.quiz-question');
+    const quizTitle = document.getElementById('quiz-title').value || 'Untitled Quiz';
+    const draft = {
+        title: quizTitle,
+        subject: document.getElementById('quiz-subject').value,
+        duration: document.getElementById('quiz-duration').value,
+        expiry: document.getElementById('quiz-expiry').value,
+        showResultsToStudent: document.getElementById('show-results-to-student').checked,
+        saveResultsToCloud: document.getElementById('save-results-to-cloud').checked,
+        randomizeOrder: document.getElementById('randomize-order').checked,
+        questions: []
+    };
+
+    questions.forEach(q => {
+        draft.questions.push(getQuestionData(q));
+    });
+
+    const blob = new Blob([JSON.stringify(draft, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${quizTitle.replace(/\s+/g, '_')}_structure.json`;
+    a.click();
+}
+
+// Periodic Auto-Save every 5 seconds (Safety First)
+setInterval(() => {
+    if (!teacherCreateSection.classList.contains('hidden')) {
+        saveDraft();
+        console.log("Draft auto-saved...");
+    }
+}, 5000);
 
 function handleViewResultsClick() {
     let quizId = document.getElementById('results-quiz-id').value.trim();
@@ -461,15 +864,25 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             const quizDetails = JSON.parse(decrypted);
 
             quizManagementContainer.classList.remove('hidden');
+
+            // Populate fields
+            document.getElementById('modify-quiz-duration').value = quizDetails.duration || 0;
+            document.getElementById('modify-show-results').checked = quizDetails.showResultsToStudent !== false;
+
             if (quizDetails.expiry) {
                 const date = new Date(quizDetails.expiry);
                 const offset = date.getTimezoneOffset() * 60000;
                 const localISOTime = new Date(date.getTime() - offset).toISOString().slice(0, 16);
                 modifyExpiryInput.value = localISOTime;
+            } else {
+                modifyExpiryInput.value = '';
             }
 
-            document.getElementById('update-expiry-btn').onclick = () => {
-                updateQuizExpiry(quizId, secretKey, modifyExpiryInput.value, quizDetails);
+            document.getElementById('update-quiz-settings-btn').onclick = () => {
+                const newDuration = parseFloat(document.getElementById('modify-quiz-duration').value) || 0;
+                const newExpiryStr = modifyExpiryInput.value;
+                const showResults = document.getElementById('modify-show-results').checked;
+                updateQuizSettings(quizId, secretKey, { duration: newDuration, expiry: newExpiryStr, showResultsToStudent: showResults }, quizDetails);
             };
         }
     } catch (e) {
@@ -514,20 +927,54 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             processedStudentResults = list;
             document.getElementById('export-pdf-btn').classList.toggle('hidden', list.length === 0);
 
+            // Analytics Calculation
+            const scores = list.map(r => (r.score / r.totalQuestions) * 100);
+            const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
+            const highest = scores.length ? Math.max(...scores).toFixed(1) : 0;
+            const passCount = scores.filter(s => s >= 75).length;
+            const passRate = scores.length ? ((passCount / scores.length) * 100).toFixed(1) : 0;
+
             resultsDisplay.innerHTML = `
-                <h3>Results (${list.length})</h3>
-                ${list.map(res => {
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:15px; margin-bottom:30px;">
+                    <div class="card" style="padding:15px; margin-bottom:0; text-align:center; background:var(--bg-body); border:1px solid var(--border);">
+                        <div style="font-size:0.8rem; color:var(--text-muted);">Avg. Score</div>
+                        <div style="font-size:1.5rem; font-weight:700; color:var(--primary);">${avgScore}%</div>
+                    </div>
+                    <div class="card" style="padding:15px; margin-bottom:0; text-align:center; background:var(--bg-body); border:1px solid var(--border);">
+                        <div style="font-size:0.8rem; color:var(--text-muted);">Highest</div>
+                        <div style="font-size:1.5rem; font-weight:700; color:var(--primary);">${highest}%</div>
+                    </div>
+                    <div class="card" style="padding:15px; margin-bottom:0; text-align:center; background:var(--bg-body); border:1px solid var(--border);">
+                        <div style="font-size:0.8rem; color:var(--text-muted);">Pass Rate (75%+)</div>
+                        <div style="font-size:1.5rem; font-weight:700; color:var(--success);">${passRate}%</div>
+                    </div>
+                    <div class="card" style="padding:15px; margin-bottom:0; text-align:center; background:var(--bg-body); border:1px solid var(--border);">
+                        <div style="font-size:0.8rem; color:var(--text-muted);">Students</div>
+                        <div style="font-size:1.5rem; font-weight:700; color:var(--info);">${list.length}</div>
+                    </div>
+                </div>
+
+                <h3>Student List</h3>
+                <div class="card" style="padding:0; overflow:hidden;">
+                    ${list.map(res => {
                 const submissionDate = res.submittedAt ? new Date(res.submittedAt).toLocaleString() : 'N/A';
                 return `
-                    <div class="student-result-card" style="display:flex; justify-content:space-between; align-items:center; padding:15px; border-bottom:1px solid #eee;">
+                    <div class="student-result-card" style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--border);">
                         <div>
-                            <strong>${res.student.lastName}, ${res.student.firstName}</strong> (${res.student.section})
-                            <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">Submitted: ${submissionDate}</div>
+                            <div style="font-weight:600;">${res.student.lastName}, ${res.student.firstName}</div>
+                            <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">
+                                ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}
+                            </div>
+                            ${res.securityViolations > 0 ? `<div style="font-size:0.7rem; color:var(--danger); font-weight:700; margin-top:4px;">⚠️ ${res.securityViolations} Security Violations</div>` : ''}
                         </div>
-                        <div style="color:var(--primary); font-weight:700; font-size:1.1rem;">${res.score}/${res.totalQuestions}</div>
+                        <div style="text-align:right;">
+                            <div style="color:var(--primary); font-weight:800; font-size:1.2rem;">${res.score}/${res.totalQuestions}</div>
+                            <div style="font-size:0.7rem; color:var(--text-muted);">${submissionDate}</div>
+                        </div>
                     </div>
                     `;
             }).join('')}
+                </div>
             `;
         };
 
@@ -543,14 +990,19 @@ async function fetchAndDisplayResults(quizId, secretKey) {
     }
 }
 
-async function updateQuizExpiry(quizId, secretKey, newExpiryStr, currentQuizData) {
-    if (!confirm('Are you sure you want to update the expiration date?')) return;
+async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizData) {
+    if (!confirm('Are you sure you want to update the quiz settings?')) return;
 
     showLoading();
     try {
-        // Update the expiry in the quiz object
-        const newExpiry = newExpiryStr ? new Date(newExpiryStr).getTime() : null;
-        currentQuizData.expiry = newExpiry;
+        // Update the fields in the quiz object
+        if (newSettings.hasOwnProperty('duration')) currentQuizData.duration = newSettings.duration;
+        if (newSettings.hasOwnProperty('expiry')) {
+            currentQuizData.expiry = newSettings.expiry ? new Date(newSettings.expiry).getTime() : null;
+        }
+        if (newSettings.hasOwnProperty('showResultsToStudent')) {
+            currentQuizData.showResultsToStudent = newSettings.showResultsToStudent;
+        }
 
         // Re-encrypt the entire quiz data
         const encrypted = await encryptData(JSON.stringify(currentQuizData), secretKey);
@@ -561,10 +1013,10 @@ async function updateQuizExpiry(quizId, secretKey, newExpiryStr, currentQuizData
         });
 
         hideLoading();
-        showConfirmationModal('Success!', 'Quiz expiration date has been updated.', null, true);
+        showConfirmationModal('Success!', 'Quiz settings have been updated.', null, true);
     } catch (error) {
         hideLoading();
-        alert('Failed to update expiry: ' + error.message);
+        alert('Failed to update quiz settings: ' + error.message);
     }
 }
 
@@ -574,30 +1026,84 @@ function exportResultsToPdf() {
     const doc = new jsPDF();
     const res0 = processedStudentResults[0];
 
-    doc.setFontSize(18);
+    // Analytics Calculation
+    const scores = processedStudentResults.map(r => (r.score / r.totalQuestions) * 100);
+    const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
+    const highest = scores.length ? Math.max(...scores).toFixed(1) : 0;
+    const passCount = scores.filter(s => s >= 75).length;
+    const passRate = scores.length ? ((passCount / scores.length) * 100).toFixed(1) : 0;
+
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(16, 185, 129); // var(--primary)
     doc.text(res0.quizTitle, 14, 22);
+
+    doc.setFontSize(12);
+    doc.setTextColor(100, 116, 139); // var(--text-muted)
+    doc.text(`Subject: ${res0.subject || 'N/A'}`, 14, 30);
+    doc.text(`Report Generated: ${new Date().toLocaleString()}`, 14, 37);
+
+    // Analytics Summary Table
     doc.autoTable({
-        head: [['Last Name', 'First Name', 'Section', 'Score', 'Submitted At']],
+        head: [['Class Performance Summary', 'Value']],
+        body: [
+            ['Average Score', `${avgScore}%`],
+            ['Highest Score', `${highest}%`],
+            ['Pass Rate (75%+)', `${passRate}%`],
+            ['Total Students', processedStudentResults.length]
+        ],
+        startY: 45,
+        theme: 'striped',
+        headStyles: { fillColor: [15, 118, 110] } // var(--secondary)
+    });
+
+    // Student List Table
+    doc.setFontSize(16);
+    doc.setTextColor(6, 78, 59); // var(--text-main)
+    doc.text('Student Performance List', 14, doc.lastAutoTable.finalY + 15);
+
+    doc.autoTable({
+        head: [['Last Name', 'First Name', 'ID', 'Section', 'Score', 'Violations', 'Submitted At']],
         body: processedStudentResults.map(r => [
             r.student.lastName,
             r.student.firstName,
+            r.student.institutionalId || 'N/A',
             r.student.section,
             `${r.score}/${r.totalQuestions}`,
+            r.securityViolations || 0,
             r.submittedAt ? new Date(r.submittedAt).toLocaleString() : 'N/A'
         ]),
-        startY: 30
+        startY: doc.lastAutoTable.finalY + 20,
+        headStyles: { fillColor: [16, 185, 129] } // var(--primary)
     });
 
+    // Detailed Individual Reports (Optional - keeping existing logic)
     processedStudentResults.forEach(res => {
         doc.addPage();
-        doc.text(`Detail: ${res.student.lastName}, ${res.student.firstName}`, 14, 20);
+        doc.setFontSize(18);
+        doc.setTextColor(16, 185, 129);
+        doc.text(`Individual Detail: ${res.student.lastName}, ${res.student.firstName}`, 14, 20);
+
+        doc.setFontSize(11);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`Institutional ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}`, 14, 28);
+        doc.text(`Final Score: ${res.score}/${res.totalQuestions} (${((res.score / res.totalQuestions) * 100).toFixed(1)}%)`, 14, 35);
+
         doc.autoTable({
-            head: [['#', 'Question', 'Student', 'Correct', 'Result']],
-            body: res.detailedAnswers.map((a, i) => [i + 1, a.questionText, a.studentAnswerText, a.correctAnswerText, a.isCorrect ? '✓' : '✗']),
-            startY: 30
+            head: [['#', 'Question', 'Student Answer', 'Correct Answer', 'Result']],
+            body: res.detailedAnswers.map((a, i) => [
+                i + 1,
+                a.questionText,
+                a.studentAnswerText,
+                a.correctAnswerText,
+                a.isCorrect ? 'Correct' : 'Incorrect'
+            ]),
+            startY: 42,
+            headStyles: { fillColor: [15, 118, 110] }
         });
     });
-    doc.save(`${res0.quizTitle}_Results_${new Date().toISOString().split('T')[0]}.pdf`);
+
+    doc.save(`${res0.quizTitle}_Full_Report_${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
 function shuffleQuiz(quiz) {
@@ -655,6 +1161,7 @@ async function startQuiz() {
     quizId = quizId.replace(/^Quiz ID:\s*/i, '');
     const firstName = document.getElementById('student-first-name').value.trim();
     const lastName = document.getElementById('student-last-name').value.trim();
+    const studentInstitutionalId = document.getElementById('student-id-field').value.trim();
 
     // Get Year and Section
     const yearSelect = document.getElementById('student-year');
@@ -669,7 +1176,7 @@ async function startQuiz() {
     secretKey = secretKey.replace(/^Secret Key:\s*/i, '');
 
     if (isDevToolsOpen()) { alert('Close DevTools.'); return; }
-    if (!quizId || !firstName || !lastName || !section || !secretKey) { alert('Fill all fields.'); return; }
+    if (!quizId || !firstName || !lastName || !section || !secretKey || !studentInstitutionalId) { alert('Fill all fields.'); return; }
 
     const studentId = `${lastName}_${firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
 
@@ -711,7 +1218,7 @@ async function startQuiz() {
         hideLoading();
         showInstructionModal(quizData.instructionCountdown, () => {
             if (quizData.randomizeOrder !== false) shuffleQuiz(quizData);
-            quizData.student = { firstName, lastName, section };
+            quizData.student = { firstName, lastName, section, institutionalId: studentInstitutionalId };
             quizData.secretKey = secretKey;
 
             // Persistence: Check for existing session
@@ -763,6 +1270,13 @@ async function startQuiz() {
             }
 
             // quizStartTime = Date.now(); // REMOVED: Managed above
+            // Forensic Watermarking
+            generateWatermark(firstName, lastName, section, studentInstitutionalId);
+            document.body.classList.add('quiz-active');
+
+            // Clear Clipboard
+            clearClipboard();
+
             isQuizActive = true;
             window.addEventListener('blur', handleFocusLoss);
             document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -774,7 +1288,16 @@ async function startQuiz() {
             document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen blocked:', e));
             document.addEventListener('fullscreenchange', handleFullscreenChange);
 
+            // Print Disruption
+            window.onbeforeprint = () => {
+                if (isQuizActive) {
+                    handleFocusLoss(); // Log as violation
+                    return false;
+                }
+            };
+
             startDevToolsDetection();
+            startWatermarkRotation(firstName, lastName, section, studentInstitutionalId);
 
             // Show new widget
             if (attemptsWidget) {
@@ -936,23 +1459,28 @@ function stopDevToolsDetection() { if (devToolsInterval) clearInterval(devToolsI
 
 function handleFocusLoss() {
     if (isQuizActive && !isHandlingFocusLoss) {
-        if (Date.now() - quizStartTime < 2000) return; // Increased grace period to 2s
+        if (Date.now() - quizStartTime < 2000) return; // Grace period
         isHandlingFocusLoss = true;
         focusLostCount++;
 
         updateAttemptsDisplay();
+        clearClipboard();
 
-        // Show expanded warning
+        // Show Full Screen Warning
+        if (tabWarning) tabWarning.classList.remove('hidden');
+
+        // Show/Expand Widget
         if (focusLostCount < MAX_ATTEMPTS) {
             expandWidget();
         }
 
         if (focusLostCount >= MAX_ATTEMPTS) {
-            alert('Attempts exceeded (Tab Switching/DevTools).');
+            if (tabWarning) tabWarning.classList.add('hidden');
+            alert('Attempts exceeded (Security Violation). Finalizing submission...');
             submitQuiz(true);
         }
 
-        setTimeout(() => isHandlingFocusLoss = false, 500); // Increased debounce
+        setTimeout(() => isHandlingFocusLoss = false, 1000);
     }
 }
 
@@ -981,15 +1509,17 @@ function handleFullscreenChange() {
         isHandlingFocusLoss = true;
         focusLostCount++;
         updateAttemptsDisplay();
+
+        // Show Full Screen Warning
+        if (tabWarning) tabWarning.classList.remove('hidden');
         expandWidget();
 
-        // Optional: Force them back?
-        // distinct warning for FS exit?
         if (focusLostCount < MAX_ATTEMPTS) {
             attemptsText.textContent = "Fullscreen Exited! Return immediately. " + attemptsText.textContent;
             attemptsWidget.classList.add('expanded');
         } else {
-            alert('Attempts exceeded (Fullscreen Exit).');
+            if (tabWarning) tabWarning.classList.add('hidden');
+            alert('Attempts exceeded (Fullscreen Exit). Finalizing submission...');
             submitQuiz(true);
         }
         setTimeout(() => isHandlingFocusLoss = false, 100);
@@ -1051,6 +1581,7 @@ function submitQuiz(auto = false) {
             student: quizData.student, quizTitle: quizData.title,
             subject: quizData.subject, score, totalQuestions: quizData.questions.length,
             detailedAnswers: detail, quizId: quizData.id,
+            securityViolations: focusLostCount, // Track tab switches
             submittedAt: Date.now()
         };
         window.studentResultsDataForPdf = res;
@@ -1078,7 +1609,7 @@ function submitQuiz(auto = false) {
                 ${detail.map((a, i) => `
                     <div class="quiz-question" style="border-left:5px solid ${a.isCorrect ? 'var(--success)' : 'var(--danger)'};">
                         <strong>Q${i + 1}</strong>: ${a.questionText}<br>
-                        Your: ${a.studentAnswerText} | Correct: ${a.correctAnswerText}
+                        Your Answer: ${a.studentAnswerText}
                     </div>
                 `).join('')}
             `;
@@ -1109,11 +1640,21 @@ function submitQuiz(auto = false) {
         }
 
         isQuizActive = false;
+        document.body.classList.remove('quiz-active');
+        window.onbeforeprint = null;
+        clearClipboard();
+
+        window.removeEventListener('blur', handleFocusLoss);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('blur', togglePrivacyBlur);
+        window.removeEventListener('focus', togglePrivacyBlur);
+        document.removeEventListener('keyup', handlePrintScreen);
+        document.removeEventListener('fullscreenchange', handleFullscreenChange);
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
+
         stopDevToolsDetection();
+        stopWatermarkRotation();
         stopQuizTimer();
-        stopDevToolsDetection();
-        stopQuizTimer();
-        // attemptsCounter.classList.add('hidden');
         if (attemptsWidget) attemptsWidget.classList.add('hidden');
         timerDisplay.classList.add('hidden');
 
@@ -1161,17 +1702,66 @@ function downloadStudentResultsAsPdf() {
     if (!res) return;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    doc.text(res.quizTitle, 14, 20);
-    doc.text(`Student: ${res.student.firstName} ${res.student.lastName} (${res.student.section})`, 14, 30);
-    doc.text(`Score: ${res.score}/${res.totalQuestions}`, 14, 40);
-    const submissionDate = res.submittedAt ? new Date(res.submittedAt).toLocaleString() : 'N/A';
-    doc.text(`Submitted At: ${submissionDate}`, 14, 50);
+
+    // Header & Branding
+    doc.setFontSize(24);
+    doc.setTextColor(16, 185, 129); // var(--primary)
+    doc.text('Performance Report', 14, 22);
+
+    doc.setFontSize(14);
+    doc.setTextColor(6, 78, 59); // var(--text-main)
+    doc.text(res.quizTitle, 14, 32);
+
+    // Student Info Card-like section
+    doc.setDrawColor(209, 250, 229); // var(--border)
+    doc.setFillColor(240, 253, 244); // Light emerald
+    doc.roundedRect(14, 40, 182, 35, 3, 3, 'FD');
+
+    doc.setFontSize(11);
+    doc.setTextColor(100, 116, 139); // var(--text-muted)
+    doc.text('STUDENT INFORMATION', 18, 47);
+
+    doc.setFontSize(13);
+    doc.setTextColor(6, 78, 59);
+    doc.text(`${res.student.lastName}, ${res.student.firstName}`, 18, 55);
+    doc.text(`ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}`, 18, 62);
+    doc.text(`Submitted: ${res.submittedAt ? new Date(res.submittedAt).toLocaleString() : 'N/A'}`, 18, 69);
+
+    // Score Circle/Badge representation
+    const percentage = ((res.score / res.totalQuestions) * 100).toFixed(1);
+    doc.setFontSize(11);
+    doc.setTextColor(100, 116, 139);
+    doc.text('FINAL SCORE', 150, 47);
+
+    doc.setFontSize(22);
+    doc.setTextColor(16, 185, 129);
+    doc.text(`${res.score}/${res.totalQuestions}`, 150, 58);
+
+    doc.setFontSize(12);
+    doc.text(`${percentage}%`, 150, 68);
+
+    // Detailed Table
     doc.autoTable({
-        head: [['#', 'Question', 'Your Answer', 'Result']],
-        body: res.detailedAnswers.map((a, i) => [i + 1, a.questionText, a.studentAnswerText, a.isCorrect ? 'Correct' : 'Incorrect']),
-        startY: 60
+        head: [['#', 'Question', 'Your Answer', 'Status']],
+        body: res.detailedAnswers.map((a, i) => [
+            i + 1,
+            a.questionText,
+            a.studentAnswerText,
+            a.isCorrect ? 'Correct ✓' : 'Incorrect ✗'
+        ]),
+        startY: 85,
+        headStyles: { fillColor: [16, 185, 129] },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { top: 85 }
     });
-    doc.save('My_Results.pdf');
+
+    // Footer
+    const finalY = doc.lastAutoTable.finalY || 85;
+    doc.setFontSize(10);
+    doc.setTextColor(148, 163, 184);
+    doc.text('Generatd by Quizable - Secure Modern Quiz Platform', 14, finalY + 15);
+
+    doc.save(`${res.student.firstName}_${res.student.lastName}_Results.pdf`);
 }
 
 function restartQuiz() {
@@ -1209,4 +1799,20 @@ async function decryptData(str, password) {
     const key = await getKey(password, salt);
     const dec = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
     return new TextDecoder().decode(dec);
+}
+
+// --- Dynamic Watermark Utility ---
+let watermarkInterval = null;
+function startWatermarkRotation(f, l, s, id) {
+    // Rotation logic: Updates the watermark slightly every 30 seconds
+    // to prevent students from using old screenshots as "proof" of progress.
+    watermarkInterval = setInterval(() => {
+        if (isQuizActive) {
+            generateWatermark(f, l, s, id);
+        }
+    }, 30000);
+}
+
+function stopWatermarkRotation() {
+    if (watermarkInterval) clearInterval(watermarkInterval);
 }

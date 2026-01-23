@@ -19,6 +19,13 @@
 </head>
 
 <body>
+    <div id="quiz-watermark" class="quiz-watermark"></div>
+    <div id="quiz-watermark-dynamic" class="quiz-watermark dynamic"></div>
+    <div class="print-violation-msg">
+        <h1>SECURITY VIOLATION</h1>
+        <p>Printing is strictly prohibited during this examination.</p>
+        <p>This attempt has been logged and reported to the instructor.</p>
+    </div>
     <div class="container">
         <!-- Teacher Dashboard -->
         <div id="teacher-menu" class="card hidden">
@@ -26,12 +33,23 @@
             <p style="text-align: center; color: var(--text-muted); margin-bottom: 30px;">Manage your quizzes and track
                 student progress with ease.</p>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <button id="go-to-create-quiz" class="btn btn-primary" style="height: 120px; flex-direction: column;">
-                    <span style="font-size: 1.5rem;">📝</span>
+                <button id="go-to-create-quiz" class="btn btn-primary"
+                    style="height: 120px; flex-direction: column; gap: 10px;">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
                     Create New Quiz
                 </button>
-                <button id="go-to-view-results" class="btn btn-info" style="height: 120px; flex-direction: column;">
-                    <span style="font-size: 1.5rem;">📊</span>
+                <button id="go-to-view-results" class="btn btn-info"
+                    style="height: 120px; flex-direction: column; gap: 10px;">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
                     View Results
                 </button>
             </div>
@@ -39,7 +57,15 @@
 
         <!-- Quiz Creator -->
         <div id="teacher-create-section" class="card hidden">
-            <button class="btn btn-outline" onclick="showTeacherMenu()">← Dashboard</button>
+            <button class="btn btn-outline" onclick="showTeacherMenu()"
+                style="display: flex; align-items: center; gap: 8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Dashboard
+            </button>
             <h1 style="margin-top: 20px;">Quiz Creator</h1>
 
             <div class="card" style="background: var(--bg-body); padding: 25px; border-style: dashed;">
@@ -120,8 +146,20 @@
 
             <div id="questions-container"></div>
 
+
+
             <div style="display: flex; gap: 15px; margin-top: 30px;">
+
                 <button id="add-question" class="btn btn-outline">Add Question</button>
+                <button onclick="exportDraftAsJson()" class="btn btn-info" style="gap:8px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export Structure
+                </button>
                 <button id="generate-encrypted-file" class="btn btn-success" style="flex-grow: 1;">Save Quiz to
                     Cloud</button>
             </div>
@@ -129,7 +167,15 @@
 
         <!-- Student Results Viewer -->
         <div id="teacher-results-section" class="card hidden">
-            <button class="btn btn-outline" onclick="showTeacherMenu()">← Dashboard</button>
+            <button class="btn btn-outline" onclick="showTeacherMenu()"
+                style="display: flex; align-items: center; gap: 8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+                Dashboard
+            </button>
             <h1 style="margin-top: 20px;">Analytics & Results</h1>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
@@ -161,17 +207,46 @@
             <div id="student-results-display" style="margin-top: 30px;"></div>
 
             <!-- Quiz Management (New Feature) -->
-            <div id="quiz-management-container" class="hidden"
+            <details id="quiz-management-container" class="hidden"
                 style="margin-top: 30px; padding: 20px; background: var(--bg-body); border-radius: 12px; border: 1px solid var(--border);">
-                <h3>Quiz Management</h3>
-                <div class="form-group" style="margin-top: 15px;">
-                    <label>Modify Expiry Date/Time</label>
-                    <div style="display: flex; gap: 10px; margin-top: 5px;">
-                        <input type="datetime-local" id="modify-quiz-expiry" style="flex-grow: 1;">
-                        <button id="update-expiry-btn" class="btn btn-warning">Update Expiry</button>
+                <summary
+                    style="cursor: pointer; font-family: var(--font-heading); font-size: 1.2rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; justify-content: space-between; outline: none;">
+                    <span style="display: flex; align-items: center; gap: 10px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                            </path>
+                        </svg>
+                        Quiz Management
+                    </span>
+                    <span style="font-size: 0.8rem; color: var(--primary); font-weight: 600;">Click to
+                        Expand/Collapse</span>
+                </summary>
+
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="form-group">
+                            <label>Modify Duration (Mins)</label>
+                            <input type="number" id="modify-quiz-duration" placeholder="0 for unlimited">
+                        </div>
+                        <div class="form-group">
+                            <label>Modify Expiry Date/Time</label>
+                            <input type="datetime-local" id="modify-quiz-expiry">
+                        </div>
                     </div>
+
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                            <input type="checkbox" id="modify-show-results"> Show score to students after submission
+                        </label>
+                    </div>
+
+                    <button id="update-quiz-settings-btn" class="btn btn-warning"
+                        style="width: 100%; margin-top: 10px;">Update Quiz Settings</button>
                 </div>
-            </div>
+            </details>
 
             <button id="export-pdf-btn" class="btn btn-info hidden" style="width: 100%; margin-top: 20px;">Export to
                 Professional PDF</button>
@@ -188,6 +263,10 @@
                 <label>Quiz ID</label>
                 <input type="text" id="student-quiz-id" placeholder="Enter ID">
             </div>
+            <div class="form-group">
+                <label>Student ID / Institutional ID</label>
+                <input type="text" id="student-id-field" placeholder="e.g. 2024-10023">
+            </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <div class="form-group">
                     <label>First Name</label>
@@ -201,8 +280,7 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 <div class="form-group">
                     <label>Year Level</label>
-                    <select id="student-year"
-                        style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: white; outline: none;">
+                    <select id="student-year">
                         <option value="" disabled selected>Select Year</option>
                         <option value="1">1st Year</option>
                         <option value="2">2nd Year</option>
@@ -212,8 +290,7 @@
                 </div>
                 <div class="form-group">
                     <label>Section</label>
-                    <select id="student-section-select"
-                        style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: white; outline: none;">
+                    <select id="student-section-select">
                         <option value="" disabled selected>Select Section</option>
                         <option value="A">Section A</option>
                         <option value="B">Section B</option>
@@ -324,6 +401,8 @@
         </div>
 
         <!-- Logic -->
+        <div id="quiz-navigator" class="quiz-navigator hidden"></div>
+        <div id="toast-container" class="toast-container"></div>
         <script src="script.js"></script>
 </body>
 
