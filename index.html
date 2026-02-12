@@ -125,7 +125,7 @@
 
             <div class="form-group">
                 <label>Encryption Key (Secret)</label>
-                <input type="text" id="secret-key" placeholder="Enter a strong password for this quiz">
+                <input type="password" id="secret-key" placeholder="Enter a strong password for this quiz">
             </div>
 
             <div class="settings-group">
@@ -183,7 +183,7 @@
                 </div>
                 <div class="form-group">
                     <label>Secret Key</label>
-                    <input type="text" id="results-secret-key" placeholder="Enter encryption key">
+                    <input type="password" id="results-secret-key" placeholder="Enter encryption key">
                 </div>
             </div>
             <button id="view-results-btn" class="btn btn-primary" style="width: 100%;">Fetch Records</button>
@@ -306,7 +306,7 @@
             </div>
             <div class="form-group">
                 <label>Access Key</label>
-                <input type="text" id="student-secret-key" placeholder="Provided by teacher">
+                <input type="password" id="student-secret-key" placeholder="Provided by teacher">
             </div>
             <button id="start-quiz" class="btn btn-primary"
                 style="width: 100%; height: 55px; font-size: 1.1rem; margin-top: 10px;">Verify & Start Quiz</button>
@@ -369,6 +369,27 @@
                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
                     <button id="modal-cancel-btn" class="btn btn-outline">Cancel</button>
                     <button id="modal-confirm-btn" class="btn btn-primary">Confirm</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="quiz-created-modal" class="modal-overlay hidden"
+            style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
+            <div class="modal-content" style="max-width: 500px; text-align: center;">
+                <h2>Quiz Created!</h2>
+                <p style="color: var(--text-muted); margin: 15px 0 10px;">Share this link with your students to let them
+                    join directly.</p>
+
+                <div
+                    style="background: var(--bg-body); padding: 15px; border-radius: 8px; margin-bottom: 20px; font-family: monospace; user-select: all; overflow-wrap: anywhere;">
+                    <a id="quiz-share-link" href="#" target="_blank"
+                        style="color: var(--primary); text-decoration: none;"></a>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button id="copy-link-btn" class="btn btn-outline">Copy Link</button>
+                    <button onclick="document.getElementById('quiz-created-modal').classList.add('hidden')"
+                        class="btn btn-primary">Done</button>
                 </div>
             </div>
         </div>

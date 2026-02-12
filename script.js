@@ -103,6 +103,27 @@ function initializeApp() {
     document.getElementById('export-pdf-btn').classList.add('hidden');
 
     const part = urlParams.get('part');
+    const qParam = urlParams.get('q');
+
+    if (qParam) {
+        try {
+            const decoded = JSON.parse(atob(qParam));
+            if (decoded.i && decoded.k) {
+                // Pre-fill fields
+                setTimeout(() => {
+                    const idField = document.getElementById('student-quiz-id');
+                    const keyField = document.getElementById('student-secret-key');
+                    if (idField && keyField) {
+                        idField.value = decoded.i;
+                        keyField.value = decoded.k;
+                        showToast('Quiz details loaded from link.', 'success');
+                    }
+                }, 500);
+            }
+        } catch (e) {
+            console.error("Invalid quiz link data", e);
+        }
+    }
 
     if (part === 'teacher') {
         showTeacherMenu();
@@ -714,7 +735,8 @@ function generateEncryptedFile() {
     encryptData(JSON.stringify(quiz), secretKey).then(encrypted => {
         database.ref('quizzes/' + quiz.id).set({ encryptedQuizData: encrypted }).then(() => {
             hideLoading();
-            const credentials = `Quiz Title: ${quizTitle}\nQuiz ID: ${quiz.id}\nSecret Key: ${secretKey}`;
+            const link = generateQuizLink(quiz.id, secretKey);
+            const credentials = `Quiz Title: ${quizTitle}\nQuiz ID: ${quiz.id}\nSecret Key: ${secretKey}\n\nDirect Link: ${link}`;
             saveTeacherHistory(quizTitle, quiz.id, secretKey); // Save to history
             const blob = new Blob([credentials], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
@@ -723,7 +745,7 @@ function generateEncryptedFile() {
             a.download = `quiz_credentials_${quizTitle.replace(/\s+/g, '_')}.txt`;
             a.click();
             resetQuizForm();
-            showConfirmationModal('Quiz Saved!', 'Quiz ID and Secret Key file downloaded.', null);
+            showQuizCreatedModal(link);
         }).catch(err => {
             hideLoading();
             alert('Failed to save quiz: ' + err.message);
@@ -1228,42 +1250,51 @@ async function startQuiz() {
         }
 
         hideLoading();
+        persistenceKey = `quiz_progress_${quizData.id}_${studentId}`;
+
         showInstructionModal(quizData.instructionCountdown, () => {
-            if (quizData.randomizeOrder !== false) shuffleQuiz(quizData);
             quizData.student = { firstName, lastName, section, institutionalId: studentInstitutionalId };
             quizData.secretKey = secretKey;
 
             // Persistence: Check for existing session
-            persistenceKey = `quiz_progress_${quizData.id}_${studentId}`;
             const savedState = localStorage.getItem(persistenceKey);
 
             if (savedState) {
                 try {
                     const state = JSON.parse(savedState);
+                    // Restore shuffled order if it exists
+                    if (state.questions) {
+                        quizData.questions = state.questions;
+                    } else if (quizData.randomizeOrder !== false) {
+                        shuffleQuiz(quizData);
+                    }
+
                     // Validate basic integrity
                     if (state.answers && state.answers.length === quizData.questions.length) {
                         console.log("Restoring session...");
                         quizStartTime = state.startTime;
                         studentAnswers = state.answers;
                         focusLostCount = state.attempts || 0;
-                        // If we restore attempts, update display immediately
                         if (focusLostCount > 0) {
-                            isHandlingFocusLoss = true; // prevent double trigger on load
+                            isHandlingFocusLoss = true;
                             setTimeout(() => isHandlingFocusLoss = false, 1000);
                         }
                     } else {
-                        // Invalid state, start fresh
                         studentAnswers = new Array(quizData.questions.length).fill(null);
                         quizStartTime = Date.now();
                     }
                 } catch (e) {
                     console.error("Error restoring state", e);
+                    if (quizData.randomizeOrder !== false) shuffleQuiz(quizData);
                     studentAnswers = new Array(quizData.questions.length).fill(null);
                     quizStartTime = Date.now();
                 }
             } else {
+                // New session: Shuffle if needed
+                if (quizData.randomizeOrder !== false) shuffleQuiz(quizData);
                 studentAnswers = new Array(quizData.questions.length).fill(null);
                 quizStartTime = Date.now();
+                saveProgress(); // Initial save to lock in the shuffle order
             }
 
             studentSection.classList.add('hidden');
@@ -1548,11 +1579,12 @@ function updateAttemptsDisplay() {
 }
 
 function saveProgress() {
-    if (!persistenceKey || !isQuizActive) return;
+    if (!persistenceKey || !isQuizActive || !quizData) return;
     const state = {
         startTime: quizStartTime,
         answers: studentAnswers,
-        attempts: focusLostCount
+        attempts: focusLostCount,
+        questions: quizData.questions // Lock in the shuffled order
     };
     localStorage.setItem(persistenceKey, JSON.stringify(state));
 }
@@ -1829,4 +1861,53 @@ function startWatermarkRotation(f, l, s, id) {
 
 function stopWatermarkRotation() {
     if (watermarkInterval) clearInterval(watermarkInterval);
+}
+
+// --- LINK SHARING HELPERS ---
+
+function generateQuizLink(id, key) {
+    const payload = JSON.stringify({ i: id, k: key });
+    // Simple obfuscation: Base64
+    const encoded = btoa(payload);
+    const url = new URL(window.location.href);
+    url.searchParams.set('q', encoded);
+
+    // Clear other params to keep link clean (e.g. 'part')
+    for (const key of Array.from(url.searchParams.keys())) {
+        if (key !== 'q') url.searchParams.delete(key);
+    }
+
+    return url.toString();
+}
+
+function showQuizCreatedModal(link) {
+    const modal = document.getElementById('quiz-created-modal');
+    if (!modal) {
+        prompt("Quiz Created! Share this link:", link);
+        return;
+    }
+    const linkEl = document.getElementById('quiz-share-link');
+    const copyBtn = document.getElementById('copy-link-btn');
+
+    linkEl.href = link;
+    linkEl.textContent = link;
+    modal.classList.remove('hidden');
+
+    // Reset copy button state
+    copyBtn.textContent = 'Copy Link';
+
+    // Clone to remove old listeners
+    const newBtn = copyBtn.cloneNode(true);
+    copyBtn.parentNode.replaceChild(newBtn, copyBtn);
+
+    newBtn.onclick = () => {
+        navigator.clipboard.writeText(link).then(() => {
+            showToast('Link copied to clipboard!', 'success');
+            newBtn.textContent = 'Copied!';
+            setTimeout(() => newBtn.textContent = 'Copy Link', 2000);
+        }).catch(err => {
+            console.error('Copy failed', err);
+            prompt("Copy this link:", link); // Fallback
+        });
+    };
 }
