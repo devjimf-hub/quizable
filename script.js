@@ -199,7 +199,7 @@ function showViewResults() {
 }
 
 // Attach Auto-Save to Main Inputs
-['quiz-title', 'quiz-subject', 'quiz-duration', 'quiz-expiry', 'secret-key', 'show-results-to-student', 'save-results-to-cloud', 'randomize-order'].forEach(id => {
+['quiz-title', 'quiz-subject', 'quiz-duration', 'quiz-expiry', 'secret-key', 'show-results-to-student', 'show-answer-summary', 'save-results-to-cloud', 'randomize-order'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
         const eventType = (el.type === 'checkbox') ? 'change' : 'input';
@@ -698,6 +698,7 @@ function generateEncryptedFile() {
     const quizExpiry = document.getElementById('quiz-expiry').value;
     const instructionCountdownDuration = parseInt(document.getElementById('instruction-countdown-duration').value) || 30;
     const showResultsToStudent = document.getElementById('show-results-to-student').checked;
+    const showAnswerSummary = document.getElementById('show-answer-summary').checked;
     const saveResultsToCloud = document.getElementById('save-results-to-cloud').checked;
     const randomizeOrder = document.getElementById('randomize-order').checked;
     const secretKey = document.getElementById('secret-key').value;
@@ -713,7 +714,7 @@ function generateEncryptedFile() {
         duration: quizDuration,
         expiry: quizExpiry ? new Date(quizExpiry).getTime() : null,
         instructionCountdown: instructionCountdownDuration,
-        showResultsToStudent, saveResultsToCloud, randomizeOrder,
+        showResultsToStudent, showAnswerSummary, saveResultsToCloud, randomizeOrder,
         id: quizId,
         questions: []
     };
@@ -782,6 +783,7 @@ function saveDraft() {
         expiry: document.getElementById('quiz-expiry').value,
         secretKey: document.getElementById('secret-key').value,
         showResults: document.getElementById('show-results-to-student').checked,
+        showAnswerSummary: document.getElementById('show-answer-summary').checked,
         saveCloud: document.getElementById('save-results-to-cloud').checked,
         randomize: document.getElementById('randomize-order').checked,
         questions: []
@@ -808,6 +810,7 @@ function loadDraft() {
         document.getElementById('quiz-expiry').value = draft.expiry || '';
         document.getElementById('secret-key').value = draft.secretKey || '';
         document.getElementById('show-results-to-student').checked = draft.showResults !== false;
+        document.getElementById('show-answer-summary').checked = draft.showAnswerSummary !== false;
         document.getElementById('save-results-to-cloud').checked = draft.saveCloud !== false;
         document.getElementById('randomize-order').checked = draft.randomize !== false;
 
@@ -831,6 +834,7 @@ function exportDraftAsJson() {
         duration: document.getElementById('quiz-duration').value,
         expiry: document.getElementById('quiz-expiry').value,
         showResultsToStudent: document.getElementById('show-results-to-student').checked,
+        showAnswerSummary: document.getElementById('show-answer-summary').checked,
         saveResultsToCloud: document.getElementById('save-results-to-cloud').checked,
         randomizeOrder: document.getElementById('randomize-order').checked,
         questions: []
@@ -888,6 +892,7 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             // Populate fields
             document.getElementById('modify-quiz-duration').value = quizDetails.duration || 0;
             document.getElementById('modify-show-results').checked = quizDetails.showResultsToStudent !== false;
+            document.getElementById('modify-show-answer-summary').checked = quizDetails.showAnswerSummary !== false;
 
             if (quizDetails.expiry) {
                 const date = new Date(quizDetails.expiry);
@@ -902,7 +907,8 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                 const newDuration = parseFloat(document.getElementById('modify-quiz-duration').value) || 0;
                 const newExpiryStr = modifyExpiryInput.value;
                 const showResults = document.getElementById('modify-show-results').checked;
-                updateQuizSettings(quizId, secretKey, { duration: newDuration, expiry: newExpiryStr, showResultsToStudent: showResults }, quizDetails);
+                const showAnswerSummaryVal = document.getElementById('modify-show-answer-summary').checked;
+                updateQuizSettings(quizId, secretKey, { duration: newDuration, expiry: newExpiryStr, showResultsToStudent: showResults, showAnswerSummary: showAnswerSummaryVal }, quizDetails);
             };
         }
     } catch (e) {
@@ -1030,6 +1036,9 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
         }
         if (newSettings.hasOwnProperty('showResultsToStudent')) {
             currentQuizData.showResultsToStudent = newSettings.showResultsToStudent;
+        }
+        if (newSettings.hasOwnProperty('showAnswerSummary')) {
+            currentQuizData.showAnswerSummary = newSettings.showAnswerSummary;
         }
 
         // Re-encrypt the entire quiz data
@@ -1631,7 +1640,10 @@ function submitQuiz(auto = false) {
         };
         window.studentResultsDataForPdf = res;
 
-        if (quizData.showResultsToStudent) {
+        const showScore = quizData.showResultsToStudent;
+        const showAnswerSummary = quizData.showAnswerSummary !== false;
+
+        if (showScore || showAnswerSummary) {
             document.getElementById('submission-success-message').classList.add('hidden');
             const summary = document.getElementById('student-score-summary');
 
@@ -1645,19 +1657,22 @@ function submitQuiz(auto = false) {
             else if (percentage >= 50) { gradeLabel = 'Fair'; gradeColor = 'var(--warning)'; }
             else { gradeLabel = 'Needs Improvement'; gradeColor = 'var(--danger)'; }
 
-            summary.innerHTML = `
+            const scoreHtml = showScore ? `
                 <div style="text-align:center; padding:30px; background:var(--bg-body); border-radius:15px; margin-bottom:20px;">
                     <div style="font-size:3rem; font-weight:800; color:var(--primary);">${score} / ${res.totalQuestions}</div>
                     <div style="font-size:1.5rem; font-weight:700; color:${gradeColor}; margin-top:5px;">${gradeLabel} (${percentage}%)</div>
                     <div style="color:var(--text-muted); margin-top:5px;">Final Result</div>
                 </div>
-                ${detail.map((a, i) => `
-                    <div class="quiz-question" style="border-left:5px solid ${a.isCorrect ? 'var(--success)' : 'var(--danger)'};">
-                        <strong>Q${i + 1}</strong>: ${a.questionText}<br>
-                        Your Answer: ${a.studentAnswerText}
-                    </div>
-                `).join('')}
-            `;
+            ` : '';
+
+            const answerHtml = showAnswerSummary ? detail.map((a, i) => `
+                <div class="quiz-question" style="border-left:5px solid ${a.isCorrect ? 'var(--success)' : 'var(--danger)'};">
+                    <strong>Q${i + 1}</strong>: ${a.questionText}<br>
+                    Your Answer: ${a.studentAnswerText}
+                </div>
+            `).join('') : '';
+
+            summary.innerHTML = scoreHtml + answerHtml;
             summary.classList.remove('hidden');
             document.getElementById('download-student-pdf-btn').classList.remove('hidden');
         } else {
