@@ -259,6 +259,35 @@
 
         </div>
 
+        <!-- Admin Login Section -->
+        <div id="admin-login-section" class="card hidden">
+            <h1>Admin Authentication</h1>
+            <p style="text-align: center; color: var(--text-muted); margin-bottom: 30px;">Access restricted to
+                authorized administrative personnel only.</p>
+            <div class="form-group">
+                <label>System Password</label>
+                <input type="password" id="admin-password-field" placeholder="••••••••">
+            </div>
+            <button id="admin-login-btn" class="btn btn-primary" style="width: 100%;">Verify Access</button>
+        </div>
+
+        <!-- Admin Dashboard Section -->
+        <div id="admin-dashboard-section" class="card hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h1>System Administrator</h1>
+                <button class="btn btn-outline" onclick="adminLogout()">Logout</button>
+            </div>
+
+            <div id="admin-stats" class="stats-overview"
+                style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px;">
+                <!-- Stats injected here -->
+            </div>
+
+            <div id="admin-quizzes-container">
+                <!-- Quizzes by subject injected here -->
+            </div>
+        </div>
+
         <!-- Student Entry Screen -->
         <div id="student-section" class="card">
             <h1>Student Portal</h1>

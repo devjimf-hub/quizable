@@ -132,17 +132,342 @@ function initializeApp() {
         }
     }
 
-    if (part === 'teacher' && !qParam) {
+    if (part === 'admin') {
+        studentSection.classList.add('hidden');
+        const adminSession = sessionStorage.getItem('quizable_admin_verified');
+        if (adminSession === 'true') {
+            document.getElementById('admin-login-section').classList.add('hidden');
+            document.getElementById('admin-dashboard-section').classList.remove('hidden');
+            loadAdminDashboard();
+        } else {
+            showAdminLogin();
+        }
+    } else if (part === 'teacher' && !qParam) {
         showTeacherMenu();
     } else if (part !== 'teacher') {
         teacherMenu.classList.add('hidden');
         teacherCreateSection.classList.add('hidden');
         teacherResultsSection.classList.add('hidden');
+        document.getElementById('admin-login-section').classList.add('hidden');
         studentSection.classList.remove('hidden');
 
         // Auto-Login Check
         checkAutoLogin();
     }
+}
+
+function showAdminLogin() {
+    studentSection.classList.add('hidden');
+    teacherMenu.classList.add('hidden');
+    document.getElementById('admin-login-section').classList.remove('hidden');
+    document.getElementById('admin-password-field').value = '';
+}
+
+async function verifyAdminPassword() {
+    const passwordField = document.getElementById('admin-password-field');
+    const password = passwordField.value.trim();
+
+    if (!password) {
+        showToast('Password required', 'error');
+        return;
+    }
+
+    // Check for Secure Context (Required for crypto.subtle)
+    if (!window.isSecureContext && window.location.protocol !== 'file:') {
+        showToast('Hashing requires HTTPS or Localhost', 'error');
+        console.error('Crypto.subtle is not available in non-secure contexts.');
+        return;
+    }
+
+    if (!window.crypto || !window.crypto.subtle) {
+        showToast('Browser does not support security features', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        console.log('Fetching admin status...');
+        const snap = await database.ref('admin/password').once('value');
+        let storedHash = snap.val();
+
+        const enteredHash = await hashPassword(password);
+
+        // If no password set in Firebase, save the first one entered
+        if (!storedHash) {
+            console.warn('No admin password found. Initializing with provided password...');
+            await database.ref('admin/password').set(enteredHash);
+            storedHash = enteredHash;
+            showToast('System initialized with new password!', 'success');
+        }
+
+        if (enteredHash === storedHash) {
+            sessionStorage.setItem('quizable_admin_verified', 'true');
+            document.getElementById('admin-login-section').classList.add('hidden');
+            document.getElementById('admin-dashboard-section').classList.remove('hidden');
+            loadAdminDashboard();
+            showToast('Admin access granted', 'success');
+        } else {
+            showToast('Invalid admin password', 'error');
+            passwordField.value = '';
+        }
+    } catch (e) {
+        console.error("Firebase Auth Error Details:", e);
+        if (e.message.includes('permission_denied')) {
+            showToast('Database Permission Denied (Check Firebase Rules)', 'error');
+        } else {
+            showToast('Connection failed: ' + e.message, 'error');
+        }
+    }
+    hideLoading();
+}
+
+async function hashPassword(password) {
+    const msgUint8 = new TextEncoder().encode(password);
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgUint8);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function loadAdminDashboard() {
+    showLoading();
+    try {
+        // Fetch both the index and the actual master list of quiz IDs
+        const [adminSnap, masterSnap] = await Promise.all([
+            database.ref('admin/quizzes').once('value'),
+            database.ref('quizzes').once('value')
+        ]);
+
+        const adminMetadata = adminSnap.val() || {};
+        const masterQuizzes = masterSnap.val() || {};
+
+        const allQuizIds = Object.keys(masterQuizzes);
+
+        // Decrypt metadata for each quiz
+        const decryptedMetaPromises = allQuizIds.map(async (id) => {
+            if (adminMetadata[id]) {
+                try {
+                    // Transparently decrypt the admin metadata
+                    const decrypted = await systemDecrypt(adminMetadata[id].data);
+                    const meta = JSON.parse(decrypted);
+                    return { id, ...meta };
+                } catch (e) {
+                    console.error("Failed to decrypt meta for " + id, e);
+                    return { id, title: "Decryption Error", subject: "Error", secretKey: "N/A" };
+                }
+            } else {
+                return {
+                    id,
+                    title: "Legacy Quiz (Unindexed)",
+                    subject: "Legacy / Unindexed",
+                    secretKey: "Manual entry required",
+                    isLegacy: true,
+                    createdAt: 0
+                };
+            }
+        });
+
+        const quizList = await Promise.all(decryptedMetaPromises);
+
+        // Group by subject
+        const grouped = quizList.reduce((acc, q) => {
+            const subject = q.subject || 'Uncategorized';
+            if (!acc[subject]) acc[subject] = [];
+            acc[subject].push(q);
+            return acc;
+        }, {});
+
+        // Render Stats
+        const statsContainer = document.getElementById('admin-stats');
+        statsContainer.innerHTML = `
+            <div class="stat-card"><div class="stat-value">${allQuizIds.length}</div><div class="stat-label">Stored Quizzes</div></div>
+            <div class="stat-card"><div class="stat-value">${Object.keys(grouped).length}</div><div class="stat-label">Subjects</div></div>
+            <div class="stat-card"><div class="stat-value" id="admin-total-submissions">...</div><div class="stat-label">Submissions</div></div>
+        `;
+
+        renderAdminDashboard(grouped);
+    } catch (e) {
+        console.error("Dashboard error", e);
+        showToast('Error loading dashboard', 'error');
+    }
+    hideLoading();
+}
+
+function renderAdminDashboard(grouped) {
+    const container = document.getElementById('admin-quizzes-container');
+
+    if (Object.keys(grouped).length === 0) {
+        container.innerHTML = `
+            <div class="card" style="text-align: center; padding: 60px 20px; border: 2px dashed var(--border); background: var(--bg-body); box-shadow: none;">
+                <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; background: white; border-radius: 50%; margin-bottom: 20px; color: var(--primary);">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                </div>
+                <h3 style="margin-bottom: 10px; color: var(--text-main);">No indexed quizzes found</h3>
+                <p style="color: var(--text-muted); max-width: 400px; margin: 0 auto; font-size: 0.95rem;">
+                    Quizzes created after the admin update will automatically appear here grouped by their subjects.
+                </p>
+                <button class="btn btn-primary" onclick="showCreateQuiz()" style="margin-top: 25px;">Create Your First Quiz</button>
+            </div>
+        `;
+        return;
+    }
+    container.innerHTML = '';
+
+    const sortedSubjects = Object.keys(grouped).sort();
+
+    sortedSubjects.forEach(subject => {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'subject-group';
+
+        // Sort: Newest to Oldest
+        const quizList = grouped[subject].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+        const initialQuizzes = quizList.slice(0, 3);
+        const extraQuizzes = quizList.slice(3);
+        const groupNormalizedId = `extra-${subject.replace(/[^a-zA-Z0-9]/g, '-')}`;
+
+        groupEl.innerHTML = `
+            <div class="subject-header">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                <h2 style="color:white; margin:0; font-size:1.2rem;">${subject}</h2>
+            </div>
+            <div class="quizzes-in-group">
+                ${initialQuizzes.map(q => renderAdminQuizItem(q)).join('')}
+                
+                <div id="${groupNormalizedId}" class="hidden">
+                    ${extraQuizzes.map(q => renderAdminQuizItem(q)).join('')}
+                </div>
+
+                ${extraQuizzes.length > 0 ? `
+                    <button class="btn btn-outline" style="width:100%; margin: 10px 0; border-style: dashed; background: white;" 
+                            onclick="toggleExtraQuizzes('${groupNormalizedId}', this)">
+                        Show More (${extraQuizzes.length} more)
+                    </button>
+                ` : ''}
+            </div>
+        `;
+        container.appendChild(groupEl);
+    });
+
+    // Count total submissions in background
+    database.ref('results').once('value').then(snap => {
+        const results = snap.val() || {};
+        let count = 0;
+        Object.values(results).forEach(quizResults => count += Object.keys(quizResults).length);
+        document.getElementById('admin-total-submissions').textContent = count;
+    });
+}
+
+function renderAdminQuizItem(q) {
+    return `
+        <div class="admin-quiz-item" id="admin-quiz-${q.id}">
+            <div class="admin-quiz-header">
+                <div>
+                    <h3 style="margin-bottom:4px;">${q.title}</h3>
+                    <div style="font-size:0.8rem; color:var(--text-muted);">
+                        ID: ${q.id} | Key: ${q.secretKey} 
+                        ${q.createdAt ? `| ${new Date(q.createdAt).toLocaleDateString()}` : ''}
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-info btn-sm" onclick="loadAdminQuizResults('${q.id}', '${q.secretKey}')">View Results</button>
+                    <button class="btn btn-outline btn-sm" onclick="deleteQuizAdmin('${q.id}')" style="color:var(--danger)">Delete</button>
+                </div>
+            </div>
+            <div id="admin-results-${q.id}" class="hidden">
+                <div class="loader-spinner" style="width: 25px; height: 25px; border-width: 3px;"></div>
+            </div>
+        </div>
+    `;
+}
+
+function toggleExtraQuizzes(id, btn) {
+    const el = document.getElementById(id);
+    const isHidden = el.classList.toggle('hidden');
+    const count = el.children.length;
+    btn.textContent = isHidden ? `Show More (${count} more)` : 'Show Less';
+}
+
+async function loadAdminQuizResults(quizId, secretKey) {
+    const container = document.getElementById(`admin-results-${quizId}`);
+    container.classList.toggle('hidden');
+    if (container.classList.contains('hidden')) return;
+
+    container.innerHTML = '<div style="padding:20px; text-align:center;"><div class="loader-spinner" style="width: 25px; height: 25px; border-width: 3px;"></div></div>';
+
+    try {
+        const snap = await database.ref(`results/${quizId}`).once('value');
+        const encryptedResults = snap.val();
+
+        if (!encryptedResults) {
+            container.innerHTML = '<p style="padding:20px; text-align:center; color:var(--text-muted);">No submissions yet.</p>';
+            return;
+        }
+
+        const promises = Object.values(encryptedResults).map(data =>
+            decryptData(data, secretKey).then(JSON.parse).catch(() => null)
+        );
+        const validResults = (await Promise.all(promises)).filter(Boolean);
+
+        if (validResults.length === 0) {
+            container.innerHTML = '<p style="padding:20px; text-align:center; color:var(--text-muted);">Could not decrypt results (Invalid Key).</p>';
+            return;
+        }
+
+        validResults.sort((a, b) => b.submittedAt - a.submittedAt);
+
+        container.innerHTML = `
+            <table class="admin-results-table">
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Score</th>
+                        <th>Time</th>
+                        <th>Violations</th>
+                        <th>Submitted</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${validResults.map(res => `
+                        <tr>
+                            <td style="font-weight:600;">${res.student.lastName}, ${res.student.firstName}</td>
+                            <td style="font-weight:700; color:var(--primary);">${res.score}/${res.totalQuestions}</td>
+                            <td>${res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A'}</td>
+                            <td style="color:${res.securityViolations > 0 ? 'var(--danger)' : 'inherit'}">${res.securityViolations || 0}</td>
+                            <td style="font-size:0.75rem; color:var(--text-muted);">${new Date(res.submittedAt).toLocaleString()}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (e) {
+        container.innerHTML = '<p style="padding:20px; text-align:center; color:var(--danger);">Error fetching results.</p>';
+    }
+}
+
+async function deleteQuizAdmin(quizId) {
+    if (!confirm('Are you sure you want to permanently delete this quiz and all its results from the database? This cannot be undone.')) return;
+
+    showLoading();
+    try {
+        const updates = {};
+        updates[`quizzes/${quizId}`] = null;
+        updates[`results/${quizId}`] = null;
+        updates[`admin/quizzes/${quizId}`] = null;
+
+        await database.ref().update(updates);
+
+        showToast('Quiz and all associated data deleted', 'success');
+        loadAdminDashboard();
+    } catch (e) {
+        console.error("Deletion error:", e);
+        showToast('Deletion failed: ' + e.message, 'error');
+    }
+    hideLoading();
+}
+
+function adminLogout() {
+    sessionStorage.removeItem('quizable_admin_verified');
+    location.reload();
 }
 
 function checkAutoLogin() {
@@ -740,8 +1065,23 @@ function generateEncryptedFile() {
     if (!allValid) return;
 
     showLoading();
-    encryptData(JSON.stringify(quiz), secretKey).then(encrypted => {
-        database.ref('quizzes/' + quiz.id).set({ encryptedQuizData: encrypted }).then(() => {
+    encryptData(JSON.stringify(quiz), secretKey).then(async (encrypted) => {
+        // Prepare the admin metadata for encryption
+        const adminMeta = {
+            title: quizTitle,
+            subject: quizSubject || 'Uncategorized',
+            secretKey: secretKey,
+            createdAt: Date.now()
+        };
+
+        // Encrypt the metadata using the internal system key
+        const encryptedAdminMeta = await systemEncrypt(JSON.stringify(adminMeta));
+
+        const saveData = {};
+        saveData['quizzes/' + quiz.id] = { encryptedQuizData: encrypted };
+        saveData['admin/quizzes/' + quiz.id] = { data: encryptedAdminMeta };
+
+        database.ref().update(saveData).then(() => {
             hideLoading();
             const studentLink = generateQuizLink(quiz.id, secretKey);
             const teacherLink = generateQuizLink(quiz.id, secretKey, true);
@@ -1844,6 +2184,17 @@ function restartQuiz() {
 window.onload = function () {
     initializeApp();
     document.getElementById('download-student-pdf-btn').addEventListener('click', downloadStudentResultsAsPdf);
+
+    // Admin Bindings
+    const adminLoginBtn = document.getElementById('admin-login-btn');
+    if (adminLoginBtn) adminLoginBtn.onclick = verifyAdminPassword;
+
+    const adminPasswordField = document.getElementById('admin-password-field');
+    if (adminPasswordField) {
+        adminPasswordField.onkeypress = (e) => {
+            if (e.key === 'Enter') verifyAdminPassword();
+        };
+    }
 };
 
 // --- CRYPTO HELPERS ---
@@ -1872,6 +2223,11 @@ async function decryptData(str, password) {
     const dec = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
     return new TextDecoder().decode(dec);
 }
+
+// System Encryption (Using an internal static key for DB privacy)
+const SYSTEM_PEPPER = "quizable_internal_v1_secure_node";
+async function systemEncrypt(data) { return encryptData(data, SYSTEM_PEPPER); }
+async function systemDecrypt(data) { return decryptData(data, SYSTEM_PEPPER); }
 
 // --- Dynamic Watermark Utility ---
 let watermarkInterval = null;
