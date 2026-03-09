@@ -111,12 +111,19 @@ function initializeApp() {
             if (decoded.i && decoded.k) {
                 // Pre-fill fields
                 setTimeout(() => {
-                    const idField = document.getElementById('student-quiz-id');
-                    const keyField = document.getElementById('student-secret-key');
+                    const idField = document.getElementById(part === 'teacher' ? 'results-quiz-id' : 'student-quiz-id');
+                    const keyField = document.getElementById(part === 'teacher' ? 'results-secret-key' : 'student-secret-key');
                     if (idField && keyField) {
                         idField.value = decoded.i;
                         keyField.value = decoded.k;
-                        showToast('Quiz details loaded from link.', 'success');
+                        showToast(`Quiz details loaded from link.`, 'success');
+
+                        // If teacher, auto-fetch
+                        if (part === 'teacher') {
+                            showTeacherMenu();
+                            showViewResults();
+                            fetchAndDisplayResults(decoded.i, decoded.k);
+                        }
                     }
                 }, 500);
             }
@@ -125,9 +132,9 @@ function initializeApp() {
         }
     }
 
-    if (part === 'teacher') {
+    if (part === 'teacher' && !qParam) {
         showTeacherMenu();
-    } else {
+    } else if (part !== 'teacher') {
         teacherMenu.classList.add('hidden');
         teacherCreateSection.classList.add('hidden');
         teacherResultsSection.classList.add('hidden');
@@ -736,8 +743,9 @@ function generateEncryptedFile() {
     encryptData(JSON.stringify(quiz), secretKey).then(encrypted => {
         database.ref('quizzes/' + quiz.id).set({ encryptedQuizData: encrypted }).then(() => {
             hideLoading();
-            const link = generateQuizLink(quiz.id, secretKey);
-            const credentials = `Quiz Title: ${quizTitle}\nQuiz ID: ${quiz.id}\nSecret Key: ${secretKey}\n\nDirect Link: ${link}`;
+            const studentLink = generateQuizLink(quiz.id, secretKey);
+            const teacherLink = generateQuizLink(quiz.id, secretKey, true);
+            const credentials = `Quiz Title: ${quizTitle}\nQuiz ID: ${quiz.id}\nSecret Key: ${secretKey}\n\nStudent Link: ${studentLink}\nTeacher Link: ${teacherLink}`;
             saveTeacherHistory(quizTitle, quiz.id, secretKey); // Save to history
             const blob = new Blob([credentials], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
@@ -746,7 +754,7 @@ function generateEncryptedFile() {
             a.download = `quiz_credentials_${quizTitle.replace(/\s+/g, '_')}.txt`;
             a.click();
             resetQuizForm();
-            showQuizCreatedModal(link);
+            showQuizCreatedModal(studentLink, teacherLink);
         }).catch(err => {
             hideLoading();
             alert('Failed to save quiz: ' + err.message);
@@ -902,6 +910,9 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             } else {
                 modifyExpiryInput.value = '';
             }
+
+            // Requirement 2: Save to history if not already there
+            saveTeacherHistory(quizDetails.title, quizId, secretKey);
 
             document.getElementById('update-quiz-settings-btn').onclick = () => {
                 const newDuration = parseFloat(document.getElementById('modify-quiz-duration').value) || 0;
@@ -1880,49 +1891,56 @@ function stopWatermarkRotation() {
 
 // --- LINK SHARING HELPERS ---
 
-function generateQuizLink(id, key) {
+function generateQuizLink(id, key, isTeacher = false) {
     const payload = JSON.stringify({ i: id, k: key });
     // Simple obfuscation: Base64
     const encoded = btoa(payload);
-    const url = new URL(window.location.href);
+    const url = new URL(window.location.origin + window.location.pathname);
     url.searchParams.set('q', encoded);
-
-    // Clear other params to keep link clean (e.g. 'part')
-    for (const key of Array.from(url.searchParams.keys())) {
-        if (key !== 'q') url.searchParams.delete(key);
-    }
+    if (isTeacher) url.searchParams.set('part', 'teacher');
 
     return url.toString();
 }
 
-function showQuizCreatedModal(link) {
+function showQuizCreatedModal(studentLink, teacherLink) {
     const modal = document.getElementById('quiz-created-modal');
     if (!modal) {
-        prompt("Quiz Created! Share this link:", link);
+        alert("Quiz Created!\n\nStudent Link: " + studentLink + "\nTeacher Link: " + teacherLink);
         return;
     }
-    const linkEl = document.getElementById('quiz-share-link');
-    const copyBtn = document.getElementById('copy-link-btn');
 
-    linkEl.href = link;
-    linkEl.textContent = link;
+    // Student Link Setup
+    const studentLinkEl = document.getElementById('quiz-share-link');
+    const studentCopyBtn = document.getElementById('copy-link-btn');
+    studentLinkEl.href = studentLink;
+    studentLinkEl.textContent = studentLink;
+    studentCopyBtn.textContent = 'Copy Student Link';
+
+    // Teacher Link Setup
+    const teacherLinkEl = document.getElementById('teacher-share-link');
+    const teacherCopyBtn = document.getElementById('copy-teacher-link-btn');
+    teacherLinkEl.href = teacherLink;
+    teacherLinkEl.textContent = teacherLink;
+    teacherCopyBtn.textContent = 'Copy Teacher Link';
+
     modal.classList.remove('hidden');
 
-    // Reset copy button state
-    copyBtn.textContent = 'Copy Link';
-
-    // Clone to remove old listeners
-    const newBtn = copyBtn.cloneNode(true);
-    copyBtn.parentNode.replaceChild(newBtn, copyBtn);
-
-    newBtn.onclick = () => {
-        navigator.clipboard.writeText(link).then(() => {
-            showToast('Link copied to clipboard!', 'success');
-            newBtn.textContent = 'Copied!';
-            setTimeout(() => newBtn.textContent = 'Copy Link', 2000);
-        }).catch(err => {
-            console.error('Copy failed', err);
-            prompt("Copy this link:", link); // Fallback
-        });
+    // Setup Copy Handlers
+    const setupCopy = (btn, text, label) => {
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.onclick = () => {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast(`${label} copied!`, 'success');
+                newBtn.textContent = 'Copied!';
+                setTimeout(() => newBtn.textContent = `Copy ${label}`, 2000);
+            }).catch(err => {
+                console.error('Copy failed', err);
+                prompt(`Copy ${label}:`, text);
+            });
+        };
     };
+
+    setupCopy(studentCopyBtn, studentLink, 'Student Link');
+    setupCopy(teacherCopyBtn, teacherLink, 'Teacher Link');
 }

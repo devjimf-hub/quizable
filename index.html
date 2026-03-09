@@ -133,7 +133,8 @@
                     <input type="checkbox" id="show-results-to-student" checked> Show score to students after submission
                 </label>
                 <label class="checkbox-label">
-                    <input type="checkbox" id="show-answer-summary" checked> Show answer summary to students after submission
+                    <input type="checkbox" id="show-answer-summary" checked> Show answer summary to students after
+                    submission
                 </label>
                 <label class="checkbox-label">
                     <input type="checkbox" id="save-results-to-cloud" checked> Save results to Firebase Cloud
@@ -243,7 +244,8 @@
                             <input type="checkbox" id="modify-show-results"> Show score to students after submission
                         </label>
                         <label class="checkbox-label">
-                            <input type="checkbox" id="modify-show-answer-summary"> Show answer summary to students after submission
+                            <input type="checkbox" id="modify-show-answer-summary"> Show answer summary to students
+                            after submission
                         </label>
                     </div>
 
@@ -383,19 +385,36 @@
             style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
             <div class="modal-content" style="max-width: 500px; text-align: center;">
                 <h2>Quiz Created!</h2>
-                <p style="color: var(--text-muted); margin: 15px 0 10px;">Share this link with your students to let them
-                    join directly.</p>
 
-                <div
-                    style="background: var(--bg-body); padding: 15px; border-radius: 8px; margin-bottom: 20px; font-family: monospace; user-select: all; overflow-wrap: anywhere;">
-                    <a id="quiz-share-link" href="#" target="_blank"
-                        style="color: var(--primary); text-decoration: none;"></a>
+                <div style="margin-top: 20px;">
+                    <p style="color: var(--text-muted); margin-bottom: 10px; font-weight: 600;">Student Participation
+                        Link</p>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 8px;">Share this with your
+                        students to let them join directly.</p>
+                    <div
+                        style="background: var(--bg-body); padding: 12px; border-radius: 8px; margin-bottom: 10px; font-family: monospace; user-select: all; overflow-wrap: anywhere; border: 1px solid var(--border);">
+                        <a id="quiz-share-link" href="#" target="_blank"
+                            style="color: var(--primary); text-decoration: none; font-size: 0.9rem;"></a>
+                    </div>
+                    <button id="copy-link-btn" class="btn btn-outline" style="width: 100%;">Copy Student Link</button>
                 </div>
 
-                <div style="display: flex; gap: 10px; justify-content: center;">
-                    <button id="copy-link-btn" class="btn btn-outline">Copy Link</button>
+                <div style="margin-top: 25px; padding-top: 20px; border-top: 1px dashed var(--border);">
+                    <p style="color: var(--text-muted); margin-bottom: 10px; font-weight: 600;">Teacher Results Link</p>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 8px;">Keep this link for
+                        yourself to view results and manage settings.</p>
+                    <div
+                        style="background: var(--bg-body); padding: 12px; border-radius: 8px; margin-bottom: 10px; font-family: monospace; user-select: all; overflow-wrap: anywhere; border: 1px solid var(--border);">
+                        <a id="teacher-share-link" href="#" target="_blank"
+                            style="color: var(--info); text-decoration: none; font-size: 0.9rem;"></a>
+                    </div>
+                    <button id="copy-teacher-link-btn" class="btn btn-outline" style="width: 100%;">Copy Teacher
+                        Link</button>
+                </div>
+
+                <div style="margin-top: 30px; display: flex; gap: 10px; justify-content: center;">
                     <button onclick="document.getElementById('quiz-created-modal').classList.add('hidden')"
-                        class="btn btn-primary">Done</button>
+                        class="btn btn-primary" style="width: 100%;">All Done</button>
                 </div>
             </div>
         </div>
