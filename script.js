@@ -28,6 +28,7 @@ let devToolsInterval = null; // For DevTools detection
 let allStudentResults = []; // To store all results for a quiz
 let processedStudentResults = []; // To store results for PDF export
 let quizStartTime = 0;
+let allAdminQuizzes = []; // Global store for admin search
 
 function showLoading() {
     document.getElementById('loading-overlay').classList.remove('hidden');
@@ -266,7 +267,8 @@ async function loadAdminDashboard() {
             }
         });
 
-        const quizList = await Promise.all(decryptedMetaPromises);
+        allAdminQuizzes = await Promise.all(decryptedMetaPromises);
+        const quizList = allAdminQuizzes;
 
         // Group by subject
         const grouped = quizList.reduce((acc, q) => {
@@ -348,12 +350,59 @@ function renderAdminDashboard(grouped) {
         container.appendChild(groupEl);
     });
 
-    // Count total submissions in background
-    database.ref('results').once('value').then(snap => {
+    // Count total submissions in background and calculate stats
+    database.ref('results').once('value').then(async (snap) => {
         const results = snap.val() || {};
         let count = 0;
-        Object.values(results).forEach(quizResults => count += Object.keys(quizResults).length);
+        let totalScorePerc = 0;
+        let totalSubmissionsWithScore = 0;
+        let totalViolations = 0;
+
+        // Build key map for decryption
+        const keyMap = {};
+        allAdminQuizzes.forEach(q => keyMap[q.id] = q.secretKey);
+
+        for (const quizId in results) {
+            const quizResults = results[quizId];
+            const secretKey = keyMap[quizId];
+            const submissions = Object.keys(quizResults);
+            count += submissions.length;
+
+            if (secretKey) {
+                for (const studentKey in quizResults) {
+                    try {
+                        const decrypted = await decryptData(quizResults[studentKey], secretKey);
+                        const res = JSON.parse(decrypted);
+                        if (res.totalQuestions > 0) {
+                            totalScorePerc += (res.score / res.totalQuestions) * 100;
+                            totalSubmissionsWithScore++;
+                        }
+                        totalViolations += (res.securityViolations || 0);
+                    } catch (e) { }
+                }
+            }
+        }
+
+        const avgScore = totalSubmissionsWithScore > 0 ? (totalScorePerc / totalSubmissionsWithScore).toFixed(1) : 0;
+
         document.getElementById('admin-total-submissions').textContent = count;
+
+        // Update stats container with more detailed info
+        const statsContainer = document.getElementById('admin-stats');
+        statsContainer.innerHTML = `
+            <div class="stat-card">
+                <div class="stat-value">${allAdminQuizzes.length}</div>
+                <div class="stat-label">Stored Quizzes</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${count}</div>
+                <div class="stat-label">Total Submissions</div>
+            </div>
+            <div class="stat-card" title="Total Violations: ${totalViolations}">
+                <div class="stat-value">${avgScore}%</div>
+                <div class="stat-label">Avg. Class Score</div>
+            </div>
+        `;
     });
 }
 
@@ -369,7 +418,8 @@ function renderAdminQuizItem(q) {
                     </div>
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <button class="btn btn-info btn-sm" onclick="loadAdminQuizResults('${q.id}', '${q.secretKey}')">View Results</button>
+                    <button class="btn btn-info btn-sm" onclick="loadAdminQuizResults('${q.id}', '${q.secretKey}')">Results</button>
+                    <button class="btn btn-warning btn-sm" onclick="showAdminSettingsModal('${q.id}', '${q.secretKey}')">Settings</button>
                     <button class="btn btn-outline btn-sm" onclick="deleteQuizAdmin('${q.id}')" style="color:var(--danger)">Delete</button>
                 </div>
             </div>
@@ -468,6 +518,156 @@ async function deleteQuizAdmin(quizId) {
 function adminLogout() {
     sessionStorage.removeItem('quizable_admin_verified');
     location.reload();
+}
+
+// --- NEW ADMIN ENHANCEMENTS ---
+
+function filterAdminQuizzes() {
+    const query = document.getElementById('admin-search-input').value.toLowerCase().trim();
+    if (!query) {
+        renderAdminDashboard(groupQuizzesBySubject(allAdminQuizzes));
+        return;
+    }
+
+    const filtered = allAdminQuizzes.filter(q =>
+        q.title.toLowerCase().includes(query) ||
+        q.id.toLowerCase().includes(query) ||
+        (q.subject && q.subject.toLowerCase().includes(query))
+    );
+
+    renderAdminDashboard(groupQuizzesBySubject(filtered));
+}
+
+function groupQuizzesBySubject(list) {
+    return list.reduce((acc, q) => {
+        const subject = q.subject || 'Uncategorized';
+        if (!acc[subject]) acc[subject] = [];
+        acc[subject].push(q);
+        return acc;
+    }, {});
+}
+
+async function exportAllSubmissionsCsv() {
+    showLoading();
+    try {
+        const snap = await database.ref('results').once('value');
+        const allResultsRaw = snap.val() || {};
+
+        let csvRows = [
+            ['Quiz ID', 'Quiz Title', 'Subject', 'Student Name', 'Student ID', 'Section', 'Score', 'Total Questions', 'Time (m)', 'Violations', 'Submitted At']
+        ];
+
+        // We need the secret keys for decryption. We have them in allAdminQuizzes.
+        const keyMap = {};
+        allAdminQuizzes.forEach(q => keyMap[q.id] = q.secretKey);
+
+        for (const quizId in allResultsRaw) {
+            const quizResults = allResultsRaw[quizId];
+            const secretKey = keyMap[quizId];
+
+            if (!secretKey) continue; // Skip if we don't have the key
+
+            for (const studentKey in quizResults) {
+                try {
+                    const decrypted = await decryptData(quizResults[studentKey], secretKey);
+                    const res = JSON.parse(decrypted);
+
+                    csvRows.push([
+                        quizId,
+                        res.quizTitle || 'N/A',
+                        res.subject || 'N/A',
+                        `${res.student.lastName}, ${res.student.firstName}`,
+                        res.student.institutionalId || 'N/A',
+                        res.student.section || 'N/A',
+                        res.score,
+                        res.totalQuestions,
+                        res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) : '0',
+                        res.securityViolations || 0,
+                        new Date(res.submittedAt).toLocaleString().replace(',', '')
+                    ]);
+                } catch (e) {
+                    console.error(`Failed to decrypt result for ${studentKey} in ${quizId}`);
+                }
+            }
+        }
+
+        if (csvRows.length === 1) {
+            showToast('No submissions found to export.', 'info');
+            hideLoading();
+            return;
+        }
+
+        const csvContent = csvRows.map(row => row.join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `Quizable_All_Submissions_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        showToast(`Exported ${csvRows.length - 1} submissions to CSV.`, 'success');
+    } catch (e) {
+        console.error("Global export error", e);
+        showToast('Export failed: ' + e.message, 'error');
+    }
+    hideLoading();
+}
+
+async function showAdminSettingsModal(quizId, secretKey) {
+    showLoading();
+    try {
+        const quizSnap = await database.ref('quizzes/' + quizId).once('value');
+        const data = quizSnap.val();
+        if (!data) throw new Error('Quiz data not found');
+
+        const decrypted = await decryptData(data.encryptedQuizData, secretKey);
+        const quiz = JSON.parse(decrypted);
+
+        // Populate the modal fields
+        document.getElementById('settings-modal-subtitle').textContent = `Quiz ID: ${quizId} | ${quiz.title}`;
+        document.getElementById('modal-modify-duration').value = quiz.duration || 0;
+
+        if (quiz.expiry) {
+            const date = new Date(quiz.expiry);
+            const localISODate = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+            document.getElementById('modal-modify-expiry').value = localISODate;
+        } else {
+            document.getElementById('modal-modify-expiry').value = '';
+        }
+
+        document.getElementById('modal-modify-show-results').checked = quiz.showResultsToStudent !== false;
+        document.getElementById('modal-modify-show-answer-summary').checked = quiz.showAnswerSummary !== false;
+
+        // Show the modal
+        const modal = document.getElementById('admin-settings-modal');
+        modal.classList.remove('hidden');
+
+        // Bind the update button for THIS specific quiz
+        const updateBtn = document.getElementById('modal-update-settings-btn');
+        const newUpdateBtn = updateBtn.cloneNode(true);
+        updateBtn.parentNode.replaceChild(newUpdateBtn, updateBtn);
+
+        newUpdateBtn.onclick = async () => {
+            const newSettings = {
+                duration: parseInt(document.getElementById('modal-modify-duration').value) || 0,
+                expiry: document.getElementById('modal-modify-expiry').value ? new Date(document.getElementById('modal-modify-expiry').value).getTime() : 0,
+                showResultsToStudent: document.getElementById('modal-modify-show-results').checked,
+                showAnswerSummary: document.getElementById('modal-modify-show-answer-summary').checked
+            };
+
+            await updateQuizSettings(quizId, secretKey, newSettings, quiz);
+            modal.classList.add('hidden');
+            loadAdminDashboard(); // Refresh
+        };
+
+        showToast(`Loaded settings for: ${quiz.title}`, 'info');
+    } catch (e) {
+        console.error("Load settings error", e);
+        showToast('Failed to load settings: ' + e.message, 'error');
+    }
+    hideLoading();
 }
 
 function checkAutoLogin() {
@@ -2189,6 +2389,11 @@ window.onload = function () {
     const adminLoginBtn = document.getElementById('admin-login-btn');
     if (adminLoginBtn) adminLoginBtn.onclick = verifyAdminPassword;
 
+    const adminSearchInput = document.getElementById('admin-search-input');
+    if (adminSearchInput) {
+        adminSearchInput.addEventListener('input', debounce(filterAdminQuizzes, 300));
+    }
+
     const adminPasswordField = document.getElementById('admin-password-field');
     if (adminPasswordField) {
         adminPasswordField.onkeypress = (e) => {
@@ -2299,4 +2504,12 @@ function showQuizCreatedModal(studentLink, teacherLink) {
 
     setupCopy(studentCopyBtn, studentLink, 'Student Link');
     setupCopy(teacherCopyBtn, teacherLink, 'Teacher Link');
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
 }

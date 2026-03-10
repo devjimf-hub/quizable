@@ -1108,3 +1108,60 @@ body.quiz-active .quiz-watermark {
         grid-template-columns: 1fr !important;
     }
 }
+
+/* Enhanced Admin Search */
+.admin-search-wrapper {
+    position: relative;
+    margin-bottom: 30px;
+}
+
+.admin-search-wrapper input {
+    padding-left: 48px !important;
+    border-radius: 50px !important;
+    background: white !important;
+    border: 2px solid var(--border) !important;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-search-wrapper input:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15), var(--shadow);
+    background: #fff !important;
+}
+
+.admin-search-wrapper svg {
+    position: absolute;
+    left: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+    transition: color 0.3s ease;
+}
+
+.admin-search-wrapper input:focus+svg {
+    color: var(--primary);
+}
+
+@media (max-width: 640px) {
+    .admin-quiz-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .admin-quiz-header div:last-child {
+        width: 100%;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .admin-quiz-header .btn {
+        flex: 1;
+        min-width: 80px;
+        font-size: 0.75rem;
+        padding: 8px 4px;
+    }
+}

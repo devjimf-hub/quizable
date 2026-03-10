@@ -273,14 +273,37 @@
 
         <!-- Admin Dashboard Section -->
         <div id="admin-dashboard-section" class="card hidden">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                 <h1>System Administrator</h1>
-                <button class="btn btn-outline" onclick="adminLogout()">Logout</button>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-info btn-sm" onclick="exportAllSubmissionsCsv()"
+                        title="Export All Submissions">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Export All
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="adminLogout()">Logout</button>
+                </div>
             </div>
 
             <div id="admin-stats" class="stats-overview"
                 style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px;">
                 <!-- Stats injected here -->
+            </div>
+
+            <!-- Admin Search Bar -->
+            <div class="admin-search-wrapper">
+                <input type="text" id="admin-search-input" placeholder="Search quizzes by title, ID, or subject...">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
             </div>
 
             <div id="admin-quizzes-container">
@@ -465,6 +488,45 @@
                 </div>
             </div>
         </div>
+
+        <!-- Admin Settings Modal -->
+        <div id="admin-settings-modal" class="modal-overlay hidden"
+            style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 4000;">
+            <div class="modal-content" style="max-width: 600px; width: 95%;">
+                <h2 id="settings-modal-title">Edit Quiz Settings</h2>
+                <p id="settings-modal-subtitle"
+                    style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;"></p>
+
+                <div class="responsive-grid">
+                    <div class="form-group">
+                        <label>Duration (Minutes)</label>
+                        <input type="number" id="modal-modify-duration" placeholder="0 for unlimited">
+                    </div>
+                    <div class="form-group">
+                        <label>Expiry Date/Time</label>
+                        <input type="datetime-local" id="modal-modify-expiry">
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 10px;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="modal-modify-show-results"> Show score to students after submission
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="modal-modify-show-answer-summary"> Show answer summary to students
+                        after submission
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 30px;">
+                    <button class="btn btn-outline" style="flex: 1;"
+                        onclick="document.getElementById('admin-settings-modal').classList.add('hidden')">Cancel</button>
+                    <button id="modal-update-settings-btn" class="btn btn-warning" style="flex: 2;">Update Quiz
+                        Settings</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Global Loading Overlay -->
         <div id="loading-overlay" class="hidden"
             style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999;">
