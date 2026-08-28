@@ -256,6 +256,40 @@ input::placeholder {
     margin-bottom: 32px;
 }
 
+.quiz-question p {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.quiz-figure {
+    max-width: 100%;
+    overflow-x: auto;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.quiz-figure svg,
+.quiz-figure img {
+    max-width: 100%;
+    height: auto;
+}
+
+.quiz-figure pre,
+.quiz-figure code {
+    max-width: 100%;
+    overflow-x: auto;
+    background: #f1f5f9;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Courier New', Courier, monospace;
+}
+
 .quiz-option {
     background: white;
     border: 1px solid var(--border);
@@ -265,6 +299,8 @@ input::placeholder {
     cursor: pointer;
     transition: all 0.2s;
     font-weight: 500;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .quiz-option:hover {

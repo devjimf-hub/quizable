@@ -29,6 +29,17 @@ let allStudentResults = []; // To store all results for a quiz
 let processedStudentResults = []; // To store results for PDF export
 let quizStartTime = 0;
 let allAdminQuizzes = []; // Global store for admin search
+const adminResultsCache = {}; // Cache admin quiz results by quizId
+
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 function showLoading() {
     document.getElementById('loading-overlay').classList.remove('hidden');
@@ -135,98 +146,20 @@ function initializeApp() {
 
     if (part === 'admin') {
         studentSection.classList.add('hidden');
-        const adminSession = sessionStorage.getItem('quizable_admin_verified');
-        if (adminSession === 'true') {
-            document.getElementById('admin-login-section').classList.add('hidden');
-            document.getElementById('admin-dashboard-section').classList.remove('hidden');
-            loadAdminDashboard();
-        } else {
-            showAdminLogin();
-        }
+        document.getElementById('admin-dashboard-section').classList.remove('hidden');
+        loadAdminDashboard();
     } else if (part === 'teacher' && !qParam) {
         showTeacherMenu();
     } else if (part !== 'teacher') {
         teacherMenu.classList.add('hidden');
         teacherCreateSection.classList.add('hidden');
         teacherResultsSection.classList.add('hidden');
-        document.getElementById('admin-login-section').classList.add('hidden');
+        document.getElementById('admin-dashboard-section').classList.add('hidden');
         studentSection.classList.remove('hidden');
 
         // Auto-Login Check
         checkAutoLogin();
     }
-}
-
-function showAdminLogin() {
-    studentSection.classList.add('hidden');
-    teacherMenu.classList.add('hidden');
-    document.getElementById('admin-login-section').classList.remove('hidden');
-    document.getElementById('admin-password-field').value = '';
-}
-
-async function verifyAdminPassword() {
-    const passwordField = document.getElementById('admin-password-field');
-    const password = passwordField.value.trim();
-
-    if (!password) {
-        showToast('Password required', 'error');
-        return;
-    }
-
-    // Check for Secure Context (Required for crypto.subtle)
-    if (!window.isSecureContext && window.location.protocol !== 'file:') {
-        showToast('Hashing requires HTTPS or Localhost', 'error');
-        console.error('Crypto.subtle is not available in non-secure contexts.');
-        return;
-    }
-
-    if (!window.crypto || !window.crypto.subtle) {
-        showToast('Browser does not support security features', 'error');
-        return;
-    }
-
-    showLoading();
-    try {
-        console.log('Fetching admin status...');
-        const snap = await database.ref('admin/password').once('value');
-        let storedHash = snap.val();
-
-        const enteredHash = await hashPassword(password);
-
-        // If no password set in Firebase, save the first one entered
-        if (!storedHash) {
-            console.warn('No admin password found. Initializing with provided password...');
-            await database.ref('admin/password').set(enteredHash);
-            storedHash = enteredHash;
-            showToast('System initialized with new password!', 'success');
-        }
-
-        if (enteredHash === storedHash) {
-            sessionStorage.setItem('quizable_admin_verified', 'true');
-            document.getElementById('admin-login-section').classList.add('hidden');
-            document.getElementById('admin-dashboard-section').classList.remove('hidden');
-            loadAdminDashboard();
-            showToast('Admin access granted', 'success');
-        } else {
-            showToast('Invalid admin password', 'error');
-            passwordField.value = '';
-        }
-    } catch (e) {
-        console.error("Firebase Auth Error Details:", e);
-        if (e.message.includes('permission_denied')) {
-            showToast('Database Permission Denied (Check Firebase Rules)', 'error');
-        } else {
-            showToast('Connection failed: ' + e.message, 'error');
-        }
-    }
-    hideLoading();
-}
-
-async function hashPassword(password) {
-    const msgUint8 = new TextEncoder().encode(password);
-    const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgUint8);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function loadAdminDashboard() {
@@ -463,12 +396,22 @@ async function loadAdminQuizResults(quizId, secretKey) {
             return;
         }
 
-        validResults.sort((a, b) => b.submittedAt - a.submittedAt);
+        validResults.sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
+        adminResultsCache[quizId] = validResults;
 
         container.innerHTML = `
+            <div style="display:flex; justify-content:flex-end; gap:8px; padding:8px 4px;">
+                <button class="btn btn-primary btn-sm" onclick="exportAdminQuizResultsPdf('${quizId}', '${secretKey}')">
+                    Export PDF
+                </button>
+                <button class="btn btn-info btn-sm" onclick="exportAdminQuizResultsExcel('${quizId}', '${secretKey}')">
+                    Export Excel
+                </button>
+            </div>
             <table class="admin-results-table">
                 <thead>
                     <tr>
+                        <th>#</th>
                         <th>Student Name</th>
                         <th>Score</th>
                         <th>Time</th>
@@ -477,8 +420,9 @@ async function loadAdminQuizResults(quizId, secretKey) {
                     </tr>
                 </thead>
                 <tbody>
-                    ${validResults.map(res => `
+                    ${validResults.map((res, i) => `
                         <tr>
+                            <td style="color:var(--text-muted);">${i + 1}</td>
                             <td style="font-weight:600;">${res.student.lastName}, ${res.student.firstName}</td>
                             <td style="font-weight:700; color:var(--primary);">${res.score}/${res.totalQuestions}</td>
                             <td>${res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A'}</td>
@@ -516,8 +460,7 @@ async function deleteQuizAdmin(quizId) {
 }
 
 function adminLogout() {
-    sessionStorage.removeItem('quizable_admin_verified');
-    location.reload();
+    window.location.href = window.location.pathname;
 }
 
 // --- NEW ADMIN ENHANCEMENTS ---
@@ -613,6 +556,179 @@ async function exportAllSubmissionsCsv() {
         showToast('Export failed: ' + e.message, 'error');
     }
     hideLoading();
+}
+
+async function exportAdminQuizResultsPdf(quizId, secretKey) {
+    let results = adminResultsCache[quizId];
+
+    if (!results) {
+        showLoading();
+        try {
+            const snap = await database.ref(`results/${quizId}`).once('value');
+            const encryptedResults = snap.val();
+            if (!encryptedResults) {
+                showToast('No submissions found.', 'info');
+                hideLoading();
+                return;
+            }
+            const promises = Object.values(encryptedResults).map(data =>
+                decryptData(data, secretKey).then(JSON.parse).catch(() => null)
+            );
+            results = (await Promise.all(promises)).filter(Boolean);
+            adminResultsCache[quizId] = results;
+        } catch (e) {
+            showToast('Failed to fetch results: ' + e.message, 'error');
+            hideLoading();
+            return;
+        }
+        hideLoading();
+    }
+
+    if (!results || results.length === 0) {
+        showToast('No results to export.', 'info');
+        return;
+    }
+
+    const sorted = [...results].sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
+
+    const quizMeta = allAdminQuizzes.find(q => q.id === quizId);
+    const quizTitle = sorted[0]?.quizTitle || quizMeta?.title || 'Quiz';
+    const subject = sorted[0]?.subject || quizMeta?.subject || 'N/A';
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape' });
+
+    // Analytics
+    const scores = sorted.map(r => (r.score / r.totalQuestions) * 100);
+    const avgScore = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
+    const highest = Math.max(...scores).toFixed(1);
+    const passCount = scores.filter(s => s >= 75).length;
+    const passRate = ((passCount / scores.length) * 100).toFixed(1);
+    const times = sorted.map(r => r.timeTakenMs || 0).filter(t => t > 0);
+    const avgTime = times.length ? (times.reduce((a, b) => a + b, 0) / times.length / 60000).toFixed(1) : 'N/A';
+
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(16, 185, 129);
+    doc.text(quizTitle, 14, 18);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Subject: ${subject}   |   Quiz ID: ${quizId}`, 14, 26);
+    doc.text(`Report Generated: ${new Date().toLocaleString()}   |   Total Submissions: ${sorted.length}`, 14, 32);
+
+    // Summary table
+    doc.autoTable({
+        head: [['Total Students', 'Average Score', 'Highest Score', 'Pass Rate (75%+)', 'Avg Duration']],
+        body: [[sorted.length, `${avgScore}%`, `${highest}%`, `${passRate}%`, avgTime !== 'N/A' ? `${avgTime}m` : 'N/A']],
+        startY: 38,
+        theme: 'striped',
+        headStyles: { fillColor: [15, 118, 110], fontSize: 9 },
+        bodyStyles: { fontSize: 9, halign: 'center' }
+    });
+
+    // Student list
+    doc.setFontSize(13);
+    doc.setTextColor(6, 78, 59);
+    doc.text('Student Results — Sorted by Last Name', 14, doc.lastAutoTable.finalY + 10);
+
+    doc.autoTable({
+        head: [['#', 'Last Name', 'First Name', 'ID', 'Section', 'Score', '%', 'Time', 'Violations', 'Submitted At']],
+        body: sorted.map((r, i) => [
+            i + 1,
+            r.student.lastName,
+            r.student.firstName,
+            r.student.institutionalId || 'N/A',
+            r.student.section || 'N/A',
+            `${r.score}/${r.totalQuestions}`,
+            `${((r.score / r.totalQuestions) * 100).toFixed(1)}%`,
+            r.timeTakenMs ? (r.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A',
+            r.securityViolations || 0,
+            r.submittedAt ? new Date(r.submittedAt).toLocaleString() : 'N/A'
+        ]),
+        startY: doc.lastAutoTable.finalY + 14,
+        headStyles: { fillColor: [16, 185, 129], fontSize: 9 },
+        styles: { fontSize: 8 },
+        columnStyles: {
+            0: { cellWidth: 8, halign: 'center' },
+            5: { halign: 'center' },
+            6: { halign: 'center' },
+            7: { halign: 'center' },
+            8: { halign: 'center' }
+        }
+    });
+
+    const safeTitle = quizTitle.replace(/[^a-z0-9]/gi, '_');
+    doc.save(`${safeTitle}_Results_${new Date().toISOString().split('T')[0]}.pdf`);
+    showToast('PDF exported successfully.', 'success');
+}
+
+async function exportAdminQuizResultsExcel(quizId, secretKey) {
+    let results = adminResultsCache[quizId];
+
+    if (!results) {
+        showLoading();
+        try {
+            const snap = await database.ref(`results/${quizId}`).once('value');
+            const encryptedResults = snap.val();
+            if (!encryptedResults) {
+                showToast('No submissions found.', 'info');
+                hideLoading();
+                return;
+            }
+            const promises = Object.values(encryptedResults).map(data =>
+                decryptData(data, secretKey).then(JSON.parse).catch(() => null)
+            );
+            results = (await Promise.all(promises)).filter(Boolean);
+            adminResultsCache[quizId] = results;
+        } catch (e) {
+            showToast('Failed to fetch results: ' + e.message, 'error');
+            hideLoading();
+            return;
+        }
+        hideLoading();
+    }
+
+    if (!results || results.length === 0) {
+        showToast('No results to export.', 'info');
+        return;
+    }
+
+    const sorted = [...results].sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
+
+    const quizMeta = allAdminQuizzes.find(q => q.id === quizId);
+    const quizTitle = sorted[0]?.quizTitle || quizMeta?.title || 'Quiz';
+
+    const rows = [
+        ['#', 'Last Name', 'First Name', 'Score', 'Total Questions', 'Percentage'],
+        ...sorted.map((r, i) => [
+            i + 1,
+            r.student.lastName,
+            r.student.firstName,
+            r.score,
+            r.totalQuestions,
+            parseFloat(((r.score / r.totalQuestions) * 100).toFixed(2))
+        ])
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+
+    // Column widths
+    ws['!cols'] = [
+        { wch: 5 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 8 },
+        { wch: 16 },
+        { wch: 12 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Results');
+
+    const safeTitle = quizTitle.replace(/[^a-z0-9]/gi, '_');
+    XLSX.writeFile(wb, `${safeTitle}_Scores_${new Date().toISOString().split('T')[0]}.xlsx`);
+    showToast('Excel file exported successfully.', 'success');
 }
 
 async function showAdminSettingsModal(quizId, secretKey) {
@@ -930,7 +1046,7 @@ function addQuestion(questionData = null) {
         
         <div class="form-group">
             <label>Question Text</label>
-            <textarea class="question-text" placeholder="What is the result of...?" rows="3">${text}</textarea>
+            <textarea class="question-text" placeholder="What is the result of...?" rows="3"></textarea>
         </div>
         
         <details class="form-group figure-collapsible" ${figure ? 'open' : ''}>
@@ -940,7 +1056,7 @@ function addQuestion(questionData = null) {
             </summary>
             <div class="figure-editor-layout">
                 <div class="figure-input-wrapper">
-                    <textarea class="question-figure" placeholder="e.g. <svg>...</svg> or <b>Code Snippet</b>" rows="3">${figure}</textarea>
+                    <textarea class="question-figure" placeholder="e.g. <svg>...</svg> or <b>Code Snippet</b>" rows="3"></textarea>
                     <button class="clear-figure-btn">
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         Clear content
@@ -967,6 +1083,9 @@ function addQuestion(questionData = null) {
         
         <input type="hidden" class="correct-answer" value="${correctAnswer}">
     `;
+
+    questionDiv.querySelector('.question-text').value = text;
+    questionDiv.querySelector('.question-figure').value = figure;
 
     questionsContainer.appendChild(questionDiv);
 
@@ -1040,11 +1159,12 @@ function addOptionInput(container, value = '', isCorrect = false) {
     div.className = 'option-input-group';
     div.innerHTML = `
         <span class="option-index-badge ${isCorrect ? 'correct' : ''}" title="Set as correct answer">${index}</span>
-        <input type="text" class="option-val" placeholder="Possible answer..." value="${value}">
+        <input type="text" class="option-val" placeholder="Possible answer...">
         <span class="remove-option-btn">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </span>
     `;
+    div.querySelector('.option-val').value = value;
     container.appendChild(div);
 
     div.querySelector('.option-index-badge').addEventListener('click', () => {
@@ -1091,11 +1211,11 @@ function updateLivePreview(card) {
     const previewContent = card.querySelector('.preview-content');
 
     previewContent.innerHTML = `
-        <p style="font-size:1.1rem; margin-bottom:15px;">${text || '<i style="color:var(--text-muted)">No question text...</i>'}</p>
+        <p style="font-size:1.1rem; margin-bottom:15px; white-space: pre-wrap; word-break: break-word;">${text ? escapeHtml(text) : '<i style="color:var(--text-muted)">No question text...</i>'}</p>
         ${figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${figure}</div>` : ''}
         <div class="quiz-options">
             ${options.map((opt, i) => `
-                <div class="quiz-option" style="cursor:default;">${opt || '<i style="color:var(--text-muted)">Empty option...</i>'}</div>
+                <div class="quiz-option" style="cursor:default; white-space: pre-wrap; word-break: break-word;">${opt ? escapeHtml(opt) : '<i style="color:var(--text-muted)">Empty option...</i>'}</div>
             `).join('')}
         </div>
     `;
@@ -1936,11 +2056,11 @@ function displayQuestion(index) {
     container.innerHTML = `
         <div class="quiz-question">
             <h3>Question ${index + 1} of ${quizData.questions.length}</h3>
-            <p style="font-size:1.1rem; margin-bottom:15px;">${q.text}</p>
+            <p style="font-size:1.1rem; margin-bottom:15px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(q.text)}</p>
             ${q.figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${q.figure}</div>` : ''}
             <div class="quiz-options">
                 ${q.options.map((opt, i) => `
-                    <div class="quiz-option ${studentAnswers[index] === i ? 'selected' : ''}" data-index="${i}">${opt}</div>
+                    <div class="quiz-option ${studentAnswers[index] === i ? 'selected' : ''}" data-index="${i}" style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(opt)}</div>
                 `).join('')}
             </div>
         </div>
@@ -2218,8 +2338,9 @@ function submitQuiz(auto = false) {
 
             const answerHtml = showAnswerSummary ? detail.map((a, i) => `
                 <div class="quiz-question" style="border-left:5px solid ${a.isCorrect ? 'var(--success)' : 'var(--danger)'};">
-                    <strong>Q${i + 1}</strong>: ${a.questionText}<br>
-                    Your Answer: ${a.studentAnswerText}
+                    <strong>Q${i + 1}</strong>: <span style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(a.questionText)}</span><br>
+                    Your Answer: <span style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(a.studentAnswerText)}</span>
+                    ${!a.isCorrect ? `<br><span style="color:var(--success); font-weight:600;">Correct Answer:</span> <span style="white-space: pre-wrap; word-break: break-word; color:var(--success);">${escapeHtml(a.correctAnswerText)}</span>` : ''}
                 </div>
             `).join('') : '';
 
@@ -2385,20 +2506,10 @@ window.onload = function () {
     initializeApp();
     document.getElementById('download-student-pdf-btn').addEventListener('click', downloadStudentResultsAsPdf);
 
-    // Admin Bindings
-    const adminLoginBtn = document.getElementById('admin-login-btn');
-    if (adminLoginBtn) adminLoginBtn.onclick = verifyAdminPassword;
-
+    // Admin Search
     const adminSearchInput = document.getElementById('admin-search-input');
     if (adminSearchInput) {
         adminSearchInput.addEventListener('input', debounce(filterAdminQuizzes, 300));
-    }
-
-    const adminPasswordField = document.getElementById('admin-password-field');
-    if (adminPasswordField) {
-        adminPasswordField.onkeypress = (e) => {
-            if (e.key === 'Enter') verifyAdminPassword();
-        };
     }
 };
 
