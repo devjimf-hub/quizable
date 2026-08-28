@@ -2346,10 +2346,13 @@ function submitQuiz(auto = false) {
 
             summary.innerHTML = scoreHtml + answerHtml;
             summary.classList.remove('hidden');
-            document.getElementById('download-student-pdf-btn').classList.remove('hidden');
         } else {
+            document.getElementById('student-score-summary').classList.add('hidden');
             document.getElementById('submission-success-message').classList.remove('hidden');
         }
+
+        const studentPdfBtn = document.getElementById('download-student-pdf-btn');
+        if (studentPdfBtn) studentPdfBtn.classList.add('hidden');
 
         quizSection.classList.add('hidden');
         resultsSection.classList.remove('hidden');
