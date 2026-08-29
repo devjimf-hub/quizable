@@ -101,6 +101,23 @@
                     Open System Administrator Dashboard
                 </button>
             </div>
+
+            <!-- Teacher's Personal Quizzes List -->
+            <div id="teacher-my-quizzes-section" style="margin-top: 35px; border-top: 1px solid var(--border); padding-top: 25px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h2 style="font-size: 1.25rem; margin: 0; display: flex; align-items: center; gap: 8px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                            My Quizzes
+                        </h2>
+                        <p style="margin: 3px 0 0 0; font-size: 0.85rem; color: var(--text-muted);">Quizzes assigned to your account</p>
+                    </div>
+                    <span id="teacher-quiz-count-badge" class="badge" style="background: var(--bg-body); padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--border); font-weight: 600; color: var(--primary);">0 Quizzes</span>
+                </div>
+                <div id="teacher-quizzes-container" style="display: flex; flex-direction: column; gap: 14px;">
+                    <!-- Dynamically populated quiz cards -->
+                </div>
+            </div>
         </div>
 
         <!-- Quiz Creator -->

@@ -1108,6 +1108,142 @@ function showTeacherMenu() {
     const adminDash = document.getElementById('admin-dashboard-section');
     if (adminDash) adminDash.classList.add('hidden');
     document.getElementById('quiz-navigator').classList.add('hidden');
+
+    // Automatically load all quizzes created by this teacher
+    loadTeacherDashboardQuizzes();
+}
+
+async function loadTeacherDashboardQuizzes() {
+    const container = document.getElementById('teacher-quizzes-container');
+    const countBadge = document.getElementById('teacher-quiz-count-badge');
+    if (!container) return;
+
+    if (!auth.currentUser) {
+        container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Please sign in to view your quizzes.</p>';
+        return;
+    }
+
+    container.innerHTML = `
+        <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+            <div class="loader-spinner" style="width: 28px; height: 28px; border-width: 3px; margin: 0 auto 10px auto;"></div>
+            <p style="font-size: 0.9rem;">Loading your quizzes...</p>
+        </div>
+    `;
+
+    let quizzes = [];
+    try {
+        const snap = await database.ref(`teachers/${auth.currentUser.uid}/quizzes`).once('value');
+        if (snap.exists()) {
+            const data = snap.val();
+            quizzes = Object.keys(data).map(id => ({
+                id,
+                title: data[id].title || 'Untitled Quiz',
+                subject: data[id].subject || 'General',
+                secretKey: data[id].secretKey || '',
+                createdAt: data[id].createdAt || Date.now()
+            })).sort((a, b) => b.createdAt - a.createdAt);
+        }
+    } catch (err) {
+        console.warn("Error fetching teacher cloud quizzes:", err);
+    }
+
+    // Merge with local storage history if available
+    const localHistory = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
+    const map = new Map();
+    quizzes.forEach(q => map.set(q.id, q));
+    localHistory.forEach(q => {
+        if (!map.has(q.id)) {
+            map.set(q.id, {
+                id: q.id,
+                title: q.title,
+                subject: q.subject || 'Saved Local',
+                secretKey: q.key,
+                createdAt: q.timestamp || Date.now()
+            });
+        }
+    });
+
+    const allMyQuizzes = Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
+    if (countBadge) countBadge.textContent = `${allMyQuizzes.length} Quiz${allMyQuizzes.length === 1 ? '' : 'zes'}`;
+
+    if (allMyQuizzes.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 35px 20px; background: var(--bg-body); border: 2px dashed var(--border); border-radius: 12px;">
+                <div style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; background: white; border-radius: 50%; margin-bottom: 12px; color: var(--primary);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                </div>
+                <h3 style="font-size: 1.05rem; margin-bottom: 6px; color: var(--text-main);">No quizzes created yet</h3>
+                <p style="color: var(--text-muted); font-size: 0.85rem; max-width: 320px; margin: 0 auto 15px auto;">
+                    Create your first quiz to share with students and monitor submissions.
+                </p>
+                <button class="btn btn-primary btn-sm" onclick="showCreateQuiz()">+ Create New Quiz</button>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = allMyQuizzes.map(q => {
+        const studentLink = generateQuizLink(q.id, q.secretKey);
+        const dateStr = new Date(q.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+        return `
+            <div class="card" style="padding: 16px 20px; margin-bottom: 0; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--border); background: white;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 240px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <h3 style="font-size: 1.08rem; margin: 0; color: var(--text-main); font-weight: 700;">${escapeHtml(q.title)}</h3>
+                            <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #ecfdf5; color: var(--primary); font-weight: 600; border: 1px solid rgba(16,185,129,0.2);">
+                                ${escapeHtml(q.subject)}
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap;">
+                            <span>Created: <strong>${dateStr}</strong></span>
+                            <span>&bull;</span>
+                            <span>Quiz ID: <code style="background: var(--bg-body); padding: 2px 6px; border-radius: 4px; font-family: monospace;">${escapeHtml(q.id)}</code></span>
+                            <span>&bull;</span>
+                            <span>Key: <code style="background: var(--bg-body); padding: 2px 6px; border-radius: 4px; font-family: monospace;">${escapeHtml(q.secretKey)}</code></span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-sm btn-primary" onclick="openTeacherQuizResults('${escapeHtml(q.id)}', '${escapeHtml(q.secretKey)}')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                            View Results
+                        </button>
+                        <button class="btn btn-sm btn-outline" onclick="copyToClipboard('${studentLink}', 'Student quiz link copied!')" title="Copy Student Link">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                            Student Link
+                        </button>
+                        <button class="btn btn-sm btn-outline" style="color: var(--danger); padding: 6px 10px;" onclick="deleteTeacherQuiz('${escapeHtml(q.id)}')" title="Delete from list">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function openTeacherQuizResults(id, key) {
+    showViewResults();
+    document.getElementById('results-quiz-id').value = id;
+    document.getElementById('results-secret-key').value = key;
+    fetchAndDisplayResults(id, key);
+}
+
+async function deleteTeacherQuiz(id) {
+    if (!confirm('Are you sure you want to remove this quiz from your dashboard?')) return;
+    showLoading();
+    try {
+        if (auth.currentUser) {
+            await database.ref(`teachers/${auth.currentUser.uid}/quizzes/${id}`).remove();
+        }
+        deleteFromHistory(id);
+        await loadTeacherDashboardQuizzes();
+        showToast('Quiz removed from your dashboard.', 'info');
+    } catch (e) {
+        showToast('Error removing quiz: ' + e.message, 'error');
+    }
+    hideLoading();
 }
 
 function showCreateQuiz() {
