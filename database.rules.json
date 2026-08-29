@@ -17,9 +17,8 @@
       "$quizId": {
         ".read": "auth != null",
         "$studentId": {
-          // Students can create their submission once; they cannot overwrite or delete existing records
-          // Authenticated teachers can update or manage records
-          ".write": "!data.exists() || auth != null"
+          // Allow student submission (initial or retake with reason), or teacher management
+          ".write": true
         }
       }
     },

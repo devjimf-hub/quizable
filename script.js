@@ -1021,6 +1021,7 @@ async function showAdminSettingsModal(quizId, secretKey) {
         // Populate the modal fields
         document.getElementById('settings-modal-subtitle').textContent = `Quiz ID: ${quizId} | ${quiz.title}`;
         document.getElementById('modal-modify-duration').value = quiz.duration || 0;
+        document.getElementById('modal-modify-sample-count').value = quiz.sampleCount || 0;
 
         if (quiz.expiry) {
             const date = new Date(quiz.expiry);
@@ -1046,6 +1047,7 @@ async function showAdminSettingsModal(quizId, secretKey) {
             const newSettings = {
                 duration: parseInt(document.getElementById('modal-modify-duration').value) || 0,
                 expiry: document.getElementById('modal-modify-expiry').value ? new Date(document.getElementById('modal-modify-expiry').value).getTime() : 0,
+                sampleCount: parseInt(document.getElementById('modal-modify-sample-count').value) || 0,
                 showResultsToStudent: document.getElementById('modal-modify-show-results').checked,
                 showAnswerSummary: document.getElementById('modal-modify-show-answer-summary').checked
             };
@@ -1140,6 +1142,7 @@ async function loadTeacherDashboardQuizzes() {
                 title: data[id].title || 'Untitled Quiz',
                 subject: data[id].subject || 'General',
                 secretKey: data[id].secretKey || '',
+                sampleCount: data[id].sampleCount || 0,
                 createdAt: data[id].createdAt || Date.now()
             })).sort((a, b) => b.createdAt - a.createdAt);
         }
@@ -1158,6 +1161,7 @@ async function loadTeacherDashboardQuizzes() {
                 title: q.title,
                 subject: q.subject || 'Saved Local',
                 secretKey: q.key,
+                sampleCount: q.sampleCount || 0,
                 createdAt: q.timestamp || Date.now()
             });
         }
@@ -1195,6 +1199,7 @@ async function loadTeacherDashboardQuizzes() {
                             <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #ecfdf5; color: var(--primary); font-weight: 600; border: 1px solid rgba(16,185,129,0.2);">
                                 ${escapeHtml(q.subject)}
                             </span>
+                            ${q.sampleCount ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #eff6ff; color: #2563eb; font-weight: 600; border: 1px solid rgba(37,99,235,0.2);">🎯 ${q.sampleCount} items pooled</span>` : ''}
                         </div>
                         <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap;">
                             <span>Created: <strong>${dateStr}</strong></span>
@@ -1289,7 +1294,7 @@ function showViewResults() {
 }
 
 // Attach Auto-Save to Main Inputs
-['quiz-title', 'quiz-subject', 'quiz-duration', 'quiz-expiry', 'secret-key', 'show-results-to-student', 'show-answer-summary', 'save-results-to-cloud', 'randomize-order'].forEach(id => {
+['quiz-title', 'quiz-subject', 'quiz-duration', 'quiz-expiry', 'sample-question-count', 'secret-key', 'show-results-to-student', 'show-answer-summary', 'save-results-to-cloud', 'randomize-order'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
         const eventType = (el.type === 'checkbox') ? 'change' : 'input';
@@ -1823,6 +1828,7 @@ function generateEncryptedFile() {
     const quizSubject = document.getElementById('quiz-subject').value;
     const quizDuration = parseFloat(document.getElementById('quiz-duration').value) || 0;
     const quizExpiry = document.getElementById('quiz-expiry').value;
+    const sampleQuestionCount = parseInt(document.getElementById('sample-question-count').value) || 0;
     const instructionCountdownDuration = parseInt(document.getElementById('instruction-countdown-duration').value) || 30;
     const showResultsToStudent = document.getElementById('show-results-to-student').checked;
     const showAnswerSummary = document.getElementById('show-answer-summary').checked;
@@ -1840,6 +1846,7 @@ function generateEncryptedFile() {
         subject: quizSubject,
         duration: quizDuration,
         expiry: quizExpiry ? new Date(quizExpiry).getTime() : null,
+        sampleCount: sampleQuestionCount,
         instructionCountdown: instructionCountdownDuration,
         showResultsToStudent, showAnswerSummary, saveResultsToCloud, randomizeOrder,
         id: quizId,
@@ -1867,6 +1874,7 @@ function generateEncryptedFile() {
             title: quizTitle,
             subject: quizSubject || 'Uncategorized',
             secretKey: secretKey,
+            sampleCount: sampleQuestionCount,
             teacherEmail: teacherEmail,
             createdAt: Date.now()
         };
@@ -1885,6 +1893,7 @@ function generateEncryptedFile() {
             title: quizTitle,
             subject: quizSubject || 'Uncategorized',
             secretKey: secretKey,
+            sampleCount: sampleQuestionCount,
             createdAt: Date.now()
         };
         saveData['admin/quizzes/' + quiz.id] = { data: encryptedAdminMeta };
@@ -1918,6 +1927,8 @@ function resetQuizForm() {
     document.getElementById('quiz-subject').value = '';
     document.getElementById('quiz-duration').value = '0';
     document.getElementById('quiz-expiry').value = '';
+    const sampleInput = document.getElementById('sample-question-count');
+    if (sampleInput) sampleInput.value = '';
     document.getElementById('secret-key').value = '';
     document.getElementById('pasted-json-input').value = '';
     document.getElementById('json-upload').value = '';
@@ -1932,11 +1943,13 @@ function resetQuizForm() {
 // --- DRAFT SYSTEM ---
 function saveDraft() {
     const questions = document.querySelectorAll('.quiz-question');
+    const sampleInput = document.getElementById('sample-question-count');
     const draft = {
         title: document.getElementById('quiz-title').value,
         subject: document.getElementById('quiz-subject').value,
         duration: document.getElementById('quiz-duration').value,
         expiry: document.getElementById('quiz-expiry').value,
+        sampleCount: sampleInput ? sampleInput.value : '',
         secretKey: document.getElementById('secret-key').value,
         showResults: document.getElementById('show-results-to-student').checked,
         showAnswerSummary: document.getElementById('show-answer-summary').checked,
@@ -1964,6 +1977,8 @@ function loadDraft() {
         document.getElementById('quiz-subject').value = draft.subject || '';
         document.getElementById('quiz-duration').value = draft.duration || '0';
         document.getElementById('quiz-expiry').value = draft.expiry || '';
+        const sampleInput = document.getElementById('sample-question-count');
+        if (sampleInput) sampleInput.value = draft.sampleCount || '';
         document.getElementById('secret-key').value = draft.secretKey || '';
         document.getElementById('show-results-to-student').checked = draft.showResults !== false;
         document.getElementById('show-answer-summary').checked = draft.showAnswerSummary !== false;
@@ -2154,10 +2169,14 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                 return `
                     <div class="student-result-card" style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--border);">
                         <div>
-                            <div style="font-weight:600;">${res.student.lastName}, ${res.student.firstName}</div>
+                            <div style="font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                ${res.student.lastName}, ${res.student.firstName}
+                                ${res.isRetake ? `<span style="font-size:0.7rem; background:#fef3c7; color:#92400e; padding:2px 7px; border-radius:4px; font-weight:600; border:1px solid #fde68a;">🔄 Retake</span>` : ''}
+                            </div>
                             <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">
                                 ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}
                             </div>
+                            ${res.isRetake && res.retakeReason ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px; background:#fffbeb; padding:3px 8px; border-radius:4px; display:inline-block; border-left:3px solid #f59e0b;"><strong>Reason:</strong> <em>${escapeHtml(res.retakeReason)}</em></div>` : ''}
                             ${res.securityViolations > 0 ? `<div style="font-size:0.7rem; color:var(--danger); font-weight:700; margin-top:4px;">⚠️ ${res.securityViolations} Security Violations</div>` : ''}
                         </div>
                         <div style="text-align:right;">
@@ -2192,6 +2211,9 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
         if (newSettings.hasOwnProperty('duration')) currentQuizData.duration = newSettings.duration;
         if (newSettings.hasOwnProperty('expiry')) {
             currentQuizData.expiry = newSettings.expiry ? new Date(newSettings.expiry).getTime() : null;
+        }
+        if (newSettings.hasOwnProperty('sampleCount')) {
+            currentQuizData.sampleCount = newSettings.sampleCount;
         }
         if (newSettings.hasOwnProperty('showResultsToStudent')) {
             currentQuizData.showResultsToStudent = newSettings.showResultsToStudent;
@@ -2358,6 +2380,49 @@ function handlePrintScreen(e) {
     }
 }
 
+let pendingRetakeContext = null;
+
+function openRetakeModal(context) {
+    pendingRetakeContext = context;
+    const reasonInput = document.getElementById('retake-reason-input');
+    if (reasonInput) reasonInput.value = '';
+    const modal = document.getElementById('retake-modal');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeRetakeModal() {
+    pendingRetakeContext = null;
+    const modal = document.getElementById('retake-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function confirmRetakeQuiz() {
+    const reasonInput = document.getElementById('retake-reason-input');
+    const reason = reasonInput ? reasonInput.value.trim() : '';
+    if (!reason) {
+        alert('Please provide a reason for retaking the exam.');
+        if (reasonInput) reasonInput.focus();
+        return;
+    }
+
+    if (!pendingRetakeContext) return;
+    const ctx = { ...pendingRetakeContext, isRetake: true, retakeReason: reason };
+    closeRetakeModal();
+
+    // Clear local storage locks & persistence for this quiz/student
+    try {
+        localStorage.removeItem(ctx.quizId);
+        const pKey = `quiz_progress_${ctx.quizId}_${ctx.studentId}`;
+        localStorage.removeItem(pKey);
+    } catch (e) { }
+
+    // Reset attempt counters
+    focusLostCount = 0;
+    isHandlingFocusLoss = false;
+
+    proceedWithQuizExecution(ctx);
+}
+
 async function startQuiz() {
     let quizId = document.getElementById('student-quiz-id').value.trim();
     quizId = quizId.replace(/^Quiz ID:\s*/i, '');
@@ -2378,19 +2443,40 @@ async function startQuiz() {
     secretKey = secretKey.replace(/^Secret Key:\s*/i, '');
 
     if (isDevToolsOpen()) { alert('Close DevTools.'); return; }
-    if (!quizId || !firstName || !lastName || !section || !secretKey || !studentInstitutionalId) { alert('Fill all fields.'); return; }
+    if (!quizId || !firstName || !lastName || !section || !secretKey || !studentInstitutionalId) {
+        alert('Please fill in all fields.');
+        return;
+    }
 
     const studentId = `${lastName}_${firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
+    const context = {
+        quizId, firstName, lastName, studentInstitutionalId, section, secretKey, studentId,
+        isRetake: false, retakeReason: ''
+    };
 
     showLoading();
     try {
         const snap = await database.ref(`results/${quizId}/${studentId}`).once('value');
-        if (snap.exists()) {
+        const localRecord = localStorage.getItem(quizId);
+        const hasSubmitted = snap.exists() || (localRecord && (Date.now() - JSON.parse(localRecord).timestamp < 10800000));
+
+        if (hasSubmitted) {
             hideLoading();
-            alert('Already submitted.');
+            openRetakeModal(context);
             return;
         }
 
+        proceedWithQuizExecution(context);
+    } catch (err) {
+        hideLoading();
+        alert('Error validating student session: ' + err.message);
+    }
+}
+
+async function proceedWithQuizExecution(ctx) {
+    const { quizId, firstName, lastName, studentInstitutionalId, section, secretKey, studentId, isRetake, retakeReason } = ctx;
+    showLoading();
+    try {
         const quizSnap = await database.ref('quizzes/' + quizId).once('value');
         const data = quizSnap.val();
         if (!data) {
@@ -2410,22 +2496,22 @@ async function startQuiz() {
             return;
         }
 
-        const record = localStorage.getItem(quizData.id);
-        if (record && (Date.now() - JSON.parse(record).timestamp < 10800000)) {
-            hideLoading();
-            alert('Already submitted (local record).');
-            return;
-        }
-
         hideLoading();
         persistenceKey = `quiz_progress_${quizData.id}_${studentId}`;
 
         showInstructionModal(quizData.instructionCountdown, () => {
-            quizData.student = { firstName, lastName, section, institutionalId: studentInstitutionalId };
+            quizData.student = {
+                firstName,
+                lastName,
+                section,
+                institutionalId: studentInstitutionalId,
+                isRetake: !!isRetake,
+                retakeReason: retakeReason || ''
+            };
             quizData.secretKey = secretKey;
 
-            // Persistence: Check for existing session
-            const savedState = localStorage.getItem(persistenceKey);
+            // Persistence: Check for existing session (only if not retake)
+            const savedState = (!isRetake) ? localStorage.getItem(persistenceKey) : null;
 
             if (savedState) {
                 try {
@@ -2458,11 +2544,25 @@ async function startQuiz() {
                     quizStartTime = Date.now();
                 }
             } else {
-                // New session: Shuffle if needed
-                if (quizData.randomizeOrder !== false) shuffleQuiz(quizData);
+                // New session: Apply question pooling (sampleCount) if configured
+                if (quizData.sampleCount && quizData.sampleCount > 0 && quizData.sampleCount < quizData.questions.length) {
+                    // Shuffle full pool first
+                    for (let i = quizData.questions.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [quizData.questions[i], quizData.questions[j]] = [quizData.questions[j], quizData.questions[i]];
+                    }
+                    // Slice the pool to sampleCount
+                    quizData.questions = quizData.questions.slice(0, quizData.sampleCount);
+                }
+
+                // Shuffle question options & final order if randomizeOrder is enabled
+                if (quizData.randomizeOrder !== false) {
+                    shuffleQuiz(quizData);
+                }
+
                 studentAnswers = new Array(quizData.questions.length).fill(null);
                 quizStartTime = Date.now();
-                saveProgress(); // Initial save to lock in the shuffle order
+                saveProgress(); // Initial save to lock in the sample and shuffle order
             }
 
             studentSection.classList.add('hidden');
@@ -2470,17 +2570,10 @@ async function startQuiz() {
             document.getElementById('quiz-title-display').textContent = quizData.title;
             displayQuestion(0);
 
-            // If restoring, we might need to adjust the timer duration passed
-            // The timer function uses "end = Date.now() + duration", but we want "end = startTime + duration"
-            // So we need to handle this in startQuizTimer or pass the calculated end time.
-            // Let's modify startQuizTimer to accept an absolute End Time optionally or handle it via logic.
-            // Actually, easier: pass persistence-aware arguments.
-
             if (quizData.duration > 0 || quizData.expiry) {
-                startQuizTimer(quizData.duration, quizData.expiry, quizStartTime); // Changed signature
+                startQuizTimer(quizData.duration, quizData.expiry, quizStartTime);
             }
 
-            // quizStartTime = Date.now(); // REMOVED: Managed above
             // Forensic Watermarking
             generateWatermark(firstName, lastName, section, studentInstitutionalId);
             document.body.classList.add('quiz-active');
@@ -2510,21 +2603,19 @@ async function startQuiz() {
             startDevToolsDetection();
             startWatermarkRotation(firstName, lastName, section, studentInstitutionalId);
 
-            // Show new widget
+            // Show attempts widget
             if (attemptsWidget) {
                 attemptsWidget.classList.remove('hidden');
                 updateAttemptsDisplay();
-                // If we restored attempts, maybe show the widget?
                 if (focusLostCount > 0) expandWidget();
             }
 
             // Save Session Logic (Auto-Login Data)
             localStorage.setItem('quizable_active_session', JSON.stringify({
                 quizId, firstName, lastName,
-                yearVal, sectionVal, secretKey,
+                section, secretKey,
                 timestamp: Date.now()
             }));
-
         });
     } catch (err) {
         hideLoading();
@@ -2790,10 +2881,16 @@ function submitQuiz(auto = false) {
         });
 
         const res = {
-            student: quizData.student, quizTitle: quizData.title,
-            subject: quizData.subject, score, totalQuestions: quizData.questions.length,
-            detailedAnswers: detail, quizId: quizData.id,
+            student: quizData.student,
+            quizTitle: quizData.title,
+            subject: quizData.subject,
+            score,
+            totalQuestions: quizData.questions.length,
+            detailedAnswers: detail,
+            quizId: quizData.id,
             securityViolations: focusLostCount, // Track tab switches
+            isRetake: !!quizData.student?.isRetake,
+            retakeReason: quizData.student?.retakeReason || '',
             submittedAt: Date.now(),
             timeTakenMs: Date.now() - quizStartTime
         };
