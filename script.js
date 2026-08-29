@@ -2360,6 +2360,26 @@ function showInstructionModal(duration, onComplete) {
     }, 1000);
 }
 
+async function validateDeviceClock() {
+    try {
+        const offsetSnap = await database.ref(".info/serverTimeOffset").once("value");
+        const offset = offsetSnap.val() || 0;
+        // If offset is greater than 3 minutes (180,000ms), clock is skewed!
+        if (Math.abs(offset) > 180000) {
+            const minutesOff = (Math.abs(offset) / 60000).toFixed(1);
+            const direction = offset > 0 ? 'behind' : 'ahead of';
+            return {
+                valid: false,
+                offset,
+                message: `Device Clock Desynchronized: Your device clock is ${minutesOff} minutes ${direction} official server time.\n\nPlease set your computer or phone clock to "Automatic Time" in your system settings before taking this quiz.`
+            };
+        }
+        return { valid: true, offset };
+    } catch {
+        return { valid: true, offset: 0 };
+    }
+}
+
 async function getServerTime() {
     try {
         const offsetSnap = await database.ref(".info/serverTimeOffset").once("value");
@@ -2456,6 +2476,14 @@ async function startQuiz() {
 
     showLoading();
     try {
+        // Validate device clock sync
+        const clockCheck = await validateDeviceClock();
+        if (!clockCheck.valid) {
+            hideLoading();
+            alert(clockCheck.message);
+            return;
+        }
+
         const snap = await database.ref(`results/${quizId}/${studentId}`).once('value');
         const localRecord = localStorage.getItem(quizId);
         const hasSubmitted = snap.exists() || (localRecord && (Date.now() - JSON.parse(localRecord).timestamp < 10800000));
@@ -2511,39 +2539,49 @@ async function proceedWithQuizExecution(ctx) {
             quizData.secretKey = secretKey;
 
             // Persistence: Check for existing session (only if not retake)
-            const savedState = (!isRetake) ? localStorage.getItem(persistenceKey) : null;
+            let savedState = (!isRetake) ? localStorage.getItem(persistenceKey) : null;
 
             if (savedState) {
                 try {
                     const state = JSON.parse(savedState);
-                    // Restore shuffled order if it exists
-                    if (state.questions) {
-                        quizData.questions = state.questions;
-                    } else if (quizData.randomizeOrder !== false) {
-                        shuffleQuiz(quizData);
-                    }
+                    const durationMs = (quizData.duration > 0) ? (quizData.duration * 60000) : 0;
+                    const elapsedMs = Date.now() - (state.startTime || 0);
 
-                    // Validate basic integrity
-                    if (state.answers && state.answers.length === quizData.questions.length) {
-                        console.log("Restoring session...");
-                        quizStartTime = state.startTime;
-                        studentAnswers = state.answers;
-                        focusLostCount = state.attempts || 0;
-                        if (focusLostCount > 0) {
-                            isHandlingFocusLoss = true;
-                            setTimeout(() => isHandlingFocusLoss = false, 1000);
-                        }
+                    // Check if previous session expired while away
+                    if (durationMs > 0 && elapsedMs >= durationMs) {
+                        console.warn("Saved session has expired; starting fresh session.");
+                        localStorage.removeItem(persistenceKey);
+                        savedState = null;
                     } else {
-                        studentAnswers = new Array(quizData.questions.length).fill(null);
-                        quizStartTime = Date.now();
+                        // Restore shuffled order if it exists
+                        if (state.questions && state.questions.length > 0) {
+                            quizData.questions = state.questions;
+                        } else if (quizData.randomizeOrder !== false) {
+                            shuffleQuiz(quizData);
+                        }
+
+                        // Validate basic integrity
+                        if (state.answers && state.answers.length === quizData.questions.length) {
+                            console.log("Restoring active session...");
+                            quizStartTime = state.startTime;
+                            studentAnswers = state.answers;
+                            focusLostCount = state.attempts || 0;
+                            if (focusLostCount > 0) {
+                                isHandlingFocusLoss = true;
+                                setTimeout(() => isHandlingFocusLoss = false, 1000);
+                            }
+                        } else {
+                            studentAnswers = new Array(quizData.questions.length).fill(null);
+                            quizStartTime = Date.now();
+                        }
                     }
                 } catch (e) {
                     console.error("Error restoring state", e);
-                    if (quizData.randomizeOrder !== false) shuffleQuiz(quizData);
-                    studentAnswers = new Array(quizData.questions.length).fill(null);
-                    quizStartTime = Date.now();
+                    savedState = null;
                 }
-            } else {
+            }
+
+            if (!savedState) {
                 // New session: Apply question pooling (sampleCount) if configured
                 if (quizData.sampleCount && quizData.sampleCount > 0 && quizData.sampleCount < quizData.questions.length) {
                     // Shuffle full pool first
@@ -2695,37 +2733,39 @@ function showReviewPage() {
     document.getElementById('submit-btn').onclick = () => submitQuiz();
 }
 
-// function startQuizTimer(mins, expiry) { // Old signature
 function startQuizTimer(mins, expiry, startTime) {
+    if (timerInterval) clearInterval(timerInterval);
     timerDisplay.classList.remove('hidden');
-    // Calculate End Time: Strictly use Server Time logic if possible, but localized start time + duration works for duration-based.
-    // For Fixed Expiry, we must compare against current Time.
 
-    // Logic: The "End Time" is determined once.
-    let absoluteEndTime = startTime + (mins * 60000);
+    const durationMs = mins > 0 ? mins * 60000 : 0;
+    const expiryTimestamp = (expiry && expiry > 0) ? expiry : null;
 
-    // If strict expiry date is set, it overrides duration if it's sooner
-    if (expiry && expiry < absoluteEndTime) absoluteEndTime = expiry;
+    let targetEndTime = 0;
+    if (durationMs > 0 && expiryTimestamp) {
+        targetEndTime = Math.min(startTime + durationMs, expiryTimestamp);
+    } else if (durationMs > 0) {
+        targetEndTime = startTime + durationMs;
+    } else if (expiryTimestamp) {
+        targetEndTime = expiryTimestamp;
+    }
 
-    // If duration is 0 but expiry exists, use expiry
-    if (mins === 0 && expiry) absoluteEndTime = expiry;
+    if (targetEndTime <= 0) return;
 
-    timerInterval = setInterval(async () => {
-        // Use local time for smooth UI updates (seconds ticking), but fallback to server check?
-        // Checking server time every second is too heavy.
-        // We'll trust local time for UI, but if local time "jumps" (cheat attempt), we catch it?
-        // Better: We rely on the "Absolute End Time" vs "Current Time".
-        // If user changes system clock, 'Date.now()' changes.
-        // To strictly prevent system clock hacks, we need 'performance.now()' relative to a trusted start,
-        // OR fetch server time offset periodically.
+    let isTimerSubmitting = false;
 
-        // Lightweight approach: We already calculate 'diff'.
+    const updateTimer = async () => {
+        if (isTimerSubmitting || !isQuizActive) return;
+
         const now = Date.now();
-        const diff = absoluteEndTime - now;
+        const diff = targetEndTime - now;
 
         if (diff <= 0) {
-            clearInterval(timerInterval);
-            showConfirmationModal('Time is up!', 'The quiz has expired. Submitting now.', () => submitQuiz(true), true);
+            isTimerSubmitting = true;
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            showConfirmationModal('Time is up!', 'The examination time has expired. Submitting your quiz now.', () => submitQuiz(true), true);
             return;
         }
 
@@ -2740,19 +2780,18 @@ function startQuizTimer(mins, expiry, startTime) {
         const m = Math.floor((diff % 3600000) / 60000);
         const s = Math.floor((diff % 60000) / 1000);
         timerDisplay.textContent = `Time Left: ${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
 
-        // Periodic Server Check (every 30s) to detect system clock manipulation
-        if (s % 30 === 0) {
-            const serverNow = await getServerTime();
-            if (serverNow > absoluteEndTime) {
-                clearInterval(timerInterval);
-                showConfirmationModal('Time is up!', 'Quiz expired (Server Time).', () => submitQuiz(true), true);
-            }
-        }
-    }, 1000);
+    updateTimer();
+    timerInterval = setInterval(updateTimer, 1000);
 }
 
-function stopQuizTimer() { if (timerInterval) clearInterval(timerInterval); }
+function stopQuizTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+}
 
 function startDevToolsDetection() {
     devToolsInterval = setInterval(() => {
