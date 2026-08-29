@@ -2568,6 +2568,11 @@ async function proceedWithQuizExecution(ctx) {
             studentSection.classList.add('hidden');
             quizSection.classList.remove('hidden');
             document.getElementById('quiz-title-display').textContent = quizData.title;
+
+            if (isRetake) {
+                showToast('Retake Session: A 2% deduction will be applied to your final score.', 'warning');
+            }
+
             displayQuestion(0);
 
             if (quizData.duration > 0 || quizData.expiry) {
@@ -2880,16 +2885,31 @@ function submitQuiz(auto = false) {
             };
         });
 
+        const rawScore = score;
+        const totalQuestions = quizData.questions.length;
+        const rawPercentage = (rawScore / totalQuestions) * 100;
+        const isRetake = !!quizData.student?.isRetake;
+        const penaltyPercent = isRetake ? 2 : 0;
+
+        // Final percentage deducted by 2% if retake
+        const finalPercentage = Math.max(0, parseFloat((rawPercentage - penaltyPercent).toFixed(1)));
+        // Final score (points) corresponding to final percentage
+        const finalScore = parseFloat(((finalPercentage / 100) * totalQuestions).toFixed(2));
+
         const res = {
             student: quizData.student,
             quizTitle: quizData.title,
             subject: quizData.subject,
-            score,
-            totalQuestions: quizData.questions.length,
+            score: finalScore,
+            rawScore: rawScore,
+            totalQuestions: totalQuestions,
+            rawPercentage: parseFloat(rawPercentage.toFixed(1)),
+            finalPercentage: finalPercentage,
+            penaltyPercent: penaltyPercent,
             detailedAnswers: detail,
             quizId: quizData.id,
             securityViolations: focusLostCount, // Track tab switches
-            isRetake: !!quizData.student?.isRetake,
+            isRetake: isRetake,
             retakeReason: quizData.student?.retakeReason || '',
             submittedAt: Date.now(),
             timeTakenMs: Date.now() - quizStartTime
@@ -2903,20 +2923,29 @@ function submitQuiz(auto = false) {
             document.getElementById('submission-success-message').classList.add('hidden');
             const summary = document.getElementById('student-score-summary');
 
-            // Rich Feedback Calculation
-            const percentage = Math.round((score / res.totalQuestions) * 100);
+            // Rich Feedback Calculation based on final percentage
             let gradeLabel = 'Participant';
             let gradeColor = 'var(--text-muted)';
 
-            if (percentage >= 90) { gradeLabel = 'Excellent!'; gradeColor = 'var(--success)'; }
-            else if (percentage >= 75) { gradeLabel = 'Good Job!'; gradeColor = 'var(--primary)'; }
-            else if (percentage >= 50) { gradeLabel = 'Fair'; gradeColor = 'var(--warning)'; }
+            if (finalPercentage >= 90) { gradeLabel = 'Excellent!'; gradeColor = 'var(--success)'; }
+            else if (finalPercentage >= 75) { gradeLabel = 'Good Job!'; gradeColor = 'var(--primary)'; }
+            else if (finalPercentage >= 50) { gradeLabel = 'Fair'; gradeColor = 'var(--warning)'; }
             else { gradeLabel = 'Needs Improvement'; gradeColor = 'var(--danger)'; }
+
+            let penaltyNotice = '';
+            if (isRetake) {
+                penaltyNotice = `
+                    <div style="margin-top:12px; padding:8px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; font-size:0.85rem; color:#991b1b; display:inline-block; line-height:1.4;">
+                        ⚠️ <strong>2% Retake Penalty Applied:</strong> Raw Score: ${rawScore}/${totalQuestions} (${parseFloat(rawPercentage.toFixed(1))}%) &rarr; Final: ${finalScore}/${totalQuestions} (${finalPercentage}%)
+                    </div>
+                `;
+            }
 
             const scoreHtml = showScore ? `
                 <div style="text-align:center; padding:30px; background:var(--bg-body); border-radius:15px; margin-bottom:20px;">
-                    <div style="font-size:3rem; font-weight:800; color:var(--primary);">${score} / ${res.totalQuestions}</div>
-                    <div style="font-size:1.5rem; font-weight:700; color:${gradeColor}; margin-top:5px;">${gradeLabel} (${percentage}%)</div>
+                    <div style="font-size:3rem; font-weight:800; color:var(--primary);">${finalScore} / ${totalQuestions}</div>
+                    <div style="font-size:1.5rem; font-weight:700; color:${gradeColor}; margin-top:5px;">${gradeLabel} (${finalPercentage}%)</div>
+                    ${penaltyNotice}
                     <div style="color:var(--text-muted); margin-top:5px;">Final Result</div>
                 </div>
             ` : '';
