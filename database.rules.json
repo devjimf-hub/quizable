@@ -1,0 +1,39 @@
+{
+  "rules": {
+    "quizzes": {
+      // Authenticated teachers/admins can list all quizzes in admin dashboard
+      ".read": "auth != null",
+      "$quizId": {
+        // Anyone with the Quiz ID can read encrypted quiz data
+        // (decryption requires the teacher-provided secret key)
+        ".read": true,
+        // Only authenticated teachers/admins can create or update a quiz
+        ".write": "auth != null"
+      }
+    },
+    "results": {
+      // Authenticated teachers/admins can fetch results
+      ".read": "auth != null",
+      "$quizId": {
+        ".read": "auth != null",
+        "$studentId": {
+          // Students can create their submission once; they cannot overwrite or delete existing records
+          // Authenticated teachers can update or manage records
+          ".write": "!data.exists() || auth != null"
+        }
+      }
+    },
+    "teachers": {
+      "$uid": {
+        // Teachers can only read and write their own quiz repository index
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "admin": {
+      // Admin metadata is strictly restricted to authenticated users
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

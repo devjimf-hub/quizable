@@ -14,6 +14,8 @@ const firebaseConfig = {
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
+const auth = firebase.auth();
+let currentAuthUser = null;
 
 // Global variables
 let quizData = null;
@@ -30,6 +32,217 @@ let processedStudentResults = []; // To store results for PDF export
 let quizStartTime = 0;
 let allAdminQuizzes = []; // Global store for admin search
 const adminResultsCache = {}; // Cache admin quiz results by quizId
+
+// --- AUTHORIZED ADMINISTRATOR CONFIGURATION ---
+// Add the administrator email addresses who are permitted to access the Admin Dashboard.
+// (All emails should be lowercase)
+const ADMIN_EMAILS = [
+    // Add your admin email(s) here, e.g.:
+    "ctutc.jbocales@gmail.com"
+];
+
+function isAdminUser(user) {
+    if (!user || !user.email) return false;
+    const email = user.email.toLowerCase().trim();
+    // If ADMIN_EMAILS has entries, enforce strict whitelist check.
+    if (ADMIN_EMAILS.length > 0) {
+        return ADMIN_EMAILS.includes(email);
+    }
+    // If not yet configured with specific emails, allow logged-in teachers
+    return true;
+}
+
+// --- AUTHENTICATION CONTROLLERS ---
+
+function updateAuthUI(user) {
+    currentAuthUser = user;
+    const userEmailText = document.getElementById('user-display-email');
+    const userAvatarInitial = document.getElementById('user-avatar-initial');
+    const navAdminBtn = document.getElementById('nav-admin-btn');
+    const actionAdminBtn = document.getElementById('go-to-admin-panel');
+
+    if (user) {
+        const displayName = user.displayName || user.email || 'Teacher';
+        if (userEmailText) userEmailText.textContent = displayName;
+        if (userAvatarInitial) userAvatarInitial.textContent = (displayName[0] || 'T').toUpperCase();
+
+        const isAdm = isAdminUser(user);
+        if (navAdminBtn) navAdminBtn.classList.toggle('hidden', !isAdm);
+        if (actionAdminBtn) actionAdminBtn.classList.toggle('hidden', !isAdm);
+    } else {
+        if (navAdminBtn) navAdminBtn.classList.add('hidden');
+        if (actionAdminBtn) actionAdminBtn.classList.add('hidden');
+    }
+}
+
+// Listen to Firebase Auth state transitions
+auth.onAuthStateChanged((user) => {
+    updateAuthUI(user);
+});
+
+function openAuthModal(tab = 'login') {
+    const modal = document.getElementById('auth-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        switchAuthTab(tab);
+    }
+}
+
+function closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    if (modal) modal.classList.add('hidden');
+    hideAuthAlert();
+}
+
+function switchAuthTab(tab) {
+    const tabLogin = document.getElementById('auth-tab-login');
+    const tabReg = document.getElementById('auth-tab-register');
+    const tabReset = document.getElementById('auth-tab-reset');
+
+    const formLogin = document.getElementById('auth-login-form');
+    const formReg = document.getElementById('auth-register-form');
+    const formReset = document.getElementById('auth-reset-form');
+
+    const titleEl = document.getElementById('auth-modal-title');
+
+    [tabLogin, tabReg, tabReset].forEach(t => t && t.classList.remove('active'));
+    [formLogin, formReg, formReset].forEach(f => f && f.classList.add('hidden'));
+    hideAuthAlert();
+
+    if (tab === 'login') {
+        if (tabLogin) tabLogin.classList.add('active');
+        if (formLogin) formLogin.classList.remove('hidden');
+        if (titleEl) titleEl.textContent = 'Teacher Sign In';
+    } else if (tab === 'register') {
+        if (tabReg) tabReg.classList.add('active');
+        if (formReg) formReg.classList.remove('hidden');
+        if (titleEl) titleEl.textContent = 'Create Teacher Account';
+    } else if (tab === 'reset') {
+        if (tabReset) tabReset.classList.add('active');
+        if (formReset) formReset.classList.remove('hidden');
+        if (titleEl) titleEl.textContent = 'Reset Password';
+    }
+}
+
+function showAuthAlert(message, type = 'error') {
+    const alertEl = document.getElementById('auth-alert');
+    if (!alertEl) return;
+    alertEl.textContent = message;
+    alertEl.className = `auth-alert auth-alert-${type}`;
+    alertEl.classList.remove('hidden');
+}
+
+function hideAuthAlert() {
+    const alertEl = document.getElementById('auth-alert');
+    if (alertEl) alertEl.classList.add('hidden');
+}
+
+function formatAuthError(err) {
+    if (!err || !err.code) return err.message || 'An error occurred during authentication.';
+    switch (err.code) {
+        case 'auth/user-not-found':
+            return 'No account found with this email. Please click "Register" to create your account.';
+        case 'auth/wrong-password':
+        case 'auth/invalid-login-credentials':
+        case 'auth/invalid-credential':
+            return 'Incorrect email or password. Please try again or use the Reset tab.';
+        case 'auth/email-already-in-use':
+            return 'An account with this email already exists. Please Sign In.';
+        case 'auth/weak-password':
+            return 'Password is too weak. Please use at least 6 characters.';
+        case 'auth/invalid-email':
+            return 'Please enter a valid email address.';
+        case 'auth/operation-not-allowed':
+            return 'Email/Password sign-in is not enabled in Firebase Console. Please enable it in Firebase Console -> Authentication -> Sign-in method.';
+        default:
+            return err.message;
+    }
+}
+
+async function handleAuthLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('auth-login-email').value.trim();
+    const password = document.getElementById('auth-login-password').value;
+
+    showLoading();
+    hideAuthAlert();
+    try {
+        const cred = await auth.signInWithEmailAndPassword(email, password);
+        hideLoading();
+        closeAuthModal();
+        showToast(`Welcome back, ${cred.user.displayName || cred.user.email}!`, 'success');
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('part') === 'admin') {
+            loadAdminDashboard();
+        } else {
+            showTeacherMenu();
+        }
+    } catch (err) {
+        hideLoading();
+        showAuthAlert(formatAuthError(err), 'error');
+    }
+}
+
+async function handleAuthRegister(e) {
+    e.preventDefault();
+    const name = document.getElementById('auth-reg-name').value.trim();
+    const email = document.getElementById('auth-reg-email').value.trim();
+    const password = document.getElementById('auth-reg-password').value;
+    const confirm = document.getElementById('auth-reg-confirm').value;
+
+    if (password !== confirm) {
+        showAuthAlert('Passwords do not match.', 'error');
+        return;
+    }
+
+    showLoading();
+    hideAuthAlert();
+    try {
+        const cred = await auth.createUserWithEmailAndPassword(email, password);
+        if (name) {
+            await cred.user.updateProfile({ displayName: name });
+        }
+        hideLoading();
+        closeAuthModal();
+        showToast(`Account created successfully. Welcome, ${name || email}!`, 'success');
+
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('part') === 'admin') {
+            loadAdminDashboard();
+        } else {
+            showTeacherMenu();
+        }
+    } catch (err) {
+        hideLoading();
+        showAuthAlert(formatAuthError(err), 'error');
+    }
+}
+
+async function handleAuthReset(e) {
+    e.preventDefault();
+    const email = document.getElementById('auth-reset-email').value.trim();
+
+    showLoading();
+    hideAuthAlert();
+    try {
+        await auth.sendPasswordResetEmail(email);
+        hideLoading();
+        showAuthAlert('Password reset email sent! Please check your inbox.', 'success');
+    } catch (err) {
+        hideLoading();
+        showAuthAlert(err.message, 'error');
+    }
+}
+
+function handleTeacherLogout() {
+    auth.signOut().then(() => {
+        showToast('Logged out successfully.', 'info');
+        showStudentPortal();
+    }).catch(err => {
+        showToast('Logout error: ' + err.message, 'error');
+    });
+}
 
 function escapeHtml(text) {
     if (text === null || text === undefined) return '';
@@ -103,11 +316,34 @@ const attemptsMessage = document.getElementById('attempts-message');
 
 let widgetTimeout;
 
+// Show Student Portal View
+function showStudentPortal(cleanUrl = false) {
+    const header = document.getElementById('app-header');
+    if (header) header.classList.add('hidden');
+    closeAuthModal();
+
+    teacherMenu.classList.add('hidden');
+    teacherCreateSection.classList.add('hidden');
+    teacherResultsSection.classList.add('hidden');
+    const adminDash = document.getElementById('admin-dashboard-section');
+    if (adminDash) adminDash.classList.add('hidden');
+    quizSection.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    studentSection.classList.remove('hidden');
+    const nav = document.getElementById('quiz-navigator');
+    if (nav) nav.classList.add('hidden');
+
+    if (cleanUrl && window.history && window.history.replaceState) {
+        const url = new URL(window.location);
+        url.searchParams.delete('part');
+        window.history.replaceState(null, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : ''));
+    }
+}
+
 // Initialize based on URL parameters
 function initializeApp() {
     const urlParams = new URLSearchParams(window.location.search);
     tabWarning.classList.add('hidden');
-    // attemptsCounter.classList.add('hidden'); // Removed old element logic if needed, but keeping for safety
     if (attemptsWidget) attemptsWidget.classList.add('hidden');
     timerDisplay.classList.add('hidden');
     confirmationModal.classList.add('hidden');
@@ -121,7 +357,6 @@ function initializeApp() {
         try {
             const decoded = JSON.parse(atob(qParam));
             if (decoded.i && decoded.k) {
-                // Pre-fill fields
                 setTimeout(() => {
                     const idField = document.getElementById(part === 'teacher' ? 'results-quiz-id' : 'student-quiz-id');
                     const keyField = document.getElementById(part === 'teacher' ? 'results-secret-key' : 'student-secret-key');
@@ -130,11 +365,17 @@ function initializeApp() {
                         keyField.value = decoded.k;
                         showToast(`Quiz details loaded from link.`, 'success');
 
-                        // If teacher, auto-fetch
                         if (part === 'teacher') {
-                            showTeacherMenu();
-                            showViewResults();
-                            fetchAndDisplayResults(decoded.i, decoded.k);
+                            const header = document.getElementById('app-header');
+                            if (header) header.classList.remove('hidden');
+                            if (auth.currentUser) {
+                                showTeacherMenu();
+                                showViewResults();
+                                fetchAndDisplayResults(decoded.i, decoded.k);
+                            } else {
+                                openAuthModal('login');
+                                showToast('Please sign in to access teacher results.', 'info');
+                            }
                         }
                     }
                 }, 500);
@@ -145,24 +386,60 @@ function initializeApp() {
     }
 
     if (part === 'admin') {
-        studentSection.classList.add('hidden');
-        document.getElementById('admin-dashboard-section').classList.remove('hidden');
-        loadAdminDashboard();
-    } else if (part === 'teacher' && !qParam) {
-        showTeacherMenu();
-    } else if (part !== 'teacher') {
-        teacherMenu.classList.add('hidden');
-        teacherCreateSection.classList.add('hidden');
-        teacherResultsSection.classList.add('hidden');
-        document.getElementById('admin-dashboard-section').classList.add('hidden');
-        studentSection.classList.remove('hidden');
+        const header = document.getElementById('app-header');
+        if (header) header.classList.remove('hidden');
 
-        // Auto-Login Check
+        if (!auth.currentUser) {
+            showStudentPortal(false);
+            openAuthModal('login');
+            showToast('Please sign in with administrator credentials.', 'info');
+        } else {
+            studentSection.classList.add('hidden');
+            document.getElementById('admin-dashboard-section').classList.remove('hidden');
+            loadAdminDashboard();
+        }
+    } else if (part === 'teacher' && !qParam) {
+        const header = document.getElementById('app-header');
+        if (header) header.classList.remove('hidden');
+
+        if (!auth.currentUser) {
+            showStudentPortal(false);
+            openAuthModal('login');
+            showToast('Please sign in to access Teacher Dashboard.', 'info');
+        } else {
+            showTeacherMenu();
+        }
+    } else if (part !== 'teacher') {
+        showStudentPortal(false);
         checkAutoLogin();
     }
 }
 
 async function loadAdminDashboard() {
+    if (!auth.currentUser) {
+        showStudentPortal(false);
+        openAuthModal('login');
+        showToast('Please sign in with administrator credentials.', 'info');
+        return;
+    }
+
+    if (!isAdminUser(auth.currentUser)) {
+        showToast('Access Denied: Your account does not have administrator privileges.', 'error');
+        showTeacherMenu();
+        return;
+    }
+
+    const header = document.getElementById('app-header');
+    if (header) header.classList.remove('hidden');
+
+    studentSection.classList.add('hidden');
+    teacherMenu.classList.add('hidden');
+    teacherCreateSection.classList.add('hidden');
+    teacherResultsSection.classList.add('hidden');
+    quizSection.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    document.getElementById('admin-dashboard-section').classList.remove('hidden');
+
     showLoading();
     try {
         // Fetch both the index and the actual master list of quiz IDs
@@ -813,16 +1090,36 @@ function checkAutoLogin() {
 }
 
 function showTeacherMenu() {
+    if (!auth.currentUser) {
+        showStudentPortal(false);
+        openAuthModal('login');
+        showToast('Please sign in to access the Teacher Dashboard.', 'info');
+        return;
+    }
+    const header = document.getElementById('app-header');
+    if (header) header.classList.remove('hidden');
+
     teacherMenu.classList.remove('hidden');
     teacherCreateSection.classList.add('hidden');
     teacherResultsSection.classList.add('hidden');
     studentSection.classList.add('hidden');
     quizSection.classList.add('hidden');
     resultsSection.classList.add('hidden');
+    const adminDash = document.getElementById('admin-dashboard-section');
+    if (adminDash) adminDash.classList.add('hidden');
     document.getElementById('quiz-navigator').classList.add('hidden');
 }
 
 function showCreateQuiz() {
+    if (!auth.currentUser) {
+        showStudentPortal(false);
+        openAuthModal('login');
+        showToast('Please sign in to create quizzes.', 'info');
+        return;
+    }
+    const header = document.getElementById('app-header');
+    if (header) header.classList.remove('hidden');
+
     teacherMenu.classList.add('hidden');
     teacherCreateSection.classList.remove('hidden');
     document.getElementById('quiz-navigator').classList.remove('hidden');
@@ -841,6 +1138,15 @@ function showCreateQuiz() {
 }
 
 function showViewResults() {
+    if (!auth.currentUser) {
+        showStudentPortal(false);
+        openAuthModal('login');
+        showToast('Please sign in to view analytics and results.', 'info');
+        return;
+    }
+    const header = document.getElementById('app-header');
+    if (header) header.classList.remove('hidden');
+
     teacherMenu.classList.add('hidden');
     teacherResultsSection.classList.remove('hidden');
     loadTeacherHistory();
@@ -860,33 +1166,60 @@ function saveTeacherHistory(title, id, key) {
     // Avoid duplicates
     const newHistory = history.filter(h => h.id !== id);
     newHistory.unshift({ title, id, key, timestamp: Date.now() });
-    // Keep last 5
-    if (newHistory.length > 5) newHistory.pop();
+    // Keep last 15
+    if (newHistory.length > 15) newHistory.pop();
     localStorage.setItem('quizable_teacher_history', JSON.stringify(newHistory));
 }
 
-function loadTeacherHistory() {
-    const history = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
+async function loadTeacherHistory() {
     const container = document.getElementById('recent-quizzes-container');
     const list = document.getElementById('recent-quizzes-list');
+    let localHistory = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
 
-    if (history.length === 0) {
+    let cloudQuizzes = [];
+    if (auth.currentUser) {
+        try {
+            const snap = await database.ref(`teachers/${auth.currentUser.uid}/quizzes`).once('value');
+            if (snap.exists()) {
+                const val = snap.val();
+                cloudQuizzes = Object.keys(val).map(k => ({
+                    id: k,
+                    title: val[k].title,
+                    key: val[k].secretKey,
+                    timestamp: val[k].createdAt || Date.now()
+                }));
+            }
+        } catch (e) {
+            console.warn("Could not fetch cloud quizzes for teacher:", e);
+        }
+    }
+
+    // Merge cloud and local quizzes, dedup by ID
+    const combinedMap = new Map();
+    cloudQuizzes.forEach(q => combinedMap.set(q.id, q));
+    localHistory.forEach(q => {
+        if (!combinedMap.has(q.id)) combinedMap.set(q.id, q);
+    });
+
+    const combinedList = Array.from(combinedMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    if (combinedList.length === 0) {
         container.classList.add('hidden');
         return;
     }
 
     container.classList.remove('hidden');
-    list.innerHTML = history.map(h => `
+    list.innerHTML = combinedList.map(h => `
         <div class="card" style="padding:15px; margin-bottom:0; display:flex; justify-content:space-between; align-items:center;">
-            <div onclick="fillCredentials('${h.id}', '${h.key}')" style="cursor:pointer; flex-grow:1;">
-                <div style="font-weight:600;">${h.title}</div>
-                <div style="font-size:0.75rem; color:var(--text-muted);">${new Date(h.timestamp).toLocaleDateString()}</div>
+            <div onclick="fillCredentials('${escapeHtml(h.id)}', '${escapeHtml(h.key)}')" style="cursor:pointer; flex-grow:1;">
+                <div style="font-weight:600;">${escapeHtml(h.title)}</div>
+                <div style="font-size:0.75rem; color:var(--text-muted);">${new Date(h.timestamp).toLocaleDateString()} &bull; ID: <code>${escapeHtml(h.id)}</code></div>
             </div>
             <div style="display:flex; gap:8px;">
-                <button class="btn btn-outline" style="padding:5px; border-radius:6px;" onclick="copyToClipboard('${h.id}', 'Quiz ID copied!')" title="Copy ID">
+                <button class="btn btn-outline" style="padding:5px 8px; border-radius:6px;" onclick="copyToClipboard('${escapeHtml(h.id)}', 'Quiz ID copied!')" title="Copy ID">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
                 </button>
-                <button class="btn btn-outline" style="padding:5px; border-radius:6px; color:var(--danger);" onclick="deleteFromHistory('${h.id}')" title="Delete from history">
+                <button class="btn btn-outline" style="padding:5px 8px; border-radius:6px; color:var(--danger);" onclick="deleteFromHistory('${escapeHtml(h.id)}')" title="Delete from history">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
             </div>
@@ -1344,6 +1677,12 @@ function processJsonData(jsonDataString) {
 }
 
 function generateEncryptedFile() {
+    if (!auth.currentUser) {
+        showToast('Please sign in as a teacher to create and save quizzes.', 'error');
+        openAuthModal('login');
+        return;
+    }
+
     const quizTitle = document.getElementById('quiz-title').value;
     const quizSubject = document.getElementById('quiz-subject').value;
     const quizDuration = parseFloat(document.getElementById('quiz-duration').value) || 0;
@@ -1386,19 +1725,32 @@ function generateEncryptedFile() {
 
     showLoading();
     encryptData(JSON.stringify(quiz), secretKey).then(async (encrypted) => {
-        // Prepare the admin metadata for encryption
+        const teacherUid = auth.currentUser.uid;
+        const teacherEmail = auth.currentUser.email || '';
         const adminMeta = {
+            title: quizTitle,
+            subject: quizSubject || 'Uncategorized',
+            secretKey: secretKey,
+            teacherEmail: teacherEmail,
+            createdAt: Date.now()
+        };
+
+        // Encrypt metadata
+        const encryptedAdminMeta = await systemEncrypt(JSON.stringify(adminMeta));
+
+        const saveData = {};
+        saveData['quizzes/' + quiz.id] = {
+            encryptedQuizData: encrypted,
+            creatorUid: teacherUid,
+            creatorEmail: teacherEmail,
+            createdAt: Date.now()
+        };
+        saveData['teachers/' + teacherUid + '/quizzes/' + quiz.id] = {
             title: quizTitle,
             subject: quizSubject || 'Uncategorized',
             secretKey: secretKey,
             createdAt: Date.now()
         };
-
-        // Encrypt the metadata using the internal system key
-        const encryptedAdminMeta = await systemEncrypt(JSON.stringify(adminMeta));
-
-        const saveData = {};
-        saveData['quizzes/' + quiz.id] = { encryptedQuizData: encrypted };
         saveData['admin/quizzes/' + quiz.id] = { data: encryptedAdminMeta };
 
         database.ref().update(saveData).then(() => {
@@ -2507,7 +2859,8 @@ function restartQuiz() {
 // Initialization
 window.onload = function () {
     initializeApp();
-    document.getElementById('download-student-pdf-btn').addEventListener('click', downloadStudentResultsAsPdf);
+    const downloadPdfBtn = document.getElementById('download-student-pdf-btn');
+    if (downloadPdfBtn) downloadPdfBtn.addEventListener('click', downloadStudentResultsAsPdf);
 
     // Admin Search
     const adminSearchInput = document.getElementById('admin-search-input');
@@ -2515,6 +2868,20 @@ window.onload = function () {
         adminSearchInput.addEventListener('input', debounce(filterAdminQuizzes, 300));
     }
 };
+
+// Global Exposure for Inline HTML Handlers
+window.openAuthModal = openAuthModal;
+window.closeAuthModal = closeAuthModal;
+window.switchAuthTab = switchAuthTab;
+window.handleAuthLogin = handleAuthLogin;
+window.handleAuthRegister = handleAuthRegister;
+window.handleAuthReset = handleAuthReset;
+window.handleTeacherLogout = handleTeacherLogout;
+window.showStudentPortal = showStudentPortal;
+window.showTeacherMenu = showTeacherMenu;
+window.showCreateQuiz = showCreateQuiz;
+window.showViewResults = showViewResults;
+window.adminLogout = adminLogout;
 
 // --- CRYPTO HELPERS ---
 async function getKey(password, salt) {
@@ -2543,10 +2910,26 @@ async function decryptData(str, password) {
     return new TextDecoder().decode(dec);
 }
 
-// System Encryption (Using an internal static key for DB privacy)
-const SYSTEM_PEPPER = "quizable_internal_v1_secure_node";
-async function systemEncrypt(data) { return encryptData(data, SYSTEM_PEPPER); }
-async function systemDecrypt(data) { return decryptData(data, SYSTEM_PEPPER); }
+// System Encryption (Derived per authenticated session)
+function getSystemKey() {
+    if (auth.currentUser) {
+        return `quizable_auth_${auth.currentUser.uid}`;
+    }
+    return "quizable_session_shield_v2";
+}
+
+async function systemEncrypt(data) {
+    return encryptData(data, getSystemKey());
+}
+
+async function systemDecrypt(data) {
+    try {
+        return await decryptData(data, getSystemKey());
+    } catch (e) {
+        // Fallback for previous legacy items if any
+        return await decryptData(data, "quizable_internal_v1_secure_node");
+    }
+}
 
 // --- Dynamic Watermark Utility ---
 let watermarkInterval = null;

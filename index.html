@@ -8,6 +8,7 @@
 
     <!-- Dependencies -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
     <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://unpkg.com/jspdf-autotable@3.5.23/dist/jspdf.plugin.autotable.min.js"></script>
@@ -27,10 +28,51 @@
         <p>Printing is strictly prohibited during this examination.</p>
         <p>This attempt has been logged and reported to the instructor.</p>
     </div>
+
+    <!-- Top App Navigation Header (Visible only in Teacher/Admin mode or when signed in) -->
+    <header id="app-header" class="app-header hidden">
+        <div class="header-inner">
+            <div class="brand-group" onclick="showStudentPortal()" style="cursor: pointer;">
+                <img src="logo.jpg" alt="Quizable Logo" class="app-logo" onerror="this.style.display='none'">
+                <span class="brand-title">Quizable</span>
+                <span class="brand-badge">Teacher Portal</span>
+            </div>
+            <div class="nav-controls">
+                <button id="nav-student-btn" class="btn btn-sm btn-outline" onclick="showStudentPortal(true)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                    Student Portal
+                </button>
+                <div id="auth-logged-in-view" style="display: flex; align-items: center; gap: 10px;">
+                    <button id="nav-admin-btn" class="btn btn-sm btn-warning hidden" onclick="loadAdminDashboard()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                        Admin Panel
+                    </button>
+                    <button class="btn btn-sm btn-outline" onclick="showTeacherMenu()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                        Dashboard
+                    </button>
+                    <div class="user-chip">
+                        <div class="user-avatar" id="user-avatar-initial">T</div>
+                        <span id="user-display-email" class="user-email-text">teacher@school.edu</span>
+                    </div>
+                    <button id="nav-logout-btn" class="btn btn-sm btn-danger-outline" onclick="handleTeacherLogout()" title="Log out">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
     <div class="container">
         <!-- Teacher Dashboard -->
         <div id="teacher-menu" class="card hidden">
-            <h1>Teacher Dashboard</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+                <h1>Teacher Dashboard</h1>
+                <div id="teacher-status-pill" class="status-pill status-verified">
+                    <span class="status-dot"></span> Authenticated Session
+                </div>
+            </div>
             <p style="text-align: center; color: var(--text-muted); margin-bottom: 30px;">Manage your quizzes and track
                 student progress with ease.</p>
             <div class="teacher-actions-grid">
@@ -50,6 +92,13 @@
                         <line x1="6" y1="20" x2="6" y2="14"></line>
                     </svg>
                     View Results
+                </button>
+                <button id="go-to-admin-panel" class="btn btn-warning action-btn hidden" onclick="loadAdminDashboard()" style="grid-column: 1 / -1;">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    Open System Administrator Dashboard
                 </button>
             </div>
         </div>
@@ -410,6 +459,90 @@
         </div>
 
         <!-- Modals -->
+        <!-- Teacher/Admin Authentication Modal -->
+        <div id="auth-modal" class="modal-overlay hidden"
+            style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3500;">
+            <div class="modal-content auth-modal-content" style="max-width: 460px; width: 92%;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="auth-icon-badge">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                        </div>
+                        <div>
+                            <h2 id="auth-modal-title" style="margin: 0; font-size: 1.4rem;">Teacher Portal</h2>
+                            <p style="margin: 0; font-size: 0.82rem; color: var(--text-muted);">Secure Authenticated Access</p>
+                        </div>
+                    </div>
+                    <button class="btn-close" onclick="closeAuthModal()" title="Close">&times;</button>
+                </div>
+
+                <!-- Auth Navigation Tabs -->
+                <div class="auth-tabs">
+                    <button id="auth-tab-login" class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+                    <button id="auth-tab-register" class="auth-tab" onclick="switchAuthTab('register')">Register</button>
+                    <button id="auth-tab-reset" class="auth-tab" onclick="switchAuthTab('reset')">Reset</button>
+                </div>
+
+                <!-- Auth Alert Message Box -->
+                <div id="auth-alert" class="auth-alert hidden"></div>
+
+                <!-- 1. Sign In Form -->
+                <form id="auth-login-form" onsubmit="handleAuthLogin(event)" style="margin-top: 18px;">
+                    <div class="form-group">
+                        <label for="auth-login-email">Teacher Email</label>
+                        <input type="email" id="auth-login-email" required placeholder="teacher@school.edu" autocomplete="username">
+                    </div>
+                    <div class="form-group">
+                        <label for="auth-login-password">Password</label>
+                        <input type="password" id="auth-login-password" required placeholder="••••••••" autocomplete="current-password">
+                    </div>
+                    <button type="submit" id="auth-login-submit-btn" class="btn btn-primary" style="width: 100%; margin-top: 10px; height: 48px;">
+                        Sign In to Teacher Dashboard
+                    </button>
+                    <div style="text-align: center; margin-top: 15px; font-size: 0.88rem;">
+                        <a href="javascript:void(0)" onclick="switchAuthTab('reset')" style="color: var(--primary); text-decoration: none;">Forgot your password?</a>
+                    </div>
+                </form>
+
+                <!-- 2. Registration Form -->
+                <form id="auth-register-form" onsubmit="handleAuthRegister(event)" class="hidden" style="margin-top: 18px;">
+                    <div class="form-group">
+                        <label for="auth-reg-name">Full Name</label>
+                        <input type="text" id="auth-reg-name" required placeholder="Prof. Jane Smith" autocomplete="name">
+                    </div>
+                    <div class="form-group">
+                        <label for="auth-reg-email">Teacher Email</label>
+                        <input type="email" id="auth-reg-email" required placeholder="teacher@school.edu" autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="auth-reg-password">Password</label>
+                        <input type="password" id="auth-reg-password" required minlength="6" placeholder="Min. 6 characters" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="auth-reg-confirm">Confirm Password</label>
+                        <input type="password" id="auth-reg-confirm" required minlength="6" placeholder="Re-enter password" autocomplete="new-password">
+                    </div>
+                    <button type="submit" id="auth-register-submit-btn" class="btn btn-success" style="width: 100%; margin-top: 10px; height: 48px;">
+                        Create Teacher Account
+                    </button>
+                </form>
+
+                <!-- 3. Password Reset Form -->
+                <form id="auth-reset-form" onsubmit="handleAuthReset(event)" class="hidden" style="margin-top: 18px;">
+                    <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 15px;">
+                        Enter your registered teacher email address. We'll send a secure password reset link to your inbox.
+                    </p>
+                    <div class="form-group">
+                        <label for="auth-reset-email">Registered Email</label>
+                        <input type="email" id="auth-reset-email" required placeholder="teacher@school.edu" autocomplete="email">
+                    </div>
+                    <button type="submit" id="auth-reset-submit-btn" class="btn btn-warning" style="width: 100%; margin-top: 10px; height: 48px;">
+                        Send Password Reset Link
+                    </button>
+                </form>
+            </div>
+        </div>
+
         <div id="confirmation-modal" class="modal-overlay hidden"
             style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
             <div class="modal-content">
