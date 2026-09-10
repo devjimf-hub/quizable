@@ -2608,7 +2608,7 @@ async function proceedWithQuizExecution(ctx) {
             document.getElementById('quiz-title-display').textContent = quizData.title;
 
             if (isRetake) {
-                showToast('Retake Session: A 2% deduction will be applied to your final score.', 'warning');
+                showToast('Retake Session: A 10% deduction will be applied to your final score.', 'warning');
             }
 
             displayQuestion(0);
@@ -2928,9 +2928,9 @@ function submitQuiz(auto = false) {
         const totalQuestions = quizData.questions.length;
         const rawPercentage = (rawScore / totalQuestions) * 100;
         const isRetake = !!quizData.student?.isRetake;
-        const penaltyPercent = isRetake ? 2 : 0;
+        const penaltyPercent = isRetake ? 10 : 0;
 
-        // Final percentage deducted by 2% if retake
+        // Final percentage deducted by 10% if retake
         const finalPercentage = Math.max(0, parseFloat((rawPercentage - penaltyPercent).toFixed(1)));
         // Final score (points) corresponding to final percentage
         const finalScore = parseFloat(((finalPercentage / 100) * totalQuestions).toFixed(2));
@@ -2975,7 +2975,7 @@ function submitQuiz(auto = false) {
             if (isRetake) {
                 penaltyNotice = `
                     <div style="margin-top:12px; padding:8px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; font-size:0.85rem; color:#991b1b; display:inline-block; line-height:1.4;">
-                        ⚠️ <strong>2% Retake Penalty Applied:</strong> Raw Score: ${rawScore}/${totalQuestions} (${parseFloat(rawPercentage.toFixed(1))}%) &rarr; Final: ${finalScore}/${totalQuestions} (${finalPercentage}%)
+                        ⚠️ <strong>10% Retake Penalty Applied:</strong> Raw Score: ${rawScore}/${totalQuestions} (${parseFloat(rawPercentage.toFixed(1))}%) &rarr; Final: ${finalScore}/${totalQuestions} (${finalPercentage}%)
                     </div>
                 `;
             }

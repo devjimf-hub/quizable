@@ -17,6 +17,8 @@
       "$quizId": {
         ".read": "auth != null",
         "$studentId": {
+          // Allow student to check their own prior submission status, or teacher management
+          ".read": true,
           // Allow student submission (initial or retake with reason), or teacher management
           ".write": true
         }
