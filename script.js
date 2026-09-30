@@ -1044,9 +1044,16 @@ async function showAdminSettingsModal(quizId, secretKey) {
         updateBtn.parentNode.replaceChild(newUpdateBtn, updateBtn);
 
         newUpdateBtn.onclick = async () => {
+            const expiryInput = document.getElementById('modal-modify-expiry').value;
+            let expiryTimestamp = 0;
+            if (expiryInput) {
+                const date = new Date(expiryInput);
+                const offset = date.getTimezoneOffset() * 60000;
+                expiryTimestamp = new Date(date.getTime() - offset).getTime();
+            }
             const newSettings = {
                 duration: parseInt(document.getElementById('modal-modify-duration').value) || 0,
-                expiry: document.getElementById('modal-modify-expiry').value ? new Date(document.getElementById('modal-modify-expiry').value).getTime() : 0,
+                expiry: expiryTimestamp,
                 sampleCount: parseInt(document.getElementById('modal-modify-sample-count').value) || 0,
                 showResultsToStudent: document.getElementById('modal-modify-show-results').checked,
                 showAnswerSummary: document.getElementById('modal-modify-show-answer-summary').checked
@@ -2079,7 +2086,12 @@ async function fetchAndDisplayResults(quizId, secretKey) {
 
             document.getElementById('update-quiz-settings-btn').onclick = () => {
                 const newDuration = parseFloat(document.getElementById('modify-quiz-duration').value) || 0;
-                const newExpiryStr = modifyExpiryInput.value;
+                let newExpiryStr = modifyExpiryInput.value;
+                if (newExpiryStr) {
+                    const date = new Date(newExpiryStr);
+                    const offset = date.getTimezoneOffset() * 60000;
+                    newExpiryStr = new Date(date.getTime() - offset).toISOString().slice(0, 16);
+                }
                 const showResults = document.getElementById('modify-show-results').checked;
                 const showAnswerSummaryVal = document.getElementById('modify-show-answer-summary').checked;
                 updateQuizSettings(quizId, secretKey, { duration: newDuration, expiry: newExpiryStr, showResultsToStudent: showResults, showAnswerSummary: showAnswerSummaryVal }, quizDetails);
