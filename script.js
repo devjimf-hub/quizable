@@ -269,6 +269,19 @@ function parseExpiryTimestamp(val) {
             const num = parseInt(trimmed, 10);
             return (!isNaN(num) && num > 0) ? num : null;
         }
+        // Match standard local ISO/datetime strings (YYYY-MM-DDTHH:mm or YYYY-MM-DD HH:mm)
+        const match = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+        if (match) {
+            const year = parseInt(match[1], 10);
+            const month = parseInt(match[2], 10) - 1;
+            const day = parseInt(match[3], 10);
+            const hour = parseInt(match[4], 10);
+            const minute = parseInt(match[5], 10);
+            const second = match[6] ? parseInt(match[6], 10) : 0;
+            const localDate = new Date(year, month, day, hour, minute, second);
+            const ts = localDate.getTime();
+            if (!isNaN(ts) && ts > 0) return ts;
+        }
         const parsed = new Date(trimmed).getTime();
         return (!isNaN(parsed) && parsed > 0) ? parsed : null;
     }
@@ -277,9 +290,22 @@ function parseExpiryTimestamp(val) {
 
 function parseExpiryInput(inputValue) {
     if (!inputValue || typeof inputValue !== 'string' || !inputValue.trim()) return null;
-    const date = new Date(inputValue.trim());
-    const ts = date.getTime();
-    return (isNaN(ts) || ts <= 0) ? null : ts;
+    const trimmed = inputValue.trim();
+    // Safely parse YYYY-MM-DDTHH:mm(:ss) for all mobile browsers (iOS Safari, Android Chrome, WebViews)
+    const match = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+    if (match) {
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1;
+        const day = parseInt(match[3], 10);
+        const hour = parseInt(match[4], 10);
+        const minute = parseInt(match[5], 10);
+        const second = match[6] ? parseInt(match[6], 10) : 0;
+        const localDate = new Date(year, month, day, hour, minute, second);
+        const ts = localDate.getTime();
+        return (isNaN(ts) || ts <= 0) ? null : ts;
+    }
+    const fallback = new Date(trimmed).getTime();
+    return (isNaN(fallback) || fallback <= 0) ? null : fallback;
 }
 
 function formatDateTimeLocal(timestampOrDateStr) {
@@ -2391,10 +2417,35 @@ function showInstructionModal(duration, onComplete) {
     }, 1000);
 }
 
+function fetchServerTimeOffset() {
+    return new Promise((resolve) => {
+        let done = false;
+        const timer = setTimeout(() => {
+            if (!done) {
+                done = true;
+                resolve(0);
+            }
+        }, 2000);
+
+        database.ref(".info/serverTimeOffset").once("value").then(snap => {
+            if (!done) {
+                done = true;
+                clearTimeout(timer);
+                resolve(snap.val() || 0);
+            }
+        }).catch(() => {
+            if (!done) {
+                done = true;
+                clearTimeout(timer);
+                resolve(0);
+            }
+        });
+    });
+}
+
 async function validateDeviceClock() {
     try {
-        const offsetSnap = await database.ref(".info/serverTimeOffset").once("value");
-        const offset = offsetSnap.val() || 0;
+        const offset = await fetchServerTimeOffset();
         // If offset is greater than 3 minutes (180,000ms), clock is skewed!
         if (Math.abs(offset) > 180000) {
             const minutesOff = (Math.abs(offset) / 60000).toFixed(1);
@@ -2413,8 +2464,8 @@ async function validateDeviceClock() {
 
 async function getServerTime() {
     try {
-        const offsetSnap = await database.ref(".info/serverTimeOffset").once("value");
-        return Date.now() + (offsetSnap.val() || 0);
+        const offset = await fetchServerTimeOffset();
+        return Date.now() + offset;
     } catch {
         return Date.now();
     }
