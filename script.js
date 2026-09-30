@@ -254,6 +254,49 @@ function escapeHtml(text) {
         .replace(/'/g, '&#039;');
 }
 
+// --- DATE & EXPIRY HELPER UTILITIES ---
+function parseExpiryTimestamp(val) {
+    if (val === null || val === undefined || val === '' || val === 0 || val === false) {
+        return null;
+    }
+    if (typeof val === 'number') {
+        return (!isNaN(val) && val > 0) ? val : null;
+    }
+    if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed || trimmed === '0' || trimmed === 'null' || trimmed === 'undefined') return null;
+        if (/^\d+$/.test(trimmed)) {
+            const num = parseInt(trimmed, 10);
+            return (!isNaN(num) && num > 0) ? num : null;
+        }
+        const parsed = new Date(trimmed).getTime();
+        return (!isNaN(parsed) && parsed > 0) ? parsed : null;
+    }
+    return null;
+}
+
+function parseExpiryInput(inputValue) {
+    if (!inputValue || typeof inputValue !== 'string' || !inputValue.trim()) return null;
+    const date = new Date(inputValue.trim());
+    const ts = date.getTime();
+    return (isNaN(ts) || ts <= 0) ? null : ts;
+}
+
+function formatDateTimeLocal(timestampOrDateStr) {
+    if (!timestampOrDateStr) return '';
+    const ts = parseExpiryTimestamp(timestampOrDateStr);
+    if (!ts) return '';
+    const date = new Date(ts);
+    if (isNaN(date.getTime())) return '';
+    const pad = n => String(n).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const mm = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
 function showLoading() {
     document.getElementById('loading-overlay').classList.remove('hidden');
 }
@@ -1023,13 +1066,7 @@ async function showAdminSettingsModal(quizId, secretKey) {
         document.getElementById('modal-modify-duration').value = quiz.duration || 0;
         document.getElementById('modal-modify-sample-count').value = quiz.sampleCount || 0;
 
-        if (quiz.expiry) {
-            const date = new Date(quiz.expiry);
-            const localISODate = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-            document.getElementById('modal-modify-expiry').value = localISODate;
-        } else {
-            document.getElementById('modal-modify-expiry').value = '';
-        }
+        document.getElementById('modal-modify-expiry').value = formatDateTimeLocal(quiz.expiry);
 
         document.getElementById('modal-modify-show-results').checked = quiz.showResultsToStudent !== false;
         document.getElementById('modal-modify-show-answer-summary').checked = quiz.showAnswerSummary !== false;
@@ -1045,15 +1082,9 @@ async function showAdminSettingsModal(quizId, secretKey) {
 
         newUpdateBtn.onclick = async () => {
             const expiryInput = document.getElementById('modal-modify-expiry').value;
-            let expiryTimestamp = 0;
-            if (expiryInput) {
-                const date = new Date(expiryInput);
-                const offset = date.getTimezoneOffset() * 60000;
-                expiryTimestamp = new Date(date.getTime() - offset).getTime();
-            }
             const newSettings = {
                 duration: parseInt(document.getElementById('modal-modify-duration').value) || 0,
-                expiry: expiryTimestamp,
+                expiry: parseExpiryInput(expiryInput),
                 sampleCount: parseInt(document.getElementById('modal-modify-sample-count').value) || 0,
                 showResultsToStudent: document.getElementById('modal-modify-show-results').checked,
                 showAnswerSummary: document.getElementById('modal-modify-show-answer-summary').checked
@@ -1852,7 +1883,7 @@ function generateEncryptedFile() {
         title: quizTitle,
         subject: quizSubject,
         duration: quizDuration,
-        expiry: quizExpiry ? new Date(quizExpiry).getTime() : null,
+        expiry: parseExpiryInput(quizExpiry),
         sampleCount: sampleQuestionCount,
         instructionCountdown: instructionCountdownDuration,
         showResultsToStudent, showAnswerSummary, saveResultsToCloud, randomizeOrder,
@@ -2072,29 +2103,17 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             document.getElementById('modify-show-results').checked = quizDetails.showResultsToStudent !== false;
             document.getElementById('modify-show-answer-summary').checked = quizDetails.showAnswerSummary !== false;
 
-            if (quizDetails.expiry) {
-                const date = new Date(quizDetails.expiry);
-                const offset = date.getTimezoneOffset() * 60000;
-                const localISOTime = new Date(date.getTime() - offset).toISOString().slice(0, 16);
-                modifyExpiryInput.value = localISOTime;
-            } else {
-                modifyExpiryInput.value = '';
-            }
+            modifyExpiryInput.value = formatDateTimeLocal(quizDetails.expiry);
 
             // Requirement 2: Save to history if not already there
             saveTeacherHistory(quizDetails.title, quizId, secretKey);
 
             document.getElementById('update-quiz-settings-btn').onclick = () => {
                 const newDuration = parseFloat(document.getElementById('modify-quiz-duration').value) || 0;
-                let newExpiryStr = modifyExpiryInput.value;
-                if (newExpiryStr) {
-                    const date = new Date(newExpiryStr);
-                    const offset = date.getTimezoneOffset() * 60000;
-                    newExpiryStr = new Date(date.getTime() - offset).toISOString().slice(0, 16);
-                }
+                const newExpiry = parseExpiryInput(modifyExpiryInput.value);
                 const showResults = document.getElementById('modify-show-results').checked;
                 const showAnswerSummaryVal = document.getElementById('modify-show-answer-summary').checked;
-                updateQuizSettings(quizId, secretKey, { duration: newDuration, expiry: newExpiryStr, showResultsToStudent: showResults, showAnswerSummary: showAnswerSummaryVal }, quizDetails);
+                updateQuizSettings(quizId, secretKey, { duration: newDuration, expiry: newExpiry, showResultsToStudent: showResults, showAnswerSummary: showAnswerSummaryVal }, quizDetails);
             };
         }
     } catch (e) {
@@ -2222,7 +2241,7 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
         // Update the fields in the quiz object
         if (newSettings.hasOwnProperty('duration')) currentQuizData.duration = newSettings.duration;
         if (newSettings.hasOwnProperty('expiry')) {
-            currentQuizData.expiry = newSettings.expiry ? new Date(newSettings.expiry).getTime() : null;
+            currentQuizData.expiry = parseExpiryTimestamp(newSettings.expiry);
         }
         if (newSettings.hasOwnProperty('sampleCount')) {
             currentQuizData.sampleCount = newSettings.sampleCount;
@@ -2529,8 +2548,9 @@ async function proceedWithQuizExecution(ctx) {
         quizData = JSON.parse(decrypted);
 
         const serverTime = await getServerTime();
+        const quizExpiry = parseExpiryTimestamp(quizData.expiry);
         // Strict Check: active or expired?
-        if (quizData.expiry && serverTime > quizData.expiry) {
+        if (quizExpiry && serverTime > quizExpiry) {
             hideLoading();
             alert('This quiz has expired and is no longer accepting submissions.');
             return;
@@ -2625,8 +2645,9 @@ async function proceedWithQuizExecution(ctx) {
 
             displayQuestion(0);
 
-            if (quizData.duration > 0 || quizData.expiry) {
-                startQuizTimer(quizData.duration, quizData.expiry, quizStartTime);
+            const quizExpiryTs = parseExpiryTimestamp(quizData.expiry);
+            if (quizData.duration > 0 || quizExpiryTs) {
+                startQuizTimer(quizData.duration, quizExpiryTs, quizStartTime);
             }
 
             // Forensic Watermarking
@@ -2750,7 +2771,7 @@ function startQuizTimer(mins, expiry, startTime) {
     timerDisplay.classList.remove('hidden');
 
     const durationMs = mins > 0 ? mins * 60000 : 0;
-    const expiryTimestamp = (expiry && expiry > 0) ? expiry : null;
+    const expiryTimestamp = parseExpiryTimestamp(expiry);
 
     let targetEndTime = 0;
     if (durationMs > 0 && expiryTimestamp) {
