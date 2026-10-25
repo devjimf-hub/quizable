@@ -5,22 +5,25 @@
       ".read": "auth != null",
       "$quizId": {
         // Anyone with the Quiz ID can read encrypted quiz data
-        // (decryption requires the teacher-provided secret key)
+        // (decryption requires the secret key)
         ".read": true,
-        // Only authenticated teachers/admins can create or update a quiz
-        ".write": "auth != null"
+        // Only the teacher who created the quiz (creatorUid) can update or delete it
+        ".write": "auth != null && (!data.exists() || data.child('creatorUid').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['encryptedQuizData']) && newData.child('encryptedQuizData').isString() && newData.child('encryptedQuizData').val().length < 1000000"
       }
     },
     "results": {
-      // Authenticated teachers/admins can fetch results
+      // Authenticated teachers/admins can fetch all results
       ".read": "auth != null",
       "$quizId": {
         ".read": "auth != null",
         "$studentId": {
           // Allow student to check their own prior submission status, or teacher management
           ".read": true,
-          // Allow student submission (initial or retake with reason), or teacher management
-          ".write": true
+          // Allow first submission freely (!data.exists()), but prevent overwriting existing submissions
+          // unless the user is an authenticated teacher/admin (auth != null)
+          ".write": "!data.exists() || auth != null",
+          ".validate": "newData.isString() && newData.val().length < 200000"
         }
       }
     },
@@ -34,7 +37,12 @@
     "admin": {
       // Admin metadata is strictly restricted to authenticated users
       ".read": "auth != null",
-      ".write": "auth != null"
+      "quizzes": {
+        "$quizId": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
     }
   }
 }

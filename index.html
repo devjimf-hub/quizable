@@ -436,12 +436,12 @@
 
         <!-- Quiz Interface -->
         <div id="quiz-section" class="card hidden">
-            <div id="timer-display" class="timer-display hidden">
+            <div id="timer-display" class="timer-display hidden" role="timer" aria-live="polite">
                 <span>⏱️</span> Time Left: 00:00
             </div>
             <h2 id="quiz-title-display" style="text-align: center; margin-bottom: 20px;">Quiz</h2>
             <div class="progress-bar">
-                <div class="progress" id="quiz-progress"></div>
+                <div class="progress" id="quiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
             </div>
             <div id="quiz-questions"></div>
             <div id="quiz-review" class="hidden"></div>
@@ -464,13 +464,13 @@
         </div>
 
         <!-- Proctoring System -->
-        <div id="tab-warning" class="tab-warning hidden">
+        <div id="tab-warning" class="tab-warning hidden" role="alert" aria-live="assertive">
             <div style="font-size: 4rem; margin-bottom: 20px;">⚠️</div>
             <h2>Tab Switch Detected</h2>
             <p style="max-width: 400px; margin-bottom: 30px;">You are not allowed to leave this window during the quiz.
                 This attempt has been logged.</p>
             <div style="font-size: 1.2rem; font-weight: 700; color: var(--danger); margin-bottom: 30px;">
-                Attempts remaining: <span id="remaining-attempts">3</span>
+                Attempts remaining: <span id="remaining-attempts">5</span>
             </div>
             <button id="return-to-quiz" class="btn btn-primary">I Understand, Return to Quiz</button>
         </div>
@@ -478,13 +478,13 @@
         <div id="attempts-widget" class="attempts-widget hidden">
             <div class="widget-content">
                 <span id="attempts-number" class="widget-number">0</span>
-                <span id="attempts-text" class="widget-text">attempts to cheat, you will get disqualified on 3</span>
+                <span id="attempts-text" class="widget-text">attempts to cheat, you will get disqualified on 5</span>
             </div>
         </div>
 
         <!-- Modals -->
         <!-- Teacher/Admin Authentication Modal -->
-        <div id="auth-modal" class="modal-overlay hidden"
+        <div id="auth-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title"
             style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3500;">
             <div class="modal-content auth-modal-content" style="max-width: 460px; width: 92%;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -567,7 +567,7 @@
             </div>
         </div>
 
-        <div id="confirmation-modal" class="modal-overlay hidden"
+        <div id="confirmation-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title"
             style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
             <div class="modal-content">
                 <h2 id="modal-title">Confirm</h2>
@@ -579,7 +579,7 @@
             </div>
         </div>
 
-        <div id="quiz-created-modal" class="modal-overlay hidden"
+        <div id="quiz-created-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
             style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
             <div class="modal-content" style="max-width: 500px; text-align: center;">
                 <h2>Quiz Created!</h2>
@@ -617,7 +617,7 @@
             </div>
         </div>
 
-        <div id="instruction-modal" class="modal-overlay hidden"
+        <div id="instruction-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
             style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
             <div class="modal-content" style="max-width: 500px;">
                 <h2>Quiz Instructions</h2>
@@ -636,7 +636,7 @@
         </div>
 
         <!-- Admin Settings Modal -->
-        <div id="admin-settings-modal" class="modal-overlay hidden"
+        <div id="admin-settings-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title"
             style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 4000;">
             <div class="modal-content" style="max-width: 600px; width: 95%;">
                 <h2 id="settings-modal-title">Edit Quiz Settings</h2>
@@ -678,7 +678,7 @@
         </div>
 
         <!-- Retake Permission Request Modal -->
-        <div id="retake-modal" class="modal-overlay hidden"
+        <div id="retake-modal" class="modal-overlay hidden" role="dialog" aria-modal="true"
             style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3600;">
             <div class="modal-content" style="max-width: 480px; width: 92%;">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px;">
@@ -719,7 +719,7 @@
 
         <!-- Logic -->
         <div id="quiz-navigator" class="quiz-navigator hidden"></div>
-        <div id="toast-container" class="toast-container"></div>
+        <div id="toast-container" class="toast-container" role="region" aria-live="polite"></div>
         <script src="script.js?v=2.1"></script>
 </body>
 

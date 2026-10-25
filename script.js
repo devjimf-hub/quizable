@@ -24,7 +24,7 @@ let studentAnswers = [];
 let focusLostCount = 0;
 let isQuizActive = false;
 let isHandlingFocusLoss = false; // Flag to prevent double counting
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 5;
 let timerInterval = null;
 let devToolsInterval = null; // For DevTools detection
 let allStudentResults = []; // To store all results for a quiz
@@ -46,7 +46,7 @@ function isAdminUser(user) {
     const email = user.email.toLowerCase().trim();
     // If ADMIN_EMAILS has entries, enforce strict whitelist check.
     if (ADMIN_EMAILS.length > 0) {
-        return ADMIN_EMAILS.includes(email);
+        return ADMIN_EMAILS.map(e => e.toLowerCase().trim()).includes(email);
     }
     // If not yet configured with specific emails, allow logged-in teachers
     return true;
@@ -252,6 +252,34 @@ function escapeHtml(text) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function sanitizeFigure(figureHtml) {
+    if (!figureHtml) return '';
+    try {
+        const temp = document.createElement('div');
+        temp.innerHTML = figureHtml;
+        const dangerousTags = ['script', 'iframe', 'object', 'embed', 'form', 'link', 'style', 'base', 'meta'];
+        dangerousTags.forEach(tag => {
+            temp.querySelectorAll(tag).forEach(el => el.remove());
+        });
+        temp.querySelectorAll('*').forEach(el => {
+            Array.from(el.attributes).forEach(attr => {
+                if (/^on/i.test(attr.name)) {
+                    el.removeAttribute(attr.name);
+                }
+                if (/^(href|src|xlink:href)$/i.test(attr.name)) {
+                    const val = attr.value.trim().toLowerCase();
+                    if (val.startsWith('javascript:') || val.startsWith('data:text/html')) {
+                        el.removeAttribute(attr.name);
+                    }
+                }
+            });
+        });
+        return temp.innerHTML;
+    } catch (e) {
+        return '';
+    }
 }
 
 // --- DATE & EXPIRY HELPER UTILITIES ---
@@ -526,8 +554,9 @@ async function loadAdminDashboard() {
         const decryptedMetaPromises = allQuizIds.map(async (id) => {
             if (adminMetadata[id]) {
                 try {
-                    // Transparently decrypt the admin metadata
-                    const decrypted = await systemDecrypt(adminMetadata[id].data);
+                    // Transparently decrypt the admin metadata with creator UID fallback
+                    const creatorUid = masterQuizzes[id]?.creatorUid;
+                    const decrypted = await systemDecrypt(adminMetadata[id].data, creatorUid);
                     const meta = JSON.parse(decrypted);
                     return { id, ...meta };
                 } catch (e) {
@@ -687,22 +716,22 @@ function renderAdminDashboard(grouped) {
 
 function renderAdminQuizItem(q) {
     return `
-        <div class="admin-quiz-item" id="admin-quiz-${q.id}">
+        <div class="admin-quiz-item" id="admin-quiz-${escapeHtml(q.id)}">
             <div class="admin-quiz-header">
                 <div>
-                    <h3 style="margin-bottom:4px;">${q.title}</h3>
+                    <h3 style="margin-bottom:4px;">${escapeHtml(q.title)}</h3>
                     <div style="font-size:0.8rem; color:var(--text-muted);">
-                        ID: ${q.id} | Key: ${q.secretKey} 
+                        ID: ${escapeHtml(q.id)} | Key: ${escapeHtml(q.secretKey)} 
                         ${q.createdAt ? `| ${new Date(q.createdAt).toLocaleDateString()}` : ''}
                     </div>
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <button class="btn btn-info btn-sm" onclick="loadAdminQuizResults('${q.id}', '${q.secretKey}')">Results</button>
-                    <button class="btn btn-warning btn-sm" onclick="showAdminSettingsModal('${q.id}', '${q.secretKey}')">Settings</button>
-                    <button class="btn btn-outline btn-sm" onclick="deleteQuizAdmin('${q.id}')" style="color:var(--danger)">Delete</button>
+                    <button class="btn btn-info btn-sm" onclick="loadAdminQuizResults('${escapeHtml(q.id)}', '${escapeHtml(q.secretKey)}')">Results</button>
+                    <button class="btn btn-warning btn-sm" onclick="showAdminSettingsModal('${escapeHtml(q.id)}', '${escapeHtml(q.secretKey)}')">Settings</button>
+                    <button class="btn btn-outline btn-sm" onclick="deleteQuizAdmin('${escapeHtml(q.id)}')" style="color:var(--danger)">Delete</button>
                 </div>
             </div>
-            <div id="admin-results-${q.id}" class="hidden">
+            <div id="admin-results-${escapeHtml(q.id)}" class="hidden">
                 <div class="loader-spinner" style="width: 25px; height: 25px; border-width: 3px;"></div>
             </div>
         </div>
@@ -747,10 +776,10 @@ async function loadAdminQuizResults(quizId, secretKey) {
 
         container.innerHTML = `
             <div style="display:flex; justify-content:flex-end; gap:8px; padding:8px 4px;">
-                <button class="btn btn-primary btn-sm" onclick="exportAdminQuizResultsPdf('${quizId}', '${secretKey}')">
+                <button class="btn btn-primary btn-sm" onclick="exportAdminQuizResultsPdf('${escapeHtml(quizId)}', '${escapeHtml(secretKey)}')">
                     Export PDF
                 </button>
-                <button class="btn btn-info btn-sm" onclick="exportAdminQuizResultsExcel('${quizId}', '${secretKey}')">
+                <button class="btn btn-info btn-sm" onclick="exportAdminQuizResultsExcel('${escapeHtml(quizId)}', '${escapeHtml(secretKey)}')">
                     Export Excel
                 </button>
             </div>
@@ -769,8 +798,8 @@ async function loadAdminQuizResults(quizId, secretKey) {
                     ${validResults.map((res, i) => `
                         <tr>
                             <td style="color:var(--text-muted);">${i + 1}</td>
-                            <td style="font-weight:600;">${res.student.lastName}, ${res.student.firstName}</td>
-                            <td style="font-weight:700; color:var(--primary);">${res.score}/${res.totalQuestions}</td>
+                            <td style="font-weight:600;">${escapeHtml(res.student?.lastName || '')}, ${escapeHtml(res.student?.firstName || '')}</td>
+                            <td style="font-weight:700; color:var(--primary);">${escapeHtml(res.score)}/${escapeHtml(res.totalQuestions)}</td>
                             <td>${res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A'}</td>
                             <td style="color:${res.securityViolations > 0 ? 'var(--danger)' : 'inherit'}">${res.securityViolations || 0}</td>
                             <td style="font-size:0.75rem; color:var(--text-muted);">${new Date(res.submittedAt).toLocaleString()}</td>
@@ -789,10 +818,16 @@ async function deleteQuizAdmin(quizId) {
 
     showLoading();
     try {
+        const quizSnap = await database.ref(`quizzes/${quizId}`).once('value');
+        const creatorUid = quizSnap.val()?.creatorUid;
+
         const updates = {};
         updates[`quizzes/${quizId}`] = null;
         updates[`results/${quizId}`] = null;
         updates[`admin/quizzes/${quizId}`] = null;
+        if (creatorUid) {
+            updates[`teachers/${creatorUid}/quizzes/${quizId}`] = null;
+        }
 
         await database.ref().update(updates);
 
@@ -836,6 +871,16 @@ function groupQuizzesBySubject(list) {
     }, {});
 }
 
+function formatCsvCell(val) {
+    if (val === null || val === undefined) return '""';
+    let str = String(val).trim();
+    // Neutralize formula injection in spreadsheets (=, +, -, @)
+    if (/^[=+@\-]/.test(str)) {
+        str = "'" + str;
+    }
+    return `"${str.replace(/"/g, '""')}"`;
+}
+
 async function exportAllSubmissionsCsv() {
     showLoading();
     try {
@@ -865,9 +910,9 @@ async function exportAllSubmissionsCsv() {
                         quizId,
                         res.quizTitle || 'N/A',
                         res.subject || 'N/A',
-                        `${res.student.lastName}, ${res.student.firstName}`,
-                        res.student.institutionalId || 'N/A',
-                        res.student.section || 'N/A',
+                        `${res.student?.lastName || ''}, ${res.student?.firstName || ''}`,
+                        res.student?.institutionalId || 'N/A',
+                        res.student?.section || 'N/A',
                         res.score,
                         res.totalQuestions,
                         res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) : '0',
@@ -886,7 +931,7 @@ async function exportAllSubmissionsCsv() {
             return;
         }
 
-        const csvContent = csvRows.map(row => row.join(',')).join('\n');
+        const csvContent = csvRows.map(row => row.map(formatCsvCell).join(',')).join('\r\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -1136,18 +1181,20 @@ function checkAutoLogin() {
             const session = JSON.parse(activeSession);
             // Check if session is recent (e.g., less than 4 hours)
             if (Date.now() - session.timestamp < 14400000) {
-                console.log("Found active session, auto-logging in...");
-
                 // Populate fields
-                document.getElementById('student-quiz-id').value = session.quizId;
-                document.getElementById('student-first-name').value = session.firstName;
-                document.getElementById('student-last-name').value = session.lastName;
-                document.getElementById('student-year').value = session.yearVal || '1'; // Default backup
-                document.getElementById('student-section-select').value = session.sectionVal || 'A';
-                document.getElementById('student-secret-key').value = session.secretKey;
+                if (session.quizId) document.getElementById('student-quiz-id').value = session.quizId;
+                if (session.firstName) document.getElementById('student-first-name').value = session.firstName;
+                if (session.lastName) document.getElementById('student-last-name').value = session.lastName;
+                if (session.studentInstitutionalId) document.getElementById('student-id-field').value = session.studentInstitutionalId;
+                if (session.yearVal) document.getElementById('student-year').value = session.yearVal;
+                if (session.sectionVal) document.getElementById('student-section-select').value = session.sectionVal;
+                if (session.secretKey) document.getElementById('student-secret-key').value = session.secretKey;
 
-                // Trigger Start
-                startQuiz();
+                // Only auto-trigger if all mandatory fields are present
+                if (session.quizId && session.firstName && session.lastName && session.studentInstitutionalId && session.secretKey) {
+                    showToast('Resuming previous quiz session...', 'info');
+                    startQuiz();
+                }
             }
         } catch (e) {
             console.error("Auto-login failed:", e);
@@ -1300,15 +1347,21 @@ function openTeacherQuizResults(id, key) {
 }
 
 async function deleteTeacherQuiz(id) {
-    if (!confirm('Are you sure you want to remove this quiz from your dashboard?')) return;
+    const choice = confirm('Do you want to permanently delete this quiz and all student results from the cloud?\n\n- Click OK to delete permanently from the database.\n- Click Cancel to abort.');
+    if (!choice) return;
     showLoading();
     try {
         if (auth.currentUser) {
-            await database.ref(`teachers/${auth.currentUser.uid}/quizzes/${id}`).remove();
+            const updates = {};
+            updates[`teachers/${auth.currentUser.uid}/quizzes/${id}`] = null;
+            updates[`quizzes/${id}`] = null;
+            updates[`results/${id}`] = null;
+            updates[`admin/quizzes/${id}`] = null;
+            await database.ref().update(updates);
         }
         deleteFromHistory(id);
         await loadTeacherDashboardQuizzes();
-        showToast('Quiz removed from your dashboard.', 'info');
+        showToast('Quiz and associated cloud data deleted.', 'info');
     } catch (e) {
         showToast('Error removing quiz: ' + e.message, 'error');
     }
@@ -1548,6 +1601,15 @@ function handleVisibilityChange() {
     if (document.hidden && isQuizActive) handleFocusLoss();
 }
 
+function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+const debouncedSaveDraft = debounce((...args) => saveDraft(...args), 400);
+
 function addQuestion(questionData = null) {
     const questionsContainer = document.getElementById('questions-container');
     const questionIndex = questionsContainer.children.length;
@@ -1675,7 +1737,7 @@ function addQuestion(questionData = null) {
 
     const refreshEditorFigure = () => {
         const val = figureInput.value.trim();
-        figurePreview.innerHTML = val || '<small style="color:var(--text-muted)">Figure Preview</small>';
+        figurePreview.innerHTML = sanitizeFigure(val) || '<small style="color:var(--text-muted)">Figure Preview</small>';
     };
 
     // Initial load
@@ -1685,7 +1747,7 @@ function addQuestion(questionData = null) {
     questionDiv.addEventListener('input', (e) => {
         if (e.target.classList.contains('question-figure')) refreshEditorFigure();
         if (previewContainer.classList.contains('active')) updateLivePreview(questionDiv);
-        saveDraft();
+        debouncedSaveDraft();
     });
 
     updateQuestionNumbers();
@@ -1730,8 +1792,8 @@ function addOptionInput(container, value = '', isCorrect = false) {
         }
     });
 
-    // Save draft on every keystroke
-    div.querySelector('.option-val').addEventListener('input', saveDraft);
+    // Save draft on keystroke with debounce
+    div.querySelector('.option-val').addEventListener('input', debouncedSaveDraft);
 }
 
 function updateOptionIndices(container) {
@@ -1750,7 +1812,7 @@ function updateLivePreview(card) {
 
     previewContent.innerHTML = `
         <p style="font-size:1.1rem; margin-bottom:15px; white-space: pre-wrap; word-break: break-word;">${text ? escapeHtml(text) : '<i style="color:var(--text-muted)">No question text...</i>'}</p>
-        ${figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${figure}</div>` : ''}
+        ${figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${sanitizeFigure(figure)}</div>` : ''}
         <div class="quiz-options">
             ${options.map((opt, i) => `
                 <div class="quiz-option" style="cursor:default; white-space: pre-wrap; word-break: break-word;">${opt ? escapeHtml(opt) : '<i style="color:var(--text-muted)">Empty option...</i>'}</div>
@@ -1828,12 +1890,21 @@ function generateWatermark(firstName, lastName, section, studentId) {
     document.getElementById('quiz-watermark-dynamic').style.backgroundImage = `url(${dynamicLayer})`;
 }
 
+let isClearingClipboard = false;
+
 function clearClipboard() {
     try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(' ').catch(() => { });
+            isClearingClipboard = true;
+            navigator.clipboard.writeText(' ')
+                .catch(() => { })
+                .finally(() => {
+                    setTimeout(() => { isClearingClipboard = false; }, 300);
+                });
         }
-    } catch (e) { }
+    } catch (e) {
+        isClearingClipboard = false;
+    }
 }
 
 // Handle Ctrl+P
@@ -2134,13 +2205,29 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             // Requirement 2: Save to history if not already there
             saveTeacherHistory(quizDetails.title, quizId, secretKey);
 
-            document.getElementById('update-quiz-settings-btn').onclick = () => {
-                const newDuration = parseFloat(document.getElementById('modify-quiz-duration').value) || 0;
-                const newExpiry = parseExpiryInput(modifyExpiryInput.value);
-                const showResults = document.getElementById('modify-show-results').checked;
-                const showAnswerSummaryVal = document.getElementById('modify-show-answer-summary').checked;
-                updateQuizSettings(quizId, secretKey, { duration: newDuration, expiry: newExpiry, showResultsToStudent: showResults, showAnswerSummary: showAnswerSummaryVal }, quizDetails);
-            };
+            const isOwner = !quizDataEnc.creatorUid || (auth.currentUser && auth.currentUser.uid === quizDataEnc.creatorUid);
+            const updateBtn = document.getElementById('update-quiz-settings-btn');
+            if (updateBtn) {
+                if (!isOwner) {
+                    updateBtn.disabled = true;
+                    updateBtn.title = "Only the creator of this quiz can modify settings.";
+                } else {
+                    updateBtn.disabled = false;
+                    updateBtn.title = "";
+                }
+
+                updateBtn.onclick = () => {
+                    if (!isOwner) {
+                        alert("Permission Denied: Only the creator of this quiz can modify settings.");
+                        return;
+                    }
+                    const newDuration = parseFloat(document.getElementById('modify-quiz-duration').value) || 0;
+                    const newExpiry = parseExpiryInput(modifyExpiryInput.value);
+                    const showResults = document.getElementById('modify-show-results').checked;
+                    const showAnswerSummaryVal = document.getElementById('modify-show-answer-summary').checked;
+                    updateQuizSettings(quizId, secretKey, { duration: newDuration, expiry: newExpiry, showResultsToStudent: showResults, showAnswerSummary: showAnswerSummaryVal }, quizDetails);
+                };
+            }
         }
     } catch (e) {
         console.warn("Could not fetch quiz details for management:", e);
@@ -2227,11 +2314,11 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                     <div class="student-result-card" style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--border);">
                         <div>
                             <div style="font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                                ${res.student.lastName}, ${res.student.firstName}
+                                ${escapeHtml(res.student?.lastName || '')}, ${escapeHtml(res.student?.firstName || '')}
                                 ${res.isRetake ? `<span style="font-size:0.7rem; background:#fef3c7; color:#92400e; padding:2px 7px; border-radius:4px; font-weight:600; border:1px solid #fde68a;">🔄 Retake</span>` : ''}
                             </div>
                             <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">
-                                ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}
+                                ID: ${escapeHtml(res.student?.institutionalId || 'N/A')} | Section: ${escapeHtml(res.student?.section || 'N/A')}
                             </div>
                             ${res.isRetake && res.retakeReason ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px; background:#fffbeb; padding:3px 8px; border-radius:4px; display:inline-block; border-left:3px solid #f59e0b;"><strong>Reason:</strong> <em>${escapeHtml(res.retakeReason)}</em></div>` : ''}
                             ${res.securityViolations > 0 ? `<div style="font-size:0.7rem; color:var(--danger); font-weight:700; margin-top:4px;">⚠️ ${res.securityViolations} Security Violations</div>` : ''}
@@ -2260,6 +2347,10 @@ async function fetchAndDisplayResults(quizId, secretKey) {
 }
 
 async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizData) {
+    if (!auth.currentUser) {
+        alert('You must be logged in as the quiz creator to update quiz settings.');
+        return;
+    }
     if (!confirm('Are you sure you want to update the quiz settings?')) return;
 
     showLoading();
@@ -2358,47 +2449,64 @@ function exportResultsToPdf() {
     });
 
     // Detailed Individual Reports (Optional - keeping existing logic)
-    processedStudentResults.forEach(res => {
-        doc.addPage();
-        doc.setFontSize(18);
-        doc.setTextColor(16, 185, 129);
-        doc.text(`Individual Detail: ${res.student.lastName}, ${res.student.firstName}`, 14, 20);
+    let includeDetails = true;
+    if (processedStudentResults.length > 25) {
+        includeDetails = confirm(
+            `This class has ${processedStudentResults.length} students. Generating individual test breakdown pages for all students may take significant memory and time.\n\nClick OK to include full breakdown pages, or Cancel to generate a high-speed Summary Report (Class Analytics & Student Performance List only).`
+        );
+    }
 
-        doc.setFontSize(11);
-        doc.setTextColor(100, 116, 139);
-        doc.text(`Institutional ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}`, 14, 28);
-        const duration = res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A';
-        doc.text(`Final Score: ${res.score}/${res.totalQuestions} (${((res.score / res.totalQuestions) * 100).toFixed(1)}%) | Duration: ${duration}`, 14, 35);
+    if (includeDetails) {
+        processedStudentResults.forEach(res => {
+            doc.addPage();
+            doc.setFontSize(18);
+            doc.setTextColor(16, 185, 129);
+            doc.text(`Individual Detail: ${res.student.lastName}, ${res.student.firstName}`, 14, 20);
 
-        doc.autoTable({
-            head: [['#', 'Question', 'Student Answer', 'Correct Answer', 'Result']],
-            body: res.detailedAnswers.map((a, i) => [
-                i + 1,
-                a.questionText,
-                a.studentAnswerText,
-                a.correctAnswerText,
-                a.isCorrect ? 'Correct' : 'Incorrect'
-            ]),
-            startY: 42,
-            headStyles: { fillColor: [15, 118, 110] }
+            doc.setFontSize(11);
+            doc.setTextColor(100, 116, 139);
+            doc.text(`Institutional ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}`, 14, 28);
+            const duration = res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A';
+            doc.text(`Final Score: ${res.score}/${res.totalQuestions} (${((res.score / res.totalQuestions) * 100).toFixed(1)}%) | Duration: ${duration}`, 14, 35);
+
+            doc.autoTable({
+                head: [['#', 'Question', 'Student Answer', 'Correct Answer', 'Result']],
+                body: res.detailedAnswers.map((a, i) => [
+                    i + 1,
+                    a.questionText,
+                    a.studentAnswerText,
+                    a.correctAnswerText,
+                    a.isCorrect ? 'Correct' : 'Incorrect'
+                ]),
+                startY: 42,
+                headStyles: { fillColor: [15, 118, 110] }
+            });
         });
-    });
+    }
 
     doc.save(`${res0.quizTitle}_Full_Report_${new Date().toISOString().split('T')[0]}.pdf`);
 }
 
 function shuffleQuiz(quiz) {
+    if (!quiz || !Array.isArray(quiz.questions)) return;
     for (let i = quiz.questions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [quiz.questions[i], quiz.questions[j]] = [quiz.questions[j], quiz.questions[i]];
     }
     quiz.questions.forEach(q => {
-        const correctText = q.options[q.correctAnswer];
-        for (let i = q.options.length - 1; i > 0; i--) {
+        if (!Array.isArray(q.options)) return;
+        const originalCorrectIndex = q.correctAnswer;
+        const mappedOptions = q.options.map((opt, idx) => ({
+            text: opt,
+            isCorrect: idx === originalCorrectIndex
+        }));
+        for (let i = mappedOptions.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [q.options[i], q.options[j]] = [q.options[j], q.options[i]];
+            [mappedOptions[i], mappedOptions[j]] = [mappedOptions[j], mappedOptions[i]];
         }
-        q.correctAnswer = q.options.indexOf(correctText);
+        q.options = mappedOptions.map(o => o.text);
+        const newCorrectIndex = mappedOptions.findIndex(o => o.isCorrect);
+        q.correctAnswer = newCorrectIndex !== -1 ? newCorrectIndex : 0;
     });
 }
 
@@ -2550,9 +2658,11 @@ async function startQuiz() {
         return;
     }
 
-    const studentId = `${lastName}_${firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
+    const sanitizedInstId = studentInstitutionalId.replace(/[^a-zA-Z0-9_-]/g, '');
+    const sanitizedName = `${lastName}_${firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
+    const studentId = `${sanitizedInstId}_${sanitizedName}`.replace(/^[_-]+|[_-]+$/g, '') || `student_${Date.now()}`;
     const context = {
-        quizId, firstName, lastName, studentInstitutionalId, section, secretKey, studentId,
+        quizId, firstName, lastName, studentInstitutionalId, yearVal, sectionVal, section, secretKey, studentId,
         isRetake: false, retakeReason: ''
     };
 
@@ -2584,7 +2694,7 @@ async function startQuiz() {
 }
 
 async function proceedWithQuizExecution(ctx) {
-    const { quizId, firstName, lastName, studentInstitutionalId, section, secretKey, studentId, isRetake, retakeReason } = ctx;
+    const { quizId, firstName, lastName, studentInstitutionalId, yearVal, sectionVal, section, secretKey, studentId, isRetake, retakeReason } = ctx;
     showLoading();
     try {
         const quizSnap = await database.ref('quizzes/' + quizId).once('value');
@@ -2665,14 +2775,22 @@ async function proceedWithQuizExecution(ctx) {
             }
 
             if (!savedState) {
-                // New session: Apply question pooling (sampleCount) if configured
+                // New session: Apply question pooling (sampleCount) with deterministic seed per student
                 if (quizData.sampleCount && quizData.sampleCount > 0 && quizData.sampleCount < quizData.questions.length) {
-                    // Shuffle full pool first
+                    const seedStr = `${quizData.id}_${studentInstitutionalId}`;
+                    let seed = 0;
+                    for (let c = 0; c < seedStr.length; c++) {
+                        seed = ((seed << 5) - seed) + seedStr.charCodeAt(c);
+                        seed |= 0;
+                    }
+                    const pseudoRandom = () => {
+                        seed = (seed * 9301 + 49297) % 233280;
+                        return seed / 233280;
+                    };
                     for (let i = quizData.questions.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
+                        const j = Math.floor(pseudoRandom() * (i + 1));
                         [quizData.questions[i], quizData.questions[j]] = [quizData.questions[j], quizData.questions[i]];
                     }
-                    // Slice the pool to sampleCount
                     quizData.questions = quizData.questions.slice(0, quizData.sampleCount);
                 }
 
@@ -2716,7 +2834,9 @@ async function proceedWithQuizExecution(ctx) {
             document.addEventListener('keyup', handlePrintScreen);
 
             // Enforce Fullscreen
-            document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen blocked:', e));
+            if (document.documentElement && document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen blocked:', e));
+            }
             document.addEventListener('fullscreenchange', handleFullscreenChange);
 
             // Print Disruption
@@ -2740,6 +2860,9 @@ async function proceedWithQuizExecution(ctx) {
             // Save Session Logic (Auto-Login Data)
             localStorage.setItem('quizable_active_session', JSON.stringify({
                 quizId, firstName, lastName,
+                studentInstitutionalId,
+                yearVal: yearVal || (document.getElementById('student-year')?.value || '1'),
+                sectionVal: sectionVal || (document.getElementById('student-section-select')?.value || 'A'),
                 section, secretKey,
                 timestamp: Date.now()
             }));
@@ -2763,10 +2886,15 @@ function displayQuestion(index) {
         <div class="quiz-question">
             <h3>Question ${index + 1} of ${quizData.questions.length}</h3>
             <p style="font-size:1.1rem; margin-bottom:15px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(q.text)}</p>
-            ${q.figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${q.figure}</div>` : ''}
-            <div class="quiz-options">
+            ${q.figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${sanitizeFigure(q.figure)}</div>` : ''}
+            <div class="quiz-options" role="radiogroup" aria-label="Question choices">
                 ${q.options.map((opt, i) => `
-                    <div class="quiz-option ${studentAnswers[index] === i ? 'selected' : ''}" data-index="${i}" style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(opt)}</div>
+                    <div class="quiz-option ${studentAnswers[index] === i ? 'selected' : ''}" 
+                         data-index="${i}" 
+                         role="radio" 
+                         tabindex="0" 
+                         aria-checked="${studentAnswers[index] === i ? 'true' : 'false'}" 
+                         style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(opt)}</div>
                 `).join('')}
             </div>
         </div>
@@ -2778,12 +2906,24 @@ function displayQuestion(index) {
         </div>
     `;
 
+    const selectOption = (el) => {
+        container.querySelectorAll('.quiz-option').forEach(o => {
+            o.classList.remove('selected');
+            o.setAttribute('aria-checked', 'false');
+        });
+        el.classList.add('selected');
+        el.setAttribute('aria-checked', 'true');
+        studentAnswers[index] = parseInt(el.dataset.index);
+        saveProgress();
+    };
+
     container.querySelectorAll('.quiz-option').forEach(el => {
-        el.onclick = () => {
-            container.querySelectorAll('.quiz-option').forEach(o => o.classList.remove('selected'));
-            el.classList.add('selected');
-            studentAnswers[index] = parseInt(el.dataset.index);
-            saveProgress();
+        el.onclick = () => selectOption(el);
+        el.onkeydown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ' || e.code === 'Space') {
+                e.preventDefault();
+                selectOption(el);
+            }
         };
     });
 
@@ -2802,9 +2942,9 @@ function showReviewPage() {
 
     review.innerHTML = `
         <h2>Review Answers</h2>
-        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;" role="navigation" aria-label="Question review list">
             ${quizData.questions.map((q, i) => `
-                <div onclick="displayQuestion(${i})" style="padding:15px; border-radius:10px; cursor:pointer; border:1px solid ${studentAnswers[i] !== null ? 'var(--success)' : 'var(--danger)'}; background:${studentAnswers[i] !== null ? '#f0fdf4' : '#fef2f2'};">
+                <div role="button" tabindex="0" onclick="displayQuestion(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();displayQuestion(${i});}" style="padding:15px; border-radius:10px; cursor:pointer; border:1px solid ${studentAnswers[i] !== null ? 'var(--success)' : 'var(--danger)'}; background:${studentAnswers[i] !== null ? '#f0fdf4' : '#fef2f2'};">
                     <strong>Q${i + 1}</strong>: ${studentAnswers[i] !== null ? 'Answered' : 'Missing'}
                 </div>
             `).join('')}
@@ -2888,13 +3028,18 @@ function startDevToolsDetection() {
 function stopDevToolsDetection() { if (devToolsInterval) clearInterval(devToolsInterval); }
 
 function handleFocusLoss() {
+    if (isClearingClipboard) return;
     if (isQuizActive && !isHandlingFocusLoss) {
-        if (Date.now() - quizStartTime < 2000) return; // Grace period
+        if (Date.now() - quizStartTime < 3000) return; // 3-second grace period
         isHandlingFocusLoss = true;
         focusLostCount++;
 
         updateAttemptsDisplay();
         clearClipboard();
+
+        // Update remaining attempts in modal warning
+        const remainingEl = document.getElementById('remaining-attempts');
+        if (remainingEl) remainingEl.textContent = Math.max(0, MAX_ATTEMPTS - focusLostCount);
 
         // Show Full Screen Warning
         if (tabWarning) tabWarning.classList.remove('hidden');
@@ -2906,11 +3051,11 @@ function handleFocusLoss() {
 
         if (focusLostCount >= MAX_ATTEMPTS) {
             if (tabWarning) tabWarning.classList.add('hidden');
-            alert('Attempts exceeded (Security Violation). Finalizing submission...');
+            showToast('Security violation threshold reached. Finalizing submission...', 'warning');
             submitQuiz(true);
         }
 
-        setTimeout(() => isHandlingFocusLoss = false, 1000);
+        setTimeout(() => isHandlingFocusLoss = false, 1500);
     }
 }
 
@@ -2932,7 +3077,7 @@ function expandWidget() {
 }
 
 function handleFullscreenChange() {
-    if (isQuizActive && !document.fullscreenElement) {
+    if (isQuizActive && document.fullscreenElement !== undefined && !document.fullscreenElement) {
         // User exited fullscreen
         if (Date.now() - quizStartTime < 1000) return; // Grace period
 
@@ -2967,11 +3112,17 @@ function updateAttemptsDisplay() {
 
 function saveProgress() {
     if (!persistenceKey || !isQuizActive || !quizData) return;
+    // Strip correctAnswer from questions before caching in localStorage
+    const sanitizedQuestions = quizData.questions.map(q => ({
+        text: q.text,
+        options: q.options,
+        figure: q.figure
+    }));
     const state = {
         startTime: quizStartTime,
         answers: studentAnswers,
         attempts: focusLostCount,
-        questions: quizData.questions // Lock in the shuffled order
+        questions: sanitizedQuestions // Safe structure without answer keys
     };
     localStorage.setItem(persistenceKey, JSON.stringify(state));
 }
@@ -3098,42 +3249,36 @@ function submitQuiz(auto = false) {
         if (quizData.saveResultsToCloud !== false) {
             showLoading();
             encryptData(JSON.stringify(res), quizData.secretKey).then(enc => {
-                const id = `${quizData.student.lastName}_${quizData.student.firstName}`.replace(/[^a-zA-Z0-9_]/g, '');
+                const instId = (quizData.student?.institutionalId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+                const namePart = `${quizData.student?.lastName || ''}_${quizData.student?.firstName || ''}`.replace(/[^a-zA-Z0-9_]/g, '');
+                const id = (instId ? `${instId}_${namePart}` : namePart).replace(/^[_-]+|[_-]+$/g, '') || `student_${Date.now()}`;
+                
+                // Keep emergency local backup until confirmation
+                localStorage.setItem(`backup_submission_${quizData.id}`, JSON.stringify(res));
+
                 database.ref(`results/${quizData.id}/${id}`).set(enc).then(() => {
                     hideLoading();
+                    showToast('Exam successfully submitted to the cloud!', 'success');
+                    // Clear persistence & session ONLY after confirmed write
+                    if (persistenceKey) localStorage.removeItem(persistenceKey);
+                    localStorage.removeItem('quizable_active_session');
+                    localStorage.removeItem(`backup_submission_${quizData.id}`);
                 }).catch(err => {
                     hideLoading();
                     console.error('Submission error:', err);
+                    alert(`Network error saving to cloud: ${err.message}. Your answers are preserved in local storage. Click "Download Results (PDF)" to ensure you have a copy of your score!`);
+                    const pdfBtn = document.getElementById('download-student-pdf-btn');
+                    if (pdfBtn) pdfBtn.classList.remove('hidden');
                 });
             }).catch(err => {
                 hideLoading();
                 console.error('Encryption error:', err);
             });
+        } else {
+            // Offline/local only quiz
+            if (persistenceKey) localStorage.removeItem(persistenceKey);
+            localStorage.removeItem('quizable_active_session');
         }
-
-        isQuizActive = false;
-        document.body.classList.remove('quiz-active');
-        window.onbeforeprint = null;
-        clearClipboard();
-
-        window.removeEventListener('blur', handleFocusLoss);
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-        window.removeEventListener('blur', togglePrivacyBlur);
-        window.removeEventListener('focus', togglePrivacyBlur);
-        document.removeEventListener('keyup', handlePrintScreen);
-        document.removeEventListener('fullscreenchange', handleFullscreenChange);
-        if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
-
-        stopDevToolsDetection();
-        stopWatermarkRotation();
-        stopQuizTimer();
-        if (attemptsWidget) attemptsWidget.classList.add('hidden');
-        timerDisplay.classList.add('hidden');
-
-        // Clear Persistence
-        if (persistenceKey) localStorage.removeItem(persistenceKey);
-        // Clear Active Session
-        localStorage.removeItem('quizable_active_session');
 
         // Celebration!
         if (window.confetti) {
@@ -3269,10 +3414,57 @@ window.showViewResults = showViewResults;
 window.adminLogout = adminLogout;
 
 // --- CRYPTO HELPERS ---
+const keyCache = new Map();
+
+function uint8ToBase64(bytes) {
+    let binary = '';
+    const len = bytes.byteLength;
+    const chunkSize = 8192;
+    for (let i = 0; i < len; i += chunkSize) {
+        const chunk = bytes.subarray(i, Math.min(i + chunkSize, len));
+        binary += String.fromCharCode.apply(null, chunk);
+    }
+    return btoa(binary);
+}
+
+function base64ToUint8(base64) {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+}
+
 async function getKey(password, salt) {
+    let saltHex = '';
+    for (let i = 0; i < salt.length; i++) {
+        saltHex += salt[i].toString(16).padStart(2, '0');
+    }
+    const cacheKey = `${password}:${saltHex}`;
+    if (keyCache.has(cacheKey)) {
+        return keyCache.get(cacheKey);
+    }
+
     const enc = new TextEncoder();
     const keyMaterial = await window.crypto.subtle.importKey('raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']);
-    return window.crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+    const derivedKey = await window.crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
+    );
+
+    if (keyCache.size > 200) {
+        const iter = keyCache.keys();
+        for (let i = 0; i < 50; i++) {
+            keyCache.delete(iter.next().value);
+        }
+    }
+    keyCache.set(cacheKey, derivedKey);
+    return derivedKey;
 }
 
 async function encryptData(data, password) {
@@ -3281,12 +3473,16 @@ async function encryptData(data, password) {
     const key = await getKey(password, salt);
     const enc = new TextEncoder();
     const encrypted = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(data));
-    const arr = new Uint8Array([...salt, ...iv, ...new Uint8Array(encrypted)]);
-    return btoa(String.fromCharCode.apply(null, arr));
+    const encArray = new Uint8Array(encrypted);
+    const combined = new Uint8Array(salt.length + iv.length + encArray.length);
+    combined.set(salt, 0);
+    combined.set(iv, salt.length);
+    combined.set(encArray, salt.length + iv.length);
+    return uint8ToBase64(combined);
 }
 
 async function decryptData(str, password) {
-    const arr = new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
+    const arr = base64ToUint8(str);
     const salt = arr.slice(0, 16);
     const iv = arr.slice(16, 28);
     const data = arr.slice(28);
@@ -3295,25 +3491,34 @@ async function decryptData(str, password) {
     return new TextDecoder().decode(dec);
 }
 
-// System Encryption (Derived per authenticated session)
+// System Encryption (Derived using shared system vault with multi-tier backward compatibility)
+const SYSTEM_VAULT_KEY = "quizable_system_vault_v3";
+
 function getSystemKey() {
-    if (auth.currentUser) {
-        return `quizable_auth_${auth.currentUser.uid}`;
-    }
-    return "quizable_session_shield_v2";
+    return SYSTEM_VAULT_KEY;
 }
 
 async function systemEncrypt(data) {
-    return encryptData(data, getSystemKey());
+    return encryptData(data, SYSTEM_VAULT_KEY);
 }
 
-async function systemDecrypt(data) {
-    try {
-        return await decryptData(data, getSystemKey());
-    } catch (e) {
-        // Fallback for previous legacy items if any
-        return await decryptData(data, "quizable_internal_v1_secure_node");
+async function systemDecrypt(data, creatorUid = null) {
+    const candidates = [
+        SYSTEM_VAULT_KEY,
+        creatorUid ? `quizable_auth_${creatorUid}` : null,
+        auth.currentUser ? `quizable_auth_${auth.currentUser.uid}` : null,
+        "quizable_session_shield_v2",
+        "quizable_internal_v1_secure_node"
+    ].filter(Boolean);
+
+    for (const key of candidates) {
+        try {
+            return await decryptData(data, key);
+        } catch (_) {
+            // try next candidate
+        }
     }
+    throw new Error("Unable to decrypt system metadata with available keys.");
 }
 
 // --- Dynamic Watermark Utility ---
