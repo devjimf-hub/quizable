@@ -3752,19 +3752,31 @@ function saveProgress() {
 
 // function startQuizTimer(mins, expiry) { // Old signature
 function showConfirmationModal(title, msg, onConfirm, isAlert = false) {
-    modalTitle.textContent = title;
-    modalMessage.textContent = msg;
-    const conf = modalConfirmBtn.cloneNode(true);
-    modalConfirmBtn.replaceWith(conf);
-    const canc = modalCancelBtn.cloneNode(true);
-    modalCancelBtn.replaceWith(canc);
+    const titleEl = document.getElementById('modal-title') || modalTitle;
+    const msgEl = document.getElementById('modal-message') || modalMessage;
+    const confirmBtn = document.getElementById('modal-confirm-btn') || modalConfirmBtn;
+    const cancelBtn = document.getElementById('modal-cancel-btn') || modalCancelBtn;
+    const modal = document.getElementById('confirmation-modal') || confirmationModal;
 
-    conf.innerText = isAlert ? "OK" : "Confirm";
-    canc.classList.toggle('hidden', isAlert);
+    if (titleEl) titleEl.textContent = title;
+    if (msgEl) msgEl.textContent = msg;
 
-    conf.onclick = () => { confirmationModal.classList.add('hidden'); if (onConfirm) onConfirm(); };
-    canc.onclick = () => confirmationModal.classList.add('hidden');
-    confirmationModal.classList.remove('hidden');
+    if (confirmBtn) {
+        confirmBtn.innerText = isAlert ? "OK" : "Confirm";
+        confirmBtn.onclick = () => {
+            if (modal) modal.classList.add('hidden');
+            if (onConfirm) onConfirm();
+        };
+    }
+
+    if (cancelBtn) {
+        cancelBtn.classList.toggle('hidden', isAlert);
+        cancelBtn.onclick = () => {
+            if (modal) modal.classList.add('hidden');
+        };
+    }
+
+    if (modal) modal.classList.remove('hidden');
 }
 
 function submitQuiz(auto = false) {
