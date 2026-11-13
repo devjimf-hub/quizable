@@ -1724,7 +1724,9 @@ function saveTeacherHistory(title, id, key) {
 
 async function loadTeacherHistory() {
     const container = document.getElementById('recent-quizzes-container');
+    if (!container) return;
     const list = document.getElementById('recent-quizzes-list');
+    if (!list) return;
     let localHistory = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
 
     let cloudQuizzes = [];
