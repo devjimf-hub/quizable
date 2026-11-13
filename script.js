@@ -2503,6 +2503,10 @@ async function fetchAndDisplayResults(quizId, secretKey) {
 
             // Populate fields
             document.getElementById('modify-quiz-duration').value = quizDetails.duration || 0;
+            const modifySampleCountEl = document.getElementById('modify-quiz-sample-count');
+            if (modifySampleCountEl) modifySampleCountEl.value = quizDetails.sampleCount || 0;
+            const bankCountEl = document.getElementById('modify-quiz-bank-count');
+            if (bankCountEl) bankCountEl.textContent = Array.isArray(quizDetails.questions) ? quizDetails.questions.length : 0;
             document.getElementById('modify-show-results').checked = quizDetails.showResultsToStudent !== false;
             document.getElementById('modify-show-answer-summary').checked = quizDetails.showAnswerSummary !== false;
 
@@ -2529,9 +2533,16 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                     }
                     const newDuration = parseFloat(document.getElementById('modify-quiz-duration').value) || 0;
                     const newExpiry = parseExpiryInput(modifyExpiryInput.value);
+                    const newSampleCount = parseInt(document.getElementById('modify-quiz-sample-count')?.value, 10) || 0;
                     const showResults = document.getElementById('modify-show-results').checked;
                     const showAnswerSummaryVal = document.getElementById('modify-show-answer-summary').checked;
-                    updateQuizSettings(quizId, secretKey, { duration: newDuration, expiry: newExpiry, showResultsToStudent: showResults, showAnswerSummary: showAnswerSummaryVal }, quizDetails);
+                    updateQuizSettings(quizId, secretKey, {
+                        duration: newDuration,
+                        expiry: newExpiry,
+                        sampleCount: newSampleCount,
+                        showResultsToStudent: showResults,
+                        showAnswerSummary: showAnswerSummaryVal
+                    }, quizDetails);
                 };
             }
         }
@@ -2697,6 +2708,12 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
         await database.ref('quizzes/' + quizId).update({
             encryptedQuizData: encrypted
         });
+
+        if (auth.currentUser && newSettings.hasOwnProperty('sampleCount')) {
+            await database.ref(`teachers/${auth.currentUser.uid}/quizzes/${quizId}`).update({
+                sampleCount: newSettings.sampleCount || 0
+            }).catch(() => {});
+        }
 
         hideLoading();
         showConfirmationModal('Success!', 'Quiz settings have been updated.', null, true);

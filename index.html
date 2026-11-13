@@ -311,6 +311,13 @@
                             <label>Modify Expiry Date/Time</label>
                             <input type="datetime-local" id="modify-quiz-expiry">
                         </div>
+                        <div class="form-group">
+                            <label>Question Pooling (Items to Show)</label>
+                            <input type="number" id="modify-quiz-sample-count" placeholder="0 for all items" min="0">
+                            <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 3px;">
+                                Set to <strong>0</strong> to give students all questions (e.g. /20). Current bank: <strong id="modify-quiz-bank-count">0</strong> questions.
+                            </small>
+                        </div>
                     </div>
 
                     <div class="form-group" style="margin-top: 10px;">
@@ -766,7 +773,7 @@
         <!-- Logic -->
         <div id="quiz-navigator" class="quiz-navigator hidden"></div>
         <div id="toast-container" class="toast-container" role="region" aria-live="polite"></div>
-        <script src="script.js?v=2.4"></script>
+        <script src="script.js?v=2.5"></script>
 </body>
 
 </html>
