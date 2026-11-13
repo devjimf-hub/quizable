@@ -20,9 +20,8 @@
         "$studentId": {
           // Allow student to check their own prior submission status, or teacher management
           ".read": true,
-          // Allow first submission freely (!data.exists()), but prevent overwriting existing submissions
-          // unless the user is an authenticated teacher/admin (auth != null)
-          ".write": "!data.exists() || auth != null",
+          // Allow student submission (initial or retake with penalty reason), or teacher management/reset
+          ".write": true,
           ".validate": "newData.isString() && newData.val().length < 200000"
         }
       }

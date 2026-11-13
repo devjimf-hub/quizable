@@ -21,6 +21,7 @@ let currentAuthUser = null;
 let quizData = null;
 let currentQuestionIndex = 0;
 let studentAnswers = [];
+let flaggedQuestions = new Set();
 let focusLostCount = 0;
 let isQuizActive = false;
 let isHandlingFocusLoss = false; // Flag to prevent double counting
@@ -446,6 +447,8 @@ function initializeApp() {
     confirmationModal.classList.add('hidden');
     instructionModal.classList.add('hidden');
     document.getElementById('export-pdf-btn').classList.add('hidden');
+    const expExcelBtnInit = document.getElementById('export-excel-btn');
+    if (expExcelBtnInit) expExcelBtnInit.classList.add('hidden');
 
     const part = urlParams.get('part');
     const qParam = urlParams.get('q');
@@ -761,8 +764,12 @@ async function loadAdminQuizResults(quizId, secretKey) {
             return;
         }
 
-        const promises = Object.values(encryptedResults).map(data =>
-            decryptData(data, secretKey).then(JSON.parse).catch(() => null)
+        const promises = Object.entries(encryptedResults).map(([dbKey, data]) =>
+            decryptData(data, secretKey).then(dec => {
+                const parsed = JSON.parse(dec);
+                parsed.dbKey = dbKey;
+                return parsed;
+            }).catch(() => null)
         );
         const validResults = (await Promise.all(promises)).filter(Boolean);
 
@@ -792,17 +799,26 @@ async function loadAdminQuizResults(quizId, secretKey) {
                         <th>Time</th>
                         <th>Violations</th>
                         <th>Submitted</th>
+                        <th style="text-align:center;">Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${validResults.map((res, i) => `
                         <tr>
                             <td style="color:var(--text-muted);">${i + 1}</td>
-                            <td style="font-weight:600;">${escapeHtml(res.student?.lastName || '')}, ${escapeHtml(res.student?.firstName || '')}</td>
+                            <td style="font-weight:600;">
+                                ${escapeHtml(res.student?.lastName || '')}, ${escapeHtml(res.student?.firstName || '')}
+                                ${res.isRetake ? `<span style="font-size:0.68rem; background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:3px; border:1px solid #fde68a;">🔄 Retake</span>` : ''}
+                            </td>
                             <td style="font-weight:700; color:var(--primary);">${escapeHtml(res.score)}/${escapeHtml(res.totalQuestions)}</td>
                             <td>${res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A'}</td>
                             <td style="color:${res.securityViolations > 0 ? 'var(--danger)' : 'inherit'}">${res.securityViolations || 0}</td>
                             <td style="font-size:0.75rem; color:var(--text-muted);">${new Date(res.submittedAt).toLocaleString()}</td>
+                            <td style="text-align:center;">
+                                <button class="btn btn-sm btn-danger-outline" style="padding:2px 8px; font-size:0.75rem;" onclick="confirmResetStudentAttempt('${escapeHtml(quizId)}', '${escapeHtml(secretKey)}', '${escapeHtml(res.dbKey)}', '${escapeHtml((res.student?.lastName || '') + ', ' + (res.student?.firstName || ''))}', '${escapeHtml(res.student?.institutionalId || '')}', true)" title="Reset attempt and clear lockout">
+                                    Reset
+                                </button>
+                            </td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -1054,6 +1070,77 @@ async function exportAdminQuizResultsPdf(quizId, secretKey) {
     showToast('PDF exported successfully.', 'success');
 }
 
+// --- EXCEL EXPORT UTILITIES & GENERATORS ---
+
+function makeValidSheetName(name, existingNames) {
+    let clean = (name || 'Sheet')
+        .replace(/[\\/?*\[\]:]/g, '_')
+        .trim();
+    if (clean.length > 31) {
+        clean = clean.substring(0, 31).trim();
+    }
+    if (!clean) clean = 'Sheet';
+    let unique = clean;
+    let counter = 2;
+    while (existingNames.has(unique.toLowerCase())) {
+        const suffix = ` (${counter})`;
+        const maxBaseLen = 31 - suffix.length;
+        unique = clean.substring(0, maxBaseLen).trim() + suffix;
+        counter++;
+    }
+    existingNames.add(unique.toLowerCase());
+    return unique;
+}
+
+const EXCEL_STUDENT_COLS = [
+    { wch: 6 },   // #
+    { wch: 18 },  // Last Name
+    { wch: 18 },  // First Name
+    { wch: 16 },  // Student ID
+    { wch: 12 },  // Section
+    { wch: 8 },   // Score
+    { wch: 16 },  // Total Questions
+    { wch: 15 },  // Percentage (%)
+    { wch: 14 },  // Time (mins)
+    { wch: 12 },  // Violations
+    { wch: 22 },  // Submitted At
+    { wch: 14 }   // Attempt Type
+];
+
+function buildStudentExcelRows(list) {
+    // Sort strictly in alphabetical order by Last Name, then First Name
+    const sorted = [...list].sort((a, b) => {
+        const ln = (a.student?.lastName || '').trim().localeCompare((b.student?.lastName || '').trim());
+        if (ln !== 0) return ln;
+        return (a.student?.firstName || '').trim().localeCompare((b.student?.firstName || '').trim());
+    });
+
+    return [
+        ['#', 'Last Name', 'First Name', 'Student ID', 'Section', 'Score', 'Total Questions', 'Percentage (%)', 'Time (mins)', 'Violations', 'Submitted At', 'Attempt Type'],
+        ...sorted.map((r, i) => {
+            const total = r.totalQuestions || 0;
+            const score = r.score ?? 0;
+            const pct = total > 0 ? parseFloat(((score / total) * 100).toFixed(2)) : 0;
+            const timeMins = r.timeTakenMs ? parseFloat((r.timeTakenMs / 60000).toFixed(1)) : 0;
+            const submittedStr = r.submittedAt ? new Date(r.submittedAt).toLocaleString() : 'N/A';
+            return [
+                i + 1,
+                r.student?.lastName || '',
+                r.student?.firstName || '',
+                r.student?.institutionalId || 'N/A',
+                r.student?.section || 'Unspecified',
+                score,
+                total,
+                pct,
+                timeMins,
+                r.securityViolations || 0,
+                submittedStr,
+                r.isRetake ? 'Retake' : 'Initial'
+            ];
+        })
+    ];
+}
+
 async function exportAdminQuizResultsExcel(quizId, secretKey) {
     let results = adminResultsCache[quizId];
 
@@ -1085,41 +1172,247 @@ async function exportAdminQuizResultsExcel(quizId, secretKey) {
         return;
     }
 
-    const sorted = [...results].sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
-
     const quizMeta = allAdminQuizzes.find(q => q.id === quizId);
-    const quizTitle = sorted[0]?.quizTitle || quizMeta?.title || 'Quiz';
-
-    const rows = [
-        ['#', 'Last Name', 'First Name', 'Score', 'Total Questions', 'Percentage'],
-        ...sorted.map((r, i) => [
-            i + 1,
-            r.student.lastName,
-            r.student.firstName,
-            r.score,
-            r.totalQuestions,
-            parseFloat(((r.score / r.totalQuestions) * 100).toFixed(2))
-        ])
-    ];
-
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-
-    // Column widths
-    ws['!cols'] = [
-        { wch: 5 },
-        { wch: 20 },
-        { wch: 20 },
-        { wch: 8 },
-        { wch: 16 },
-        { wch: 12 }
-    ];
+    const quizTitle = results[0]?.quizTitle || quizMeta?.title || 'Quiz';
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Results');
+    const existingSheetNames = new Set();
+
+    // Group submissions by section
+    const bySection = {};
+    results.forEach(r => {
+        const sec = (r.student?.section || 'Unspecified').trim();
+        if (!bySection[sec]) bySection[sec] = [];
+        bySection[sec].push(r);
+    });
+
+    // 1. Overall Sheet: All Students (alphabetical)
+    const allWs = XLSX.utils.aoa_to_sheet(buildStudentExcelRows(results));
+    allWs['!cols'] = EXCEL_STUDENT_COLS;
+    XLSX.utils.book_append_sheet(wb, allWs, makeValidSheetName('All Students', existingSheetNames));
+
+    // 2. Separate Sheets per Section (alphabetical)
+    const sortedSections = Object.keys(bySection).sort();
+    sortedSections.forEach(sec => {
+        const secWs = XLSX.utils.aoa_to_sheet(buildStudentExcelRows(bySection[sec]));
+        secWs['!cols'] = EXCEL_STUDENT_COLS;
+        XLSX.utils.book_append_sheet(wb, secWs, makeValidSheetName(`Section ${sec}`, existingSheetNames));
+    });
+
+    const safeTitle = quizTitle.replace(/[^a-z0-9]/gi, '_');
+    XLSX.writeFile(wb, `${safeTitle}_SectionScores_${new Date().toISOString().split('T')[0]}.xlsx`);
+    showToast('Excel file exported successfully (separate sheets per section).', 'success');
+}
+
+function exportCurrentTeacherQuizExcel() {
+    if (!allStudentResults || allStudentResults.length === 0) {
+        showToast('No results available to export.', 'info');
+        return;
+    }
+    const quizTitle = document.getElementById('quiz-title-display')?.textContent ||
+                      allStudentResults[0]?.quizTitle || 'Quiz';
+    const wb = XLSX.utils.book_new();
+    const existingSheetNames = new Set();
+
+    // Sheet 1: All Students
+    const allWs = XLSX.utils.aoa_to_sheet(buildStudentExcelRows(allStudentResults));
+    allWs['!cols'] = EXCEL_STUDENT_COLS;
+    XLSX.utils.book_append_sheet(wb, allWs, makeValidSheetName('All Students', existingSheetNames));
+
+    // Separate sheets per section
+    const bySection = {};
+    allStudentResults.forEach(r => {
+        const sec = (r.student?.section || 'Unspecified').trim();
+        if (!bySection[sec]) bySection[sec] = [];
+        bySection[sec].push(r);
+    });
+
+    Object.keys(bySection).sort().forEach(sec => {
+        const secWs = XLSX.utils.aoa_to_sheet(buildStudentExcelRows(bySection[sec]));
+        secWs['!cols'] = EXCEL_STUDENT_COLS;
+        XLSX.utils.book_append_sheet(wb, secWs, makeValidSheetName(`Section ${sec}`, existingSheetNames));
+    });
 
     const safeTitle = quizTitle.replace(/[^a-z0-9]/gi, '_');
     XLSX.writeFile(wb, `${safeTitle}_Scores_${new Date().toISOString().split('T')[0]}.xlsx`);
     showToast('Excel file exported successfully.', 'success');
+}
+
+/**
+ * Export all quiz results from August 2026 to latest.
+ * - Every quiz gets its own sheet with all students in alphabetical order.
+ * - In addition, students per section are placed on separate sheets in alphabetical order.
+ * - An overview summary sheet is placed first with quiz stats.
+ */
+async function exportAugust2026Excel(startDate = new Date(2026, 7, 1, 0, 0, 0, 0)) {
+    showLoading();
+    try {
+        const cutoffTime = startDate.getTime();
+
+        // 1. Ensure admin quizzes metadata is loaded and decrypted
+        let quizzes = allAdminQuizzes;
+        if (!quizzes || quizzes.length === 0) {
+            const [adminSnap, masterSnap] = await Promise.all([
+                database.ref('admin/quizzes').once('value'),
+                database.ref('quizzes').once('value')
+            ]);
+            const adminMetadata = adminSnap.val() || {};
+            const masterQuizzes = masterSnap.val() || {};
+            const allQuizIds = Object.keys(masterQuizzes);
+
+            const decryptedMetaPromises = allQuizIds.map(async (id) => {
+                if (adminMetadata[id]) {
+                    try {
+                        const creatorUid = masterQuizzes[id]?.creatorUid;
+                        const decrypted = await systemDecrypt(adminMetadata[id].data, creatorUid);
+                        const meta = JSON.parse(decrypted);
+                        return { id, ...meta };
+                    } catch (e) {
+                        return { id, title: "Decryption Error", subject: "Error", secretKey: "N/A" };
+                    }
+                } else {
+                    return { id, title: "Legacy Quiz (Unindexed)", subject: "Legacy", secretKey: null, createdAt: 0 };
+                }
+            });
+            quizzes = await Promise.all(decryptedMetaPromises);
+            allAdminQuizzes = quizzes;
+        }
+
+        // 2. Fetch all raw results
+        const resultsSnap = await database.ref('results').once('value');
+        const allResultsRaw = resultsSnap.val() || {};
+
+        // 3. Filter for quizzes that are from August 2026 to latest
+        const qualifyingQuizzes = [];
+
+        for (const q of quizzes) {
+            if (!q.secretKey || q.secretKey === 'N/A' || q.secretKey === 'Manual entry required') continue;
+
+            const isCreatedAfterCutoff = q.createdAt && q.createdAt >= cutoffTime;
+            const quizResultsRaw = allResultsRaw[q.id] || {};
+            const rawEntries = Object.entries(quizResultsRaw);
+
+            // Decrypt student submissions for this quiz
+            const decryptedSubmissions = [];
+            for (const [studentKey, encData] of rawEntries) {
+                try {
+                    const dec = await decryptData(encData, q.secretKey);
+                    const parsed = JSON.parse(dec);
+                    parsed.dbKey = studentKey;
+                    decryptedSubmissions.push(parsed);
+                } catch (e) {
+                    console.warn(`Failed to decrypt result ${studentKey} for quiz ${q.id}`);
+                }
+            }
+
+            const hasSubmissionsAfterCutoff = decryptedSubmissions.some(s => (s.submittedAt || 0) >= cutoffTime);
+
+            if (isCreatedAfterCutoff || hasSubmissionsAfterCutoff) {
+                qualifyingQuizzes.push({
+                    quiz: q,
+                    submissions: decryptedSubmissions
+                });
+            }
+        }
+
+        if (qualifyingQuizzes.length === 0) {
+            hideLoading();
+            showToast('No quizzes or submissions found from August 2026 to latest.', 'info');
+            return;
+        }
+
+        // Sort chronologically descending
+        qualifyingQuizzes.sort((a, b) => (b.quiz.createdAt || 0) - (a.quiz.createdAt || 0));
+
+        // 4. Construct Excel Workbook
+        const wb = XLSX.utils.book_new();
+        const existingSheetNames = new Set();
+
+        // Sheet 0: Overview Summary
+        const summaryRows = [
+            ['#', 'Quiz Title', 'Subject', 'Quiz ID', 'Created Date', 'Total Submissions', 'Sections', 'Avg Score (%)', 'High Score (%)', 'Pass Rate (%)']
+        ];
+
+        qualifyingQuizzes.forEach((item, index) => {
+            const q = item.quiz;
+            const subs = item.submissions;
+            const scores = subs.map(r => r.totalQuestions > 0 ? (r.score / r.totalQuestions) * 100 : 0);
+            const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 'N/A';
+            const high = scores.length ? Math.max(...scores).toFixed(1) : 'N/A';
+            const passCount = scores.filter(s => s >= 75).length;
+            const passRate = scores.length ? ((passCount / scores.length) * 100).toFixed(1) + '%' : 'N/A';
+
+            const sectionSet = new Set(subs.map(s => (s.student?.section || 'Unspecified').trim()));
+            const secStr = Array.from(sectionSet).filter(Boolean).sort().join(', ') || 'None';
+
+            summaryRows.push([
+                index + 1,
+                q.title || 'Untitled Quiz',
+                q.subject || 'Uncategorized',
+                q.id,
+                q.createdAt ? new Date(q.createdAt).toLocaleDateString() : 'N/A',
+                subs.length,
+                secStr,
+                avg !== 'N/A' ? parseFloat(avg) : 'N/A',
+                high !== 'N/A' ? parseFloat(high) : 'N/A',
+                passRate
+            ]);
+        });
+
+        const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows);
+        summaryWs['!cols'] = [
+            { wch: 5 }, { wch: 26 }, { wch: 18 }, { wch: 14 }, { wch: 14 },
+            { wch: 18 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 14 }
+        ];
+        XLSX.utils.book_append_sheet(wb, summaryWs, makeValidSheetName('Overview Summary', existingSheetNames));
+
+        // For each quiz: Sheet for the entire quiz + separate sheets per section (all in alphabetical order)
+        qualifyingQuizzes.forEach((item, idx) => {
+            const q = item.quiz;
+            const subs = item.submissions;
+            const qNum = idx + 1;
+            const cleanTitle = (q.title || `Quiz_${qNum}`).replace(/[^a-zA-Z0-9_\- ]/g, '').trim().substring(0, 14);
+
+            const bySection = {};
+            subs.forEach(r => {
+                const sec = (r.student?.section || 'Unspecified').trim();
+                if (!bySection[sec]) bySection[sec] = [];
+                bySection[sec].push(r);
+            });
+
+            const sectionKeys = Object.keys(bySection).sort();
+
+            // 1. Sheet for this quiz (all students, alphabetical)
+            const allRows = subs.length > 0
+                ? buildStudentExcelRows(subs)
+                : [['#', 'Last Name', 'First Name', 'Student ID', 'Section', 'Score', 'Total Questions', 'Percentage (%)'], ['No submissions recorded yet']];
+            const allWs = XLSX.utils.aoa_to_sheet(allRows);
+            allWs['!cols'] = EXCEL_STUDENT_COLS;
+            const allSheetName = makeValidSheetName(`Q${qNum} ${cleanTitle} (All)`, existingSheetNames);
+            XLSX.utils.book_append_sheet(wb, allWs, allSheetName);
+
+            // 2. Separate sheet per section for this quiz (alphabetical)
+            sectionKeys.forEach(sec => {
+                const secStudents = bySection[sec];
+                const secRows = buildStudentExcelRows(secStudents);
+                const secWs = XLSX.utils.aoa_to_sheet(secRows);
+                secWs['!cols'] = EXCEL_STUDENT_COLS;
+                const secSheetName = makeValidSheetName(`Q${qNum} ${cleanTitle} - ${sec}`, existingSheetNames);
+                XLSX.utils.book_append_sheet(wb, secWs, secSheetName);
+            });
+        });
+
+        const dateStr = new Date().toISOString().split('T')[0];
+        const filename = `Quizable_Results_Aug2026_To_Latest_${dateStr}.xlsx`;
+        XLSX.writeFile(wb, filename);
+
+        hideLoading();
+        showToast(`Successfully exported ${qualifyingQuizzes.length} quiz(zes) to Excel!`, 'success');
+    } catch (err) {
+        console.error("Export August 2026 Quizzes Excel error:", err);
+        hideLoading();
+        showToast('Export failed: ' + err.message, 'error');
+    }
 }
 
 async function showAdminSettingsModal(quizId, secretKey) {
@@ -1536,6 +1829,19 @@ document.getElementById('start-quiz').addEventListener('click', startQuiz);
 document.getElementById('return-to-quiz').addEventListener('click', returnToQuiz);
 document.getElementById('restart-quiz').addEventListener('click', restartQuiz);
 document.getElementById('view-results-btn').addEventListener('click', handleViewResultsClick);
+
+const togglePaletteBtn = document.getElementById('toggle-palette-btn');
+if (togglePaletteBtn) {
+    togglePaletteBtn.addEventListener('click', () => {
+        const grid = document.getElementById('student-palette-grid');
+        const text = document.getElementById('toggle-palette-text');
+        if (grid) {
+            const isHidden = grid.classList.toggle('hidden');
+            if (text) text.textContent = isHidden ? 'Show Grid' : 'Hide Grid';
+            togglePaletteBtn.setAttribute('aria-expanded', !isHidden);
+        }
+    });
+}
 
 ['student-quiz-id', 'results-quiz-id'].forEach(id => {
     const element = document.getElementById(id);
@@ -2244,8 +2550,12 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             return;
         }
 
-        const promises = Object.values(encryptedResults).map(data =>
-            decryptData(data, secretKey).then(JSON.parse).catch(() => null)
+        const promises = Object.entries(encryptedResults).map(([dbKey, data]) =>
+            decryptData(data, secretKey).then(dec => {
+                const parsed = JSON.parse(dec);
+                parsed.dbKey = dbKey;
+                return parsed;
+            }).catch(() => null)
         );
         const validResults = (await Promise.all(promises)).filter(Boolean);
         allStudentResults = validResults;
@@ -2270,6 +2580,8 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             list.sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
             processedStudentResults = list;
             document.getElementById('export-pdf-btn').classList.toggle('hidden', list.length === 0);
+            const expExcelBtnToggle = document.getElementById('export-excel-btn');
+            if (expExcelBtnToggle) expExcelBtnToggle.classList.toggle('hidden', list.length === 0);
 
             // Analytics Calculation
             const scores = list.map(r => (r.score / r.totalQuestions) * 100);
@@ -2311,8 +2623,8 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                     ${list.map(res => {
                 const submissionDate = res.submittedAt ? new Date(res.submittedAt).toLocaleString() : 'N/A';
                 return `
-                    <div class="student-result-card" style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--border);">
-                        <div>
+                    <div class="student-result-card" style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:12px;">
+                        <div style="flex:1; min-width:240px;">
                             <div style="font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                                 ${escapeHtml(res.student?.lastName || '')}, ${escapeHtml(res.student?.firstName || '')}
                                 ${res.isRetake ? `<span style="font-size:0.7rem; background:#fef3c7; color:#92400e; padding:2px 7px; border-radius:4px; font-weight:600; border:1px solid #fde68a;">🔄 Retake</span>` : ''}
@@ -2323,9 +2635,17 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                             ${res.isRetake && res.retakeReason ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px; background:#fffbeb; padding:3px 8px; border-radius:4px; display:inline-block; border-left:3px solid #f59e0b;"><strong>Reason:</strong> <em>${escapeHtml(res.retakeReason)}</em></div>` : ''}
                             ${res.securityViolations > 0 ? `<div style="font-size:0.7rem; color:var(--danger); font-weight:700; margin-top:4px;">⚠️ ${res.securityViolations} Security Violations</div>` : ''}
                         </div>
-                        <div style="text-align:right;">
-                            <div style="color:var(--primary); font-weight:800; font-size:1.2rem;">${res.score}/${res.totalQuestions}</div>
-                            <div style="font-size:0.7rem; color:var(--text-muted);">${res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A'} | ${submissionDate}</div>
+                        <div style="display:flex; align-items:center; gap:14px;">
+                            <div style="text-align:right;">
+                                <div style="color:var(--primary); font-weight:800; font-size:1.2rem;">${res.score}/${res.totalQuestions}</div>
+                                <div style="font-size:0.7rem; color:var(--text-muted);">${res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A'} | ${submissionDate}</div>
+                            </div>
+                            <button class="btn btn-sm btn-danger-outline reset-student-btn" 
+                                onclick="confirmResetStudentAttempt('${escapeHtml(quizId)}', '${escapeHtml(secretKey)}', '${escapeHtml(res.dbKey)}', '${escapeHtml((res.student?.lastName || '') + ', ' + (res.student?.firstName || ''))}', '${escapeHtml(res.student?.institutionalId || '')}')" 
+                                title="Reset attempt and clear lockout for this student">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+                                Reset
+                            </button>
                         </div>
                     </div>
                     `;
@@ -2385,6 +2705,35 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
         alert('Failed to update quiz settings: ' + error.message);
     }
 }
+
+window.confirmResetStudentAttempt = async function (quizId, secretKey, dbKey, studentName, studentInstId, isAdmin = false) {
+    if (!auth.currentUser) {
+        showToast('Please sign in to manage student results.', 'error');
+        return;
+    }
+
+    const displayName = studentName ? studentName.trim() : 'this student';
+    const idInfo = studentInstId ? ` (ID: ${studentInstId})` : '';
+    const message = `Are you sure you want to reset the attempt for ${displayName}${idInfo}?\n\nThis will permanently delete their submission and clear all security lockout violations from the database, allowing them to take the exam again cleanly without penalty.`;
+
+    showConfirmationModal('Reset Student Attempt', message, async () => {
+        showLoading();
+        try {
+            await database.ref(`results/${quizId}/${dbKey}`).remove();
+            hideLoading();
+            showToast(`Attempt for ${displayName} has been reset.`, 'success');
+            if (isAdmin) {
+                delete adminResultsCache[quizId];
+                loadAdminQuizResults(quizId, secretKey);
+            } else {
+                fetchAndDisplayResults(quizId, secretKey);
+            }
+        } catch (err) {
+            hideLoading();
+            alert('Failed to reset student attempt: ' + err.message);
+        }
+    });
+};
 
 function exportResultsToPdf() {
     if (processedStudentResults.length === 0) return;
@@ -2494,7 +2843,7 @@ function shuffleQuiz(quiz) {
         [quiz.questions[i], quiz.questions[j]] = [quiz.questions[j], quiz.questions[i]];
     }
     quiz.questions.forEach(q => {
-        if (!Array.isArray(q.options)) return;
+        if (!q || !Array.isArray(q.options) || q.options.length < 2) return;
         const originalCorrectIndex = q.correctAnswer;
         const mappedOptions = q.options.map((opt, idx) => ({
             text: opt,
@@ -2510,17 +2859,65 @@ function shuffleQuiz(quiz) {
     });
 }
 
+let instructionCountdownInterval = null;
+
 function showInstructionModal(duration, onComplete) {
-    instructionModal.classList.remove('hidden');
-    let count = duration;
-    instructionCountdown.textContent = count;
-    const timer = setInterval(() => {
-        count--;
+    if (!instructionModal) {
+        if (onComplete) onComplete();
+        return;
+    }
+
+    if (instructionCountdownInterval) {
+        clearInterval(instructionCountdownInterval);
+        instructionCountdownInterval = null;
+    }
+
+    // Safely parse duration. Default to 5 seconds if undefined/null/invalid.
+    const rawVal = parseInt(duration, 10);
+    const countDuration = (!isNaN(rawVal) && rawVal > 0) ? rawVal : 5;
+
+    let count = countDuration;
+    if (instructionCountdown) {
         instructionCountdown.textContent = count;
-        if (count <= 0) {
-            clearInterval(timer);
+    }
+    instructionModal.classList.remove('hidden');
+
+    let hasCompleted = false;
+    const executeComplete = () => {
+        if (hasCompleted) return;
+        hasCompleted = true;
+        if (instructionCountdownInterval) {
+            clearInterval(instructionCountdownInterval);
+            instructionCountdownInterval = null;
+        }
+        if (instructionModal) {
             instructionModal.classList.add('hidden');
-            if (onComplete) onComplete();
+        }
+        if (onComplete) {
+            try {
+                onComplete();
+            } catch (err) {
+                console.error("Error starting quiz after countdown:", err);
+                alert("Failed to start quiz: " + (err.message || err));
+                if (studentSection) studentSection.classList.remove('hidden');
+                if (quizSection) quizSection.classList.add('hidden');
+            }
+        }
+    };
+
+    // Allow student to proceed immediately via the "Start Quiz Now" button
+    const proceedBtn = document.getElementById('instruction-proceed-btn');
+    if (proceedBtn) {
+        proceedBtn.onclick = () => executeComplete();
+    }
+
+    instructionCountdownInterval = setInterval(() => {
+        count--;
+        if (instructionCountdown) {
+            instructionCountdown.textContent = Math.max(0, count);
+        }
+        if (count <= 0) {
+            executeComplete();
         }
     }, 1000);
 }
@@ -2677,6 +3074,16 @@ async function startQuiz() {
         }
 
         const snap = await database.ref(`results/${quizId}/${studentId}`).once('value');
+
+        // If there is NO submission in the cloud database, any old local submission record
+        // on this machine is either obsolete or was reset by the instructor. Clear it!
+        if (!snap.exists()) {
+            try {
+                localStorage.removeItem(quizId);
+                localStorage.removeItem(`quiz_progress_${quizId}_${studentId}`);
+            } catch (_) { }
+        }
+
         const localRecord = localStorage.getItem(quizId);
         const hasSubmitted = snap.exists() || (localRecord && (Date.now() - JSON.parse(localRecord).timestamp < 10800000));
 
@@ -2701,12 +3108,40 @@ async function proceedWithQuizExecution(ctx) {
         const data = quizSnap.val();
         if (!data) {
             hideLoading();
-            alert('Quiz not found.');
+            alert('Quiz not found in cloud database. Please verify the Quiz ID with your teacher.');
             return;
         }
 
-        const decrypted = await decryptData(data.encryptedQuizData, secretKey);
+        let decrypted;
+        try {
+            decrypted = await decryptData(data.encryptedQuizData, secretKey);
+        } catch (decryptErr) {
+            hideLoading();
+            alert('Decryption failed: Incorrect secret key. Please check the access key provided by your teacher.');
+            return;
+        }
+
         quizData = JSON.parse(decrypted);
+
+        // Validate quizData structure
+        if (!quizData || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
+            hideLoading();
+            alert('This quiz contains no questions or has corrupted data. Please contact your instructor.');
+            return;
+        }
+
+        // Normalize each question's options if needed
+        quizData.questions.forEach((q, idx) => {
+            if (!q) {
+                quizData.questions[idx] = { text: `Question ${idx + 1}`, options: ['Option 1', 'Option 2'], correctAnswer: 0 };
+            } else if (!Array.isArray(q.options)) {
+                if (typeof q.options === 'string') {
+                    q.options = q.options.split('|').map(o => o.trim()).filter(Boolean);
+                } else {
+                    q.options = ['Option 1', 'Option 2'];
+                }
+            }
+        });
 
         const serverTime = await getServerTime();
         const quizExpiry = parseExpiryTimestamp(quizData.expiry);
@@ -2720,152 +3155,167 @@ async function proceedWithQuizExecution(ctx) {
         hideLoading();
         persistenceKey = `quiz_progress_${quizData.id}_${studentId}`;
 
-        showInstructionModal(quizData.instructionCountdown, () => {
-            quizData.student = {
-                firstName,
-                lastName,
-                section,
-                institutionalId: studentInstitutionalId,
-                isRetake: !!isRetake,
-                retakeReason: retakeReason || ''
-            };
-            quizData.secretKey = secretKey;
+        const countdownDuration = parseInt(quizData.instructionCountdown, 10);
+        const safeCountdown = (!isNaN(countdownDuration) && countdownDuration > 0) ? countdownDuration : 5;
 
-            // Persistence: Check for existing session (only if not retake)
-            let savedState = (!isRetake) ? localStorage.getItem(persistenceKey) : null;
+        showInstructionModal(safeCountdown, () => {
+            try {
+                quizData.student = {
+                    firstName,
+                    lastName,
+                    section,
+                    institutionalId: studentInstitutionalId,
+                    isRetake: !!isRetake,
+                    retakeReason: retakeReason || ''
+                };
+                quizData.secretKey = secretKey;
 
-            if (savedState) {
-                try {
-                    const state = JSON.parse(savedState);
-                    const durationMs = (quizData.duration > 0) ? (quizData.duration * 60000) : 0;
-                    const elapsedMs = Date.now() - (state.startTime || 0);
+                // Persistence: Check for existing session (only if not retake)
+                let savedState = (!isRetake) ? localStorage.getItem(persistenceKey) : null;
 
-                    // Check if previous session expired while away
-                    if (durationMs > 0 && elapsedMs >= durationMs) {
-                        console.warn("Saved session has expired; starting fresh session.");
-                        localStorage.removeItem(persistenceKey);
-                        savedState = null;
-                    } else {
-                        // Restore shuffled order if it exists
-                        if (state.questions && state.questions.length > 0) {
-                            quizData.questions = state.questions;
-                        } else if (quizData.randomizeOrder !== false) {
-                            shuffleQuiz(quizData);
-                        }
+                if (savedState) {
+                    try {
+                        const state = JSON.parse(savedState);
+                        const durationMs = (quizData.duration > 0) ? (quizData.duration * 60000) : 0;
+                        const elapsedMs = Date.now() - (state.startTime || 0);
 
-                        // Validate basic integrity
-                        if (state.answers && state.answers.length === quizData.questions.length) {
-                            console.log("Restoring active session...");
-                            quizStartTime = state.startTime;
-                            studentAnswers = state.answers;
-                            focusLostCount = state.attempts || 0;
-                            if (focusLostCount > 0) {
-                                isHandlingFocusLoss = true;
-                                setTimeout(() => isHandlingFocusLoss = false, 1000);
-                            }
+                        // Check if previous session expired while away
+                        if (durationMs > 0 && elapsedMs >= durationMs) {
+                            console.warn("Saved session has expired; starting fresh session.");
+                            localStorage.removeItem(persistenceKey);
+                            savedState = null;
                         } else {
-                            studentAnswers = new Array(quizData.questions.length).fill(null);
-                            quizStartTime = Date.now();
+                            // Restore shuffled order if it exists
+                            if (state.questions && Array.isArray(state.questions) && state.questions.length > 0) {
+                                quizData.questions = state.questions;
+                            } else if (quizData.randomizeOrder !== false) {
+                                shuffleQuiz(quizData);
+                            }
+
+                            // Validate basic integrity
+                            if (state.answers && Array.isArray(state.answers) && state.answers.length === quizData.questions.length) {
+                                console.log("Restoring active session...");
+                                quizStartTime = state.startTime;
+                                studentAnswers = state.answers;
+                                flaggedQuestions = new Set(state.flagged || []);
+                                focusLostCount = state.attempts || 0;
+                                if (focusLostCount > 0) {
+                                    isHandlingFocusLoss = true;
+                                    setTimeout(() => isHandlingFocusLoss = false, 1000);
+                                }
+                            } else {
+                                studentAnswers = new Array(quizData.questions.length).fill(null);
+                                flaggedQuestions = new Set();
+                                quizStartTime = Date.now();
+                            }
                         }
+                    } catch (e) {
+                        console.error("Error restoring state", e);
+                        savedState = null;
                     }
-                } catch (e) {
-                    console.error("Error restoring state", e);
-                    savedState = null;
                 }
-            }
 
-            if (!savedState) {
-                // New session: Apply question pooling (sampleCount) with deterministic seed per student
-                if (quizData.sampleCount && quizData.sampleCount > 0 && quizData.sampleCount < quizData.questions.length) {
-                    const seedStr = `${quizData.id}_${studentInstitutionalId}`;
-                    let seed = 0;
-                    for (let c = 0; c < seedStr.length; c++) {
-                        seed = ((seed << 5) - seed) + seedStr.charCodeAt(c);
-                        seed |= 0;
+                if (!savedState) {
+                    // New session: Apply question pooling (sampleCount) with deterministic seed per student
+                    if (quizData.sampleCount && quizData.sampleCount > 0 && quizData.sampleCount < quizData.questions.length) {
+                        const seedStr = `${quizData.id}_${studentInstitutionalId}`;
+                        let seed = 0;
+                        for (let c = 0; c < seedStr.length; c++) {
+                            seed = ((seed << 5) - seed) + seedStr.charCodeAt(c);
+                            seed |= 0;
+                        }
+                        const pseudoRandom = () => {
+                            seed = (seed * 9301 + 49297) % 233280;
+                            return seed / 233280;
+                        };
+                        for (let i = quizData.questions.length - 1; i > 0; i--) {
+                            const j = Math.floor(pseudoRandom() * (i + 1));
+                            [quizData.questions[i], quizData.questions[j]] = [quizData.questions[j], quizData.questions[i]];
+                        }
+                        quizData.questions = quizData.questions.slice(0, quizData.sampleCount);
                     }
-                    const pseudoRandom = () => {
-                        seed = (seed * 9301 + 49297) % 233280;
-                        return seed / 233280;
-                    };
-                    for (let i = quizData.questions.length - 1; i > 0; i--) {
-                        const j = Math.floor(pseudoRandom() * (i + 1));
-                        [quizData.questions[i], quizData.questions[j]] = [quizData.questions[j], quizData.questions[i]];
+
+                    // Shuffle question options & final order if randomizeOrder is enabled
+                    if (quizData.randomizeOrder !== false) {
+                        shuffleQuiz(quizData);
                     }
-                    quizData.questions = quizData.questions.slice(0, quizData.sampleCount);
+
+                    studentAnswers = new Array(quizData.questions.length).fill(null);
+                    flaggedQuestions = new Set();
+                    quizStartTime = Date.now();
+                    saveProgress(); // Initial save to lock in the sample and shuffle order
                 }
 
-                // Shuffle question options & final order if randomizeOrder is enabled
-                if (quizData.randomizeOrder !== false) {
-                    shuffleQuiz(quizData);
+                if (studentSection) studentSection.classList.add('hidden');
+                if (quizSection) quizSection.classList.remove('hidden');
+                const titleEl = document.getElementById('quiz-title-display');
+                if (titleEl) titleEl.textContent = quizData.title || 'Quiz';
+
+                if (isRetake) {
+                    showToast('Retake Session: A 10% deduction will be applied to your final score.', 'warning');
                 }
 
-                studentAnswers = new Array(quizData.questions.length).fill(null);
-                quizStartTime = Date.now();
-                saveProgress(); // Initial save to lock in the sample and shuffle order
-            }
+                updateStudentPalette();
+                displayQuestion(0);
 
-            studentSection.classList.add('hidden');
-            quizSection.classList.remove('hidden');
-            document.getElementById('quiz-title-display').textContent = quizData.title;
-
-            if (isRetake) {
-                showToast('Retake Session: A 10% deduction will be applied to your final score.', 'warning');
-            }
-
-            displayQuestion(0);
-
-            const quizExpiryTs = parseExpiryTimestamp(quizData.expiry);
-            if (quizData.duration > 0 || quizExpiryTs) {
-                startQuizTimer(quizData.duration, quizExpiryTs, quizStartTime);
-            }
-
-            // Forensic Watermarking
-            generateWatermark(firstName, lastName, section, studentInstitutionalId);
-            document.body.classList.add('quiz-active');
-
-            // Clear Clipboard
-            clearClipboard();
-
-            isQuizActive = true;
-            window.addEventListener('blur', handleFocusLoss);
-            document.addEventListener('visibilitychange', handleVisibilityChange);
-            window.addEventListener('blur', togglePrivacyBlur);
-            window.addEventListener('focus', togglePrivacyBlur);
-            document.addEventListener('keyup', handlePrintScreen);
-
-            // Enforce Fullscreen
-            if (document.documentElement && document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen blocked:', e));
-            }
-            document.addEventListener('fullscreenchange', handleFullscreenChange);
-
-            // Print Disruption
-            window.onbeforeprint = () => {
-                if (isQuizActive) {
-                    handleFocusLoss(); // Log as violation
-                    return false;
+                const quizExpiryTs = parseExpiryTimestamp(quizData.expiry);
+                if (quizData.duration > 0 || quizExpiryTs) {
+                    startQuizTimer(quizData.duration, quizExpiryTs, quizStartTime);
                 }
-            };
 
-            startDevToolsDetection();
-            startWatermarkRotation(firstName, lastName, section, studentInstitutionalId);
+                // Forensic Watermarking
+                generateWatermark(firstName, lastName, section, studentInstitutionalId);
+                document.body.classList.add('quiz-active');
 
-            // Show attempts widget
-            if (attemptsWidget) {
-                attemptsWidget.classList.remove('hidden');
-                updateAttemptsDisplay();
-                if (focusLostCount > 0) expandWidget();
+                // Clear Clipboard
+                clearClipboard();
+
+                isQuizActive = true;
+                window.addEventListener('blur', handleFocusLoss);
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                window.addEventListener('blur', togglePrivacyBlur);
+                window.addEventListener('focus', togglePrivacyBlur);
+                document.addEventListener('keyup', handlePrintScreen);
+
+                // Enforce Fullscreen
+                if (document.documentElement && document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen blocked:', e));
+                }
+                document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+                // Print Disruption
+                window.onbeforeprint = () => {
+                    if (isQuizActive) {
+                        handleFocusLoss(); // Log as violation
+                        return false;
+                    }
+                };
+
+                startDevToolsDetection();
+                startWatermarkRotation(firstName, lastName, section, studentInstitutionalId);
+
+                // Show attempts widget
+                if (attemptsWidget) {
+                    attemptsWidget.classList.remove('hidden');
+                    updateAttemptsDisplay();
+                    if (focusLostCount > 0) expandWidget();
+                }
+
+                // Save Session Logic (Auto-Login Data)
+                localStorage.setItem('quizable_active_session', JSON.stringify({
+                    quizId, firstName, lastName,
+                    studentInstitutionalId,
+                    yearVal: yearVal || (document.getElementById('student-year')?.value || '1'),
+                    sectionVal: sectionVal || (document.getElementById('student-section-select')?.value || 'A'),
+                    section, secretKey,
+                    timestamp: Date.now()
+                }));
+            } catch (err) {
+                console.error("Error executing quiz after countdown:", err);
+                alert("Failed to initialize quiz: " + err.message);
+                if (studentSection) studentSection.classList.remove('hidden');
+                if (quizSection) quizSection.classList.add('hidden');
             }
-
-            // Save Session Logic (Auto-Login Data)
-            localStorage.setItem('quizable_active_session', JSON.stringify({
-                quizId, firstName, lastName,
-                studentInstitutionalId,
-                yearVal: yearVal || (document.getElementById('student-year')?.value || '1'),
-                sectionVal: sectionVal || (document.getElementById('student-section-select')?.value || 'A'),
-                section, secretKey,
-                timestamp: Date.now()
-            }));
         });
     } catch (err) {
         hideLoading();
@@ -2873,18 +3323,101 @@ async function proceedWithQuizExecution(ctx) {
     }
 }
 
+function updateStudentPalette() {
+    if (!quizData || !quizData.questions) return;
+    const grid = document.getElementById('student-palette-grid');
+    if (!grid) return;
+
+    let answered = 0;
+    let flagged = 0;
+    const total = quizData.questions.length;
+
+    grid.innerHTML = '';
+    for (let i = 0; i < total; i++) {
+        const isAnswered = studentAnswers[i] !== null;
+        const isFlag = flaggedQuestions.has(i);
+        const isCurrent = (i === currentQuestionIndex);
+
+        if (isAnswered) answered++;
+        if (isFlag) flagged++;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `palette-item ${isAnswered ? 'answered' : 'unanswered'} ${isFlag ? 'flagged' : ''} ${isCurrent ? 'current' : ''}`;
+        btn.title = `Question ${i + 1}: ${isAnswered ? 'Answered' : 'Unanswered'}${isFlag ? ' (Flagged)' : ''}`;
+        btn.setAttribute('aria-label', `Question ${i + 1}`);
+
+        btn.innerHTML = `<span>${i + 1}</span>${isFlag ? '<span class="palette-flag-icon">🚩</span>' : ''}`;
+
+        btn.onclick = () => {
+            displayQuestion(i);
+        };
+        grid.appendChild(btn);
+    }
+
+    const answeredEl = document.getElementById('palette-count-answered');
+    const flaggedEl = document.getElementById('palette-count-flagged');
+    const unansweredEl = document.getElementById('palette-count-unanswered');
+    if (answeredEl) answeredEl.textContent = answered;
+    if (flaggedEl) flaggedEl.textContent = flagged;
+    if (unansweredEl) unansweredEl.textContent = Math.max(0, total - answered);
+}
+
+window.toggleFlagQuestion = function (index) {
+    if (flaggedQuestions.has(index)) {
+        flaggedQuestions.delete(index);
+        showToast(`Unflagged Question ${index + 1}`, 'info');
+    } else {
+        flaggedQuestions.add(index);
+        showToast(`Flagged Question ${index + 1} for review`, 'warning');
+    }
+    const flagBtn = document.getElementById(`flag-btn-${index}`);
+    const isFlagged = flaggedQuestions.has(index);
+    if (flagBtn) {
+        flagBtn.className = `btn btn-sm ${isFlagged ? 'btn-flagged' : 'btn-outline'}`;
+        flagBtn.innerHTML = `<span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>`;
+        flagBtn.title = isFlagged ? 'Remove flag' : 'Flag this question for review';
+    }
+    updateStudentPalette();
+    saveProgress();
+};
+
 function displayQuestion(index) {
+    if (!quizData || !Array.isArray(quizData.questions) || quizData.questions.length === 0) return;
+    if (index < 0) index = 0;
+    if (index >= quizData.questions.length) index = quizData.questions.length - 1;
+
     currentQuestionIndex = index;
     const q = quizData.questions[index];
-    document.getElementById('quiz-review').classList.add('hidden');
-    const container = document.getElementById('quiz-questions');
-    container.classList.remove('hidden');
+    if (!q) return;
 
-    document.getElementById('quiz-progress').style.width = `${((index + 1) / quizData.questions.length) * 100}%`;
+    if (!Array.isArray(q.options)) {
+        if (typeof q.options === 'string') {
+            q.options = q.options.split('|').map(o => o.trim()).filter(Boolean);
+        } else {
+            q.options = [];
+        }
+    }
+
+    const isFlagged = flaggedQuestions ? flaggedQuestions.has(index) : false;
+    const reviewEl = document.getElementById('quiz-review');
+    if (reviewEl) reviewEl.classList.add('hidden');
+    const container = document.getElementById('quiz-questions');
+    if (container) container.classList.remove('hidden');
+
+    const progressEl = document.getElementById('quiz-progress');
+    if (progressEl && quizData.questions.length > 0) {
+        progressEl.style.width = `${((index + 1) / quizData.questions.length) * 100}%`;
+    }
 
     container.innerHTML = `
         <div class="quiz-question">
-            <h3>Question ${index + 1} of ${quizData.questions.length}</h3>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+                <h3 style="margin:0;">Question ${index + 1} of ${quizData.questions.length}</h3>
+                <button type="button" id="flag-btn-${index}" class="btn btn-sm ${isFlagged ? 'btn-flagged' : 'btn-outline'}" onclick="toggleFlagQuestion(${index})" title="${isFlagged ? 'Remove flag' : 'Flag this question for review'}">
+                    <span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>
+                </button>
+            </div>
             <p style="font-size:1.1rem; margin-bottom:15px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(q.text)}</p>
             ${q.figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${sanitizeFigure(q.figure)}</div>` : ''}
             <div class="quiz-options" role="radiogroup" aria-label="Question choices">
@@ -2898,10 +3431,11 @@ function displayQuestion(index) {
                 `).join('')}
             </div>
         </div>
-        <div style="display:flex; justify-content:space-between;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
             <button class="btn btn-outline" ${index === 0 ? 'disabled' : ''} id="prev-btn">Previous</button>
+            <button class="btn btn-outline btn-sm" id="jump-review-btn" style="color:var(--info);" title="View all answers overview">Review Answers</button>
             ${index === quizData.questions.length - 1
-            ? '<button class="btn btn-info" id="review-btn">Review Answers</button>'
+            ? '<button class="btn btn-info" id="review-btn">Finish & Review</button>'
             : '<button class="btn btn-primary" id="next-btn">Next</button>'}
         </div>
     `;
@@ -2915,6 +3449,7 @@ function displayQuestion(index) {
         el.setAttribute('aria-checked', 'true');
         studentAnswers[index] = parseInt(el.dataset.index);
         saveProgress();
+        updateStudentPalette();
     };
 
     container.querySelectorAll('.quiz-option').forEach(el => {
@@ -2933,6 +3468,10 @@ function displayQuestion(index) {
     if (next) next.onclick = () => displayQuestion(index + 1);
     const review = document.getElementById('review-btn');
     if (review) review.onclick = () => showReviewPage();
+    const jumpReview = document.getElementById('jump-review-btn');
+    if (jumpReview) jumpReview.onclick = () => showReviewPage();
+
+    updateStudentPalette();
 }
 
 function showReviewPage() {
@@ -2943,11 +3482,21 @@ function showReviewPage() {
     review.innerHTML = `
         <h2>Review Answers</h2>
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;" role="navigation" aria-label="Question review list">
-            ${quizData.questions.map((q, i) => `
-                <div role="button" tabindex="0" onclick="displayQuestion(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();displayQuestion(${i});}" style="padding:15px; border-radius:10px; cursor:pointer; border:1px solid ${studentAnswers[i] !== null ? 'var(--success)' : 'var(--danger)'}; background:${studentAnswers[i] !== null ? '#f0fdf4' : '#fef2f2'};">
-                    <strong>Q${i + 1}</strong>: ${studentAnswers[i] !== null ? 'Answered' : 'Missing'}
+            ${quizData.questions.map((q, i) => {
+                const isAnswered = studentAnswers[i] !== null;
+                const isFlagged = flaggedQuestions.has(i);
+                return `
+                <div role="button" tabindex="0" onclick="displayQuestion(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();displayQuestion(${i});}" style="padding:15px; border-radius:10px; cursor:pointer; border:1.5px solid ${isAnswered ? 'var(--success)' : 'var(--danger)'}; background:${isAnswered ? '#f0fdf4' : '#fef2f2'}; position:relative;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong>Q${i + 1}</strong>
+                        ${isFlagged ? '<span style="font-size:0.75rem; background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:4px; font-weight:700; border:1px solid #fde68a;">🚩 Flagged</span>' : ''}
+                    </div>
+                    <div style="margin-top:6px; font-size:0.85rem; font-weight:600; color:${isAnswered ? 'var(--success)' : 'var(--danger)'};">
+                        ${isAnswered ? '✓ Answered' : '✗ Missing'}
+                    </div>
                 </div>
-            `).join('')}
+                `;
+            }).join('')}
         </div>
         <div style="display:flex; justify-content:space-between;">
             <button class="btn btn-outline" onclick="displayQuestion(${quizData.questions.length - 1})">Back</button>
@@ -2955,6 +3504,7 @@ function showReviewPage() {
         </div>
     `;
     document.getElementById('submit-btn').onclick = () => submitQuiz();
+    updateStudentPalette();
 }
 
 function startQuizTimer(mins, expiry, startTime) {
@@ -3122,6 +3672,7 @@ function saveProgress() {
         startTime: quizStartTime,
         answers: studentAnswers,
         attempts: focusLostCount,
+        flagged: Array.from(flaggedQuestions),
         questions: sanitizedQuestions // Safe structure without answer keys
     };
     localStorage.setItem(persistenceKey, JSON.stringify(state));
@@ -3244,6 +3795,7 @@ function submitQuiz(auto = false) {
 
         quizSection.classList.add('hidden');
         resultsSection.classList.remove('hidden');
+        flaggedQuestions.clear();
         try { localStorage.setItem(quizData.id, JSON.stringify({ timestamp: Date.now() })); } catch { }
 
         if (quizData.saveResultsToCloud !== false) {
@@ -3412,6 +3964,9 @@ window.showTeacherMenu = showTeacherMenu;
 window.showCreateQuiz = showCreateQuiz;
 window.showViewResults = showViewResults;
 window.adminLogout = adminLogout;
+window.exportAugust2026Excel = exportAugust2026Excel;
+window.exportCurrentTeacherQuizExcel = exportCurrentTeacherQuizExcel;
+window.exportAdminQuizResultsExcel = exportAdminQuizResultsExcel;
 
 // --- CRYPTO HELPERS ---
 const keyCache = new Map();

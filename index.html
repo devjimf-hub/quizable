@@ -328,8 +328,10 @@
                 </div>
             </details>
 
-            <button id="export-pdf-btn" class="btn btn-info hidden" style="width: 100%; margin-top: 20px;">Export to
-                Professional PDF</button>
+            <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+                <button id="export-pdf-btn" class="btn btn-info hidden" style="flex: 1; min-width: 180px;">Export to Professional PDF</button>
+                <button id="export-excel-btn" class="btn btn-success hidden" style="flex: 1; min-width: 180px;" onclick="exportCurrentTeacherQuizExcel()">Export to Excel (By Section)</button>
+            </div>
 
         </div>
 
@@ -338,16 +340,28 @@
             <div
                 style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
                 <h1>System Administrator</h1>
-                <div style="display: flex; gap: 10px;">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <button class="btn btn-info btn-sm" onclick="exportAllSubmissionsCsv()"
-                        title="Export All Submissions">
+                        title="Export All Submissions to CSV">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                             <polyline points="7 10 12 15 17 10"></polyline>
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
-                        Export All
+                        Export All (CSV)
+                    </button>
+                    <button class="btn btn-success btn-sm" onclick="exportAugust2026Excel()"
+                        title="Export Quizzes from August 2026 to latest into Excel (Every Quiz & Section in Separate Sheets)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="8" y1="13" x2="16" y2="13"></line>
+                            <line x1="8" y1="17" x2="16" y2="17"></line>
+                            <polyline points="10 9 9 9 8 9"></polyline>
+                        </svg>
+                        Export Excel (Aug 2026+)
                     </button>
                     <button class="btn btn-outline btn-sm" onclick="adminLogout()">Exit Admin</button>
                 </div>
@@ -443,6 +457,34 @@
             <div class="progress-bar">
                 <div class="progress" id="quiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
             </div>
+
+            <!-- Student Question Navigator / Quick Jump Palette -->
+            <div id="student-palette-container" class="student-palette-container">
+                <div class="palette-header">
+                    <div class="palette-stats">
+                        <span class="palette-stat stat-answered" title="Answered Questions">
+                            <span class="stat-indicator answered-indicator"></span>
+                            <span id="palette-count-answered">0</span> Answered
+                        </span>
+                        <span class="palette-stat stat-flagged" title="Flagged for Review">
+                            <span class="stat-indicator flagged-indicator">🚩</span>
+                            <span id="palette-count-flagged">0</span> Flagged
+                        </span>
+                        <span class="palette-stat stat-unanswered" title="Unanswered Questions">
+                            <span class="stat-indicator unanswered-indicator"></span>
+                            <span id="palette-count-unanswered">0</span> Left
+                        </span>
+                    </div>
+                    <div class="palette-actions">
+                        <button type="button" id="toggle-palette-btn" class="btn btn-sm btn-outline palette-toggle-btn" aria-expanded="true">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                            <span id="toggle-palette-text">Hide Grid</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="student-palette-grid" class="student-palette-grid" role="navigation" aria-label="Question jump palette"></div>
+            </div>
+
             <div id="quiz-questions"></div>
             <div id="quiz-review" class="hidden"></div>
         </div>
@@ -629,9 +671,13 @@
                 </div>
                 <div style="background: var(--bg-body); padding: 20px; border-radius: 12px; text-align: center;">
                     <p style="font-weight: 600; color: var(--text-muted); margin-bottom: 5px;">Starting in</p>
-                    <div id="instruction-countdown" style="font-size: 3rem; font-weight: 800; color: var(--primary);">30
+                    <div id="instruction-countdown" style="font-size: 3rem; font-weight: 800; color: var(--primary);">5
                     </div>
                 </div>
+                <button type="button" id="instruction-proceed-btn" class="btn btn-primary"
+                    style="width: 100%; margin-top: 15px; height: 48px; font-weight: 700; font-size: 1rem;">
+                    Start Quiz Now
+                </button>
             </div>
         </div>
 
@@ -720,7 +766,7 @@
         <!-- Logic -->
         <div id="quiz-navigator" class="quiz-navigator hidden"></div>
         <div id="toast-container" class="toast-container" role="region" aria-live="polite"></div>
-        <script src="script.js?v=2.1"></script>
+        <script src="script.js?v=2.3"></script>
 </body>
 
 </html>
