@@ -3288,12 +3288,14 @@ async function proceedWithQuizExecution(ctx) {
                             seed = ((seed << 5) - seed) + seedStr.charCodeAt(c);
                             seed |= 0;
                         }
+                        seed = Math.abs(seed);
                         const pseudoRandom = () => {
                             seed = (seed * 9301 + 49297) % 233280;
-                            return seed / 233280;
+                            return (seed < 0 ? seed + 233280 : seed) / 233280;
                         };
                         for (let i = quizData.questions.length - 1; i > 0; i--) {
-                            const j = Math.floor(pseudoRandom() * (i + 1));
+                            const r = pseudoRandom();
+                            const j = Math.max(0, Math.min(i, Math.floor(r * (i + 1))));
                             [quizData.questions[i], quizData.questions[j]] = [quizData.questions[j], quizData.questions[i]];
                         }
                         quizData.questions = quizData.questions.slice(0, quizData.sampleCount);
