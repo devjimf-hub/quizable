@@ -2838,14 +2838,31 @@ function exportResultsToPdf() {
 
 function shuffleQuiz(quiz) {
     if (!quiz || !Array.isArray(quiz.questions)) return;
+    // Densify and remove any holes/nulls
+    quiz.questions = quiz.questions.filter(q => q && typeof q === 'object');
     for (let i = quiz.questions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [quiz.questions[i], quiz.questions[j]] = [quiz.questions[j], quiz.questions[i]];
     }
     quiz.questions.forEach(q => {
-        if (!q || !Array.isArray(q.options) || q.options.length < 2) return;
-        const originalCorrectIndex = q.correctAnswer;
-        const mappedOptions = q.options.map((opt, idx) => ({
+        if (!q) return;
+        if (!Array.isArray(q.options)) {
+            if (typeof q.options === 'string') {
+                q.options = q.options.split('|').map(o => o.trim()).filter(Boolean);
+            } else if (q.options && typeof q.options === 'object') {
+                q.options = Object.values(q.options).filter(Boolean);
+            } else {
+                q.options = ['Option 1', 'Option 2'];
+            }
+        }
+        const cleanOpts = Array.from(q.options)
+            .filter(opt => opt !== undefined && opt !== null)
+            .map(opt => typeof opt === 'object' && opt.text ? String(opt.text).trim() : String(opt).trim())
+            .filter(Boolean);
+        if (cleanOpts.length < 2) return;
+
+        const originalCorrectIndex = typeof q.correctAnswer === 'number' ? q.correctAnswer : 0;
+        const mappedOptions = cleanOpts.map((opt, idx) => ({
             text: opt,
             isCorrect: idx === originalCorrectIndex
         }));
@@ -2853,8 +2870,8 @@ function shuffleQuiz(quiz) {
             const j = Math.floor(Math.random() * (i + 1));
             [mappedOptions[i], mappedOptions[j]] = [mappedOptions[j], mappedOptions[i]];
         }
-        q.options = mappedOptions.map(o => o.text);
-        const newCorrectIndex = mappedOptions.findIndex(o => o.isCorrect);
+        q.options = mappedOptions.map(o => (o && o.text !== undefined) ? o.text : String(o || '')).filter(Boolean);
+        const newCorrectIndex = mappedOptions.findIndex(o => o && o.isCorrect);
         q.correctAnswer = newCorrectIndex !== -1 ? newCorrectIndex : 0;
     });
 }
@@ -3123,25 +3140,48 @@ async function proceedWithQuizExecution(ctx) {
 
         quizData = JSON.parse(decrypted);
 
-        // Validate quizData structure
+        // Validate and thoroughly sanitize quizData.questions structure
         if (!quizData || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
             hideLoading();
             alert('This quiz contains no questions or has corrupted data. Please contact your instructor.');
             return;
         }
 
-        // Normalize each question's options if needed
-        quizData.questions.forEach((q, idx) => {
-            if (!q) {
-                quizData.questions[idx] = { text: `Question ${idx + 1}`, options: ['Option 1', 'Option 2'], correctAnswer: 0 };
-            } else if (!Array.isArray(q.options)) {
-                if (typeof q.options === 'string') {
-                    q.options = q.options.split('|').map(o => o.trim()).filter(Boolean);
-                } else {
-                    q.options = ['Option 1', 'Option 2'];
+        // Densify and normalize each question: guaranteed text, array of options, and valid correctAnswer
+        quizData.questions = Array.from(quizData.questions)
+            .filter(q => q && typeof q === 'object')
+            .map((q, idx) => {
+                const text = (q.text || q.question || q.title || `Question ${idx + 1}`).toString().trim();
+                let options = q.options;
+                if (!Array.isArray(options)) {
+                    if (typeof options === 'string') {
+                        options = options.split('|').map(o => o.trim()).filter(Boolean);
+                    } else if (options && typeof options === 'object') {
+                        options = Object.values(options).filter(Boolean);
+                    } else {
+                        options = ['Option 1', 'Option 2'];
+                    }
                 }
-            }
-        });
+                const cleanOpts = Array.from(options)
+                    .filter(opt => opt !== undefined && opt !== null)
+                    .map(opt => typeof opt === 'object' && opt.text ? String(opt.text).trim() : String(opt).trim())
+                    .filter(Boolean);
+                const finalOptions = cleanOpts.length >= 2 ? cleanOpts : ['Option 1', 'Option 2'];
+                const ca = parseInt(q.correctAnswer, 10);
+                const finalCorrectAnswer = (!isNaN(ca) && ca >= 0 && ca < finalOptions.length) ? ca : 0;
+                return {
+                    text,
+                    options: finalOptions,
+                    correctAnswer: finalCorrectAnswer,
+                    figure: q.figure || ''
+                };
+            });
+
+        if (quizData.questions.length === 0) {
+            hideLoading();
+            alert('No valid questions found in this quiz. Please contact your instructor.');
+            return;
+        }
 
         const serverTime = await getServerTime();
         const quizExpiry = parseExpiryTimestamp(quizData.expiry);
@@ -3187,7 +3227,14 @@ async function proceedWithQuizExecution(ctx) {
                         } else {
                             // Restore shuffled order if it exists
                             if (state.questions && Array.isArray(state.questions) && state.questions.length > 0) {
-                                quizData.questions = state.questions;
+                                quizData.questions = state.questions
+                                    .filter(q => q && typeof q === 'object')
+                                    .map((q, idx) => ({
+                                        text: (q.text || `Question ${idx + 1}`).toString(),
+                                        options: Array.isArray(q.options) ? q.options.filter(Boolean) : ['Option 1', 'Option 2'],
+                                        correctAnswer: (typeof q.correctAnswer === 'number') ? q.correctAnswer : (quizData.questions[idx]?.correctAnswer || 0),
+                                        figure: q.figure || ''
+                                    }));
                             } else if (quizData.randomizeOrder !== false) {
                                 shuffleQuiz(quizData);
                             }
@@ -3418,7 +3465,7 @@ function displayQuestion(index) {
                     <span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>
                 </button>
             </div>
-            <p style="font-size:1.1rem; margin-bottom:15px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(q.text)}</p>
+            <p style="font-size:1.1rem; margin-bottom:15px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(q ? (q.text || '') : '')}</p>
             ${q.figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${sanitizeFigure(q.figure)}</div>` : ''}
             <div class="quiz-options" role="radiogroup" aria-label="Question choices">
                 ${q.options.map((opt, i) => `
@@ -3661,21 +3708,27 @@ function updateAttemptsDisplay() {
 }
 
 function saveProgress() {
-    if (!persistenceKey || !isQuizActive || !quizData) return;
+    if (!persistenceKey || !quizData || !Array.isArray(quizData.questions)) return;
     // Strip correctAnswer from questions before caching in localStorage
-    const sanitizedQuestions = quizData.questions.map(q => ({
-        text: q.text,
-        options: q.options,
-        figure: q.figure
-    }));
+    const sanitizedQuestions = quizData.questions
+        .filter(q => q && typeof q === 'object')
+        .map(q => ({
+            text: (q && q.text) ? q.text : '',
+            options: (q && Array.isArray(q.options)) ? q.options.filter(o => o !== undefined && o !== null) : [],
+            figure: (q && q.figure) ? q.figure : ''
+        }));
     const state = {
         startTime: quizStartTime,
         answers: studentAnswers,
         attempts: focusLostCount,
-        flagged: Array.from(flaggedQuestions),
+        flagged: Array.from(flaggedQuestions || []),
         questions: sanitizedQuestions // Safe structure without answer keys
     };
-    localStorage.setItem(persistenceKey, JSON.stringify(state));
+    try {
+        localStorage.setItem(persistenceKey, JSON.stringify(state));
+    } catch (e) {
+        console.warn("Failed to cache quiz state:", e);
+    }
 }
 
 // function startQuizTimer(mins, expiry) { // Old signature
@@ -3699,16 +3752,18 @@ function submitQuiz(auto = false) {
     if (!quizData) return;
     const exec = () => {
         let score = 0;
-        const detail = quizData.questions.map((q, i) => {
+        const detail = (quizData.questions || []).map((q, i) => {
+            if (!q) return null;
             const correct = studentAnswers[i] === q.correctAnswer;
             if (correct) score++;
             return {
-                questionText: q.text, figure: q.figure,
-                studentAnswerText: studentAnswers[i] !== null ? q.options[studentAnswers[i]] : 'N/A',
-                correctAnswerText: q.options[q.correctAnswer],
+                questionText: q.text || '',
+                figure: q.figure || '',
+                studentAnswerText: (studentAnswers[i] !== null && Array.isArray(q.options)) ? (q.options[studentAnswers[i]] || 'N/A') : 'N/A',
+                correctAnswerText: Array.isArray(q.options) ? (q.options[q.correctAnswer] || 'N/A') : 'N/A',
                 isCorrect: correct
             };
-        });
+        }).filter(Boolean);
 
         const rawScore = score;
         const totalQuestions = quizData.questions.length;
