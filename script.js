@@ -455,7 +455,8 @@ function initializeApp() {
 
     if (qParam) {
         try {
-            const decoded = JSON.parse(atob(qParam));
+            const safeBase64 = qParam.replace(/ /g, '+');
+            const decoded = JSON.parse(atob(safeBase64));
             if (decoded.i && decoded.k) {
                 setTimeout(() => {
                     const idField = document.getElementById(part === 'teacher' ? 'results-quiz-id' : 'student-quiz-id');
@@ -1874,18 +1875,23 @@ if (togglePaletteBtn) {
 });
 
 function isDevToolsOpen() {
-    const threshold = 160;
+    // Touch/mobile devices do not have docked desktop DevTools
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    if (isTouchDevice) return false;
 
     // Method 1: Debugger delay
     const start = performance.now();
     debugger;
-    if (performance.now() - start > threshold) return true;
+    if (performance.now() - start > 220) return true;
 
-    // Method 2: Window size difference (detects docked DevTools)
-    const widthDiff = window.outerWidth - window.innerWidth > threshold;
-    const heightDiff = window.outerHeight - window.innerHeight > threshold;
+    // Method 2: Significant window size discrepancy (docked desktop DevTools)
+    if (window.outerWidth && window.innerWidth) {
+        const widthDiff = window.outerWidth - window.innerWidth;
+        const heightDiff = window.outerHeight - window.innerHeight;
+        if (widthDiff > 280 || heightDiff > 280) return true;
+    }
 
-    return widthDiff || heightDiff;
+    return false;
 }
 
 // --- CHEATING PREVENTION ---
@@ -2987,8 +2993,8 @@ function fetchServerTimeOffset() {
 async function validateDeviceClock() {
     try {
         const offset = await fetchServerTimeOffset();
-        // If offset is greater than 3 minutes (180,000ms), clock is skewed!
-        if (Math.abs(offset) > 180000) {
+        // Allow up to 10 minutes (600,000ms) tolerance to avoid locking out students with minor system drift
+        if (Math.abs(offset) > 600000) {
             const minutesOff = (Math.abs(offset) / 60000).toFixed(1);
             const direction = offset > 0 ? 'behind' : 'ahead of';
             return {
@@ -3019,7 +3025,7 @@ function togglePrivacyBlur(e) {
 
 function handlePrintScreen(e) {
     if (isQuizActive && e.key === 'PrintScreen') {
-        alert('Screenshots not allowed.');
+        showToast('Screenshots are disabled during the examination.', 'warning');
     }
 }
 
@@ -3636,11 +3642,13 @@ function stopQuizTimer() {
 }
 
 function startDevToolsDetection() {
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    if (isTouchDevice) return; // Prevent mobile GC pauses from false-triggering violations
     devToolsInterval = setInterval(() => {
         const start = performance.now();
         debugger;
-        if (performance.now() - start > 160) handleFocusLoss();
-    }, 2000);
+        if (performance.now() - start > 220) handleFocusLoss();
+    }, 3000);
 }
 
 function stopDevToolsDetection() { if (devToolsInterval) clearInterval(devToolsInterval); }
@@ -3791,7 +3799,6 @@ function submitQuiz(auto = false) {
             if (correct) score++;
             return {
                 questionText: q.text || '',
-                figure: q.figure || '',
                 studentAnswerText: (studentAnswers[i] !== null && Array.isArray(q.options)) ? (q.options[studentAnswers[i]] || 'N/A') : 'N/A',
                 correctAnswerText: Array.isArray(q.options) ? (q.options[q.correctAnswer] || 'N/A') : 'N/A',
                 isCorrect: correct
@@ -3896,20 +3903,30 @@ function submitQuiz(auto = false) {
                 // Keep emergency local backup until confirmation
                 localStorage.setItem(`backup_submission_${quizData.id}`, JSON.stringify(res));
 
-                database.ref(`results/${quizData.id}/${id}`).set(enc).then(() => {
-                    hideLoading();
-                    showToast('Exam successfully submitted to the cloud!', 'success');
-                    // Clear persistence & session ONLY after confirmed write
-                    if (persistenceKey) localStorage.removeItem(persistenceKey);
-                    localStorage.removeItem('quizable_active_session');
-                    localStorage.removeItem(`backup_submission_${quizData.id}`);
-                }).catch(err => {
-                    hideLoading();
-                    console.error('Submission error:', err);
-                    alert(`Network error saving to cloud: ${err.message}. Your answers are preserved in local storage. Click "Download Results (PDF)" to ensure you have a copy of your score!`);
-                    const pdfBtn = document.getElementById('download-student-pdf-btn');
-                    if (pdfBtn) pdfBtn.classList.remove('hidden');
-                });
+                const retryBtn = document.getElementById('retry-cloud-submission-btn');
+                const saveToCloud = () => {
+                    showLoading();
+                    database.ref(`results/${quizData.id}/${id}`).set(enc).then(() => {
+                        hideLoading();
+                        showToast('Exam successfully submitted to the cloud!', 'success');
+                        if (retryBtn) retryBtn.classList.add('hidden');
+                        // Clear persistence & session ONLY after confirmed write
+                        if (persistenceKey) localStorage.removeItem(persistenceKey);
+                        localStorage.removeItem('quizable_active_session');
+                        localStorage.removeItem(`backup_submission_${quizData.id}`);
+                    }).catch(err => {
+                        hideLoading();
+                        console.error('Submission error:', err);
+                        alert(`Network error saving to cloud: ${err.message}. Your answers are preserved in local storage. Click "Retry Cloud Submission" once connected or "Download Results (PDF)"!`);
+                        if (retryBtn) {
+                            retryBtn.classList.remove('hidden');
+                            retryBtn.onclick = saveToCloud;
+                        }
+                        const pdfBtn = document.getElementById('download-student-pdf-btn');
+                        if (pdfBtn) pdfBtn.classList.remove('hidden');
+                    });
+                };
+                saveToCloud();
             }).catch(err => {
                 hideLoading();
                 console.error('Encryption error:', err);
@@ -3947,10 +3964,15 @@ function submitQuiz(auto = false) {
     else {
         const missing = studentAnswers.filter(a => a === null).length;
         if (missing > 0) {
-            // Replaced alert with Modal
-            showConfirmationModal('Incomplete Quiz', `You haven't answered all questions yet! (${missing} remaining)`, null, true);
+            showConfirmationModal(
+                'Unanswered Questions',
+                `You still have ${missing} unanswered question${missing > 1 ? 's' : ''}.\n\nAre you sure you want to finish and submit your quiz now?`,
+                exec,
+                false
+            );
+        } else {
+            showConfirmationModal('Submit Quiz?', 'Are you sure you want to submit your answers?', exec);
         }
-        else showConfirmationModal('Submit Quiz?', 'Are you sure you want to submit your answers?', exec);
     }
 }
 
