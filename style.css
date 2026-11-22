@@ -2174,6 +2174,172 @@ body.quiz-active .quiz-watermark {
     margin-bottom: 16px;
 }
 
+/* Vector Graphics & Duolingo Iconography */
+.duo-icon {
+    display: inline-block;
+    vertical-align: -0.16em;
+    width: 1.15em;
+    height: 1.15em;
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+
+.duo-icon-inline {
+    margin-right: 6px;
+}
+
+.duo-hud-pill .duo-icon {
+    width: 1.1em;
+    height: 1.1em;
+    vertical-align: -0.15em;
+    margin-right: 4px;
+}
+
+.duo-hud-sfx .duo-icon {
+    margin-right: 0;
+    width: 1.2em;
+    height: 1.2em;
+}
+
+.duo-results-icon-badge {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: #FEF9C3;
+    border: 2px solid #FDE047;
+    box-shadow: 0 4px 0 #FACC15;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.duo-results-icon-badge .duo-icon {
+    width: 44px;
+    height: 44px;
+    vertical-align: middle;
+}
+
+.duo-warning-icon {
+    margin-bottom: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    animation: shieldShake 0.5s ease-in-out;
+}
+
+.duo-warning-icon .duo-icon {
+    width: 58px;
+    height: 58px;
+}
+
+.duo-modal-icon-badge {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: #EFF6FF;
+    border: 2px solid #BFDBFE;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 3px 0 #93C5FD;
+}
+
+.duo-modal-icon-badge .duo-icon {
+    width: 28px;
+    height: 28px;
+}
+
+.duo-modal-icon-badge.duo-badge-warning {
+    background: #FEF3C7;
+    border-color: #FDE68A;
+    box-shadow: 0 3px 0 #FCD34D;
+}
+
+.duo-inst-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.duo-inst-icon .duo-icon {
+    width: 22px;
+    height: 22px;
+}
+
+.duo-progress-star {
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+.duo-progress-star .duo-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.duo-toast-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.duo-toast-icon .duo-icon {
+    width: 22px;
+    height: 22px;
+}
+
+.duo-flag-btn .duo-icon {
+    width: 1.15em;
+    height: 1.15em;
+    margin-right: 5px;
+    vertical-align: -0.18em;
+}
+
+.duo-filter-btn .duo-icon {
+    width: 1.05em;
+    height: 1.05em;
+    margin-right: 5px;
+    vertical-align: -0.16em;
+}
+
+.duo-review-tile .duo-icon {
+    width: 1.05em;
+    height: 1.05em;
+    margin-right: 4px;
+    vertical-align: -0.16em;
+}
+
+.duo-attempts-left-pill .duo-icon {
+    width: 1.2em;
+    height: 1.2em;
+    vertical-align: -0.18em;
+    margin-right: 4px;
+}
+
+.duo-pill-badge .duo-icon {
+    width: 1.1em;
+    height: 1.1em;
+    vertical-align: -0.16em;
+    margin-right: 4px;
+}
+
+.duo-creds-pill .duo-icon {
+    width: 1.1em;
+    height: 1.1em;
+    vertical-align: -0.16em;
+    margin-right: 4px;
+}
+
 .duo-results-icon-badge {
     width: 76px;
     height: 76px;

@@ -82,11 +82,76 @@ function playCelebrationSound() {
     } catch (_) {}
 }
 
-function showDuoToast(message, type = 'info', icon = '✨') {
+// Duolingo Graphic Icon Library (SVGs)
+const DUO_ICONS = {
+    lightning: `<svg class="duo-icon duo-icon-lightning" viewBox="0 0 24 24" fill="none"><path d="M13 2L4.5 13.2h6L8.5 22 19.5 10.8h-6L15 2z" fill="#FFC800" stroke="#D97706" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+    timer: `<svg class="duo-icon duo-icon-timer" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13.5" r="7.5" fill="#FFF7ED" stroke="#EA580C" stroke-width="2"/><path d="M12 9.5v4l2.5 2.5" stroke="#EA580C" stroke-width="2" stroke-linecap="round"/><path d="M10 2.5h4M12 2.5v3.5M19 6.5l-1.5 1.5" stroke="#EA580C" stroke-width="2" stroke-linecap="round"/></svg>`,
+    shield: `<svg class="duo-icon duo-icon-shield" viewBox="0 0 24 24" fill="none"><path d="M12 2.5L4 6v6c0 5.2 3.4 10 8 11.5 4.6-1.5 8-6.3 8-11.5V6l-8-3.5z" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    shieldRed: `<svg class="duo-icon duo-icon-shield-red" viewBox="0 0 24 24" fill="none"><path d="M12 2.5L4 6v6c0 5.2 3.4 10 8 11.5 4.6-1.5 8-6.3 8-11.5V6l-8-3.5z" fill="#FEF2F2" stroke="#EF4444" stroke-width="2" stroke-linejoin="round"/><path d="M12 8v5M12 16v.5" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round"/></svg>`,
+    soundOn: `<svg class="duo-icon duo-icon-sfx" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H3v6h3l5 4V5z" fill="#3B82F6" stroke="#2563EB" stroke-width="1.5" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 6a9 9 0 0 1 0 12" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/></svg>`,
+    soundOff: `<svg class="duo-icon duo-icon-sfx-muted" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H3v6h3l5 4V5z" fill="#94A3B8" stroke="#64748B" stroke-width="1.5" stroke-linejoin="round"/><line x1="16" y1="9" x2="22" y2="15" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round"/><line x1="22" y1="9" x2="16" y2="15" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round"/></svg>`,
+    star: `<svg class="duo-icon duo-icon-star" viewBox="0 0 24 24" fill="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#FFC800" stroke="#E5A500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    flagFilled: `<svg class="duo-icon duo-icon-flag-filled" viewBox="0 0 24 24" fill="none"><path d="M5 21v-7m0 0V3.5c3-1.5 5 1.5 8 0s5-1.5 6 0v8.5c-2-1.5-4 1.5-7 0s-5-1.5-7 0z" fill="#EF4444" stroke="#DC2626" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5" cy="3.5" r="1.5" fill="#DC2626"/></svg>`,
+    flagOutline: `<svg class="duo-icon duo-icon-flag-outline" viewBox="0 0 24 24" fill="none"><path d="M5 21v-7m0 0V3.5c3-1.5 5 1.5 8 0s5-1.5 6 0v8.5c-2-1.5-4 1.5-7 0s-5-1.5-7 0z" stroke="#64748B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5" cy="3.5" r="1.5" fill="#94A3B8"/></svg>`,
+    lock: `<svg class="duo-icon duo-icon-lock" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="11" rx="3" fill="#3B82F6" stroke="#2563EB" stroke-width="1.6"/><path d="M8 10V7a4 4 0 1 1 8 0v3" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="15" r="1.5" fill="#ffffff"/></svg>`,
+    warning: `<svg class="duo-icon duo-icon-warning" viewBox="0 0 24 24" fill="none"><path d="M12 2.8l9.5 16.5A1.8 1.8 0 0 1 19.9 22H4.1a1.8 1.8 0 0 1-1.6-2.7L12 2.8z" fill="#FEF3C7" stroke="#F59E0B" stroke-width="2" stroke-linejoin="round"/><path d="M12 9v5M12 17.5v.5" stroke="#D97706" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+    stop: `<svg class="duo-icon duo-icon-stop" viewBox="0 0 24 24" fill="none"><polygon points="7.86,2 16.14,2 22,7.86 22,16.14 16.14,22 7.86,22 2,16.14 2,7.86" fill="#EF4444" stroke="#DC2626" stroke-width="1.5"/><line x1="8" y1="12" x2="16" y2="12" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/></svg>`,
+    ban: `<svg class="duo-icon duo-icon-ban" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="#FEE2E2" stroke="#EF4444" stroke-width="2.2"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="#EF4444" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+    clipboard: `<svg class="duo-icon duo-icon-clipboard" viewBox="0 0 24 24" fill="none"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/><rect x="8" y="2" width="8" height="4" rx="1.5" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.8"/><line x1="8" y1="11" x2="16" y2="11" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="15" x2="13" y2="15" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/></svg>`,
+    party: `<svg class="duo-icon duo-icon-party" viewBox="0 0 24 24" fill="none"><path d="M3 21l3.5-10.5 7 7L3 21z" fill="#FFC800" stroke="#EA580C" stroke-width="1.6" stroke-linejoin="round"/><path d="M13.5 17.5l-7-7" stroke="#EA580C" stroke-width="1.5"/><path d="M15 4l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" fill="#EF4444"/><circle cx="20" cy="5" r="1.5" fill="#3B82F6"/><circle cx="18" cy="14" r="1.5" fill="#10B981"/><circle cx="10" cy="5" r="1.5" fill="#8B5CF6"/><path d="M16 10c1.5-1 2.5 0 3-1" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+    trophy: `<svg class="duo-icon duo-icon-trophy" viewBox="0 0 24 24" fill="none"><path d="M6 3h12v7a6 6 0 0 1-12 0V3z" fill="#FEF08A" stroke="#EAB308" stroke-width="2"/><path d="M6 5H3a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4h1M18 5h3a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4h-1" stroke="#EAB308" stroke-width="2" stroke-linecap="round"/><path d="M12 16v3M8 21h8" stroke="#CA8A04" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="9" r="2" fill="#EAB308"/></svg>`,
+    question: `<svg class="duo-icon duo-icon-question" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-2.5 2.8V13M12 16.5v.5" stroke="#2563EB" stroke-width="2.4" stroke-linecap="round"/></svg>`,
+    check: `<svg class="duo-icon duo-icon-check" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" fill="#DCFCE7" stroke="#16A34A" stroke-width="2"/><path d="M8 12.2l2.8 2.8L16 9.5" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    cross: `<svg class="duo-icon duo-icon-cross" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" fill="#FEE2E2" stroke="#DC2626" stroke-width="2"/><path d="M9 9l6 6M15 9l-6 6" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+    sparkle: `<svg class="duo-icon duo-icon-sparkle" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" fill="#FEF08A" stroke="#EAB308" stroke-width="1.8" stroke-linejoin="round"/><path d="M19 16l1 2.5L22.5 19.5 20 20.5 19 23l-1-2.5-2.5-1 2.5-1 1-2.5z" fill="#FDE047"/></svg>`,
+    refresh: `<svg class="duo-icon duo-icon-refresh" viewBox="0 0 24 24" fill="none"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    target: `<svg class="duo-icon duo-icon-target" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#2563EB" stroke-width="2"/><circle cx="12" cy="12" r="5" stroke="#3B82F6" stroke-width="2"/><circle cx="12" cy="12" r="1.5" fill="#1D4ED8"/></svg>`
+};
+
+function getDuoIcon(name) {
+    if (!name) return '';
+    if (typeof name === 'string' && name.startsWith('<svg')) return name;
+    const emojiMap = {
+        '⚡': 'lightning',
+        '⏱️': 'timer',
+        '⏱': 'timer',
+        '🛡️': 'shield',
+        '🛡': 'shield',
+        '🔊': 'soundOn',
+        '🔇': 'soundOff',
+        '⭐': 'star',
+        '🚩': 'flagFilled',
+        '🏳️': 'flagOutline',
+        '🏳': 'flagOutline',
+        '🔐': 'lock',
+        '🔒': 'lock',
+        '⚠️': 'warning',
+        '⚠': 'warning',
+        '🛑': 'stop',
+        '🚫': 'ban',
+        '📋': 'clipboard',
+        '🎉': 'party',
+        '🏆': 'trophy',
+        '❓': 'question',
+        '✓': 'check',
+        '✗': 'cross',
+        '✨': 'sparkle',
+        '🔄': 'refresh',
+        '🎯': 'target'
+    };
+    const key = emojiMap[name] || name;
+    return DUO_ICONS[key] || name;
+}
+if (typeof window !== 'undefined') {
+    window.DUO_ICONS = DUO_ICONS;
+    window.getDuoIcon = getDuoIcon;
+}
+
+function showDuoToast(message, type = 'info', icon = 'sparkle') {
     const toast = document.getElementById('duo-toast');
     if (!toast) return;
     toast.className = `duo-toast ${type}`;
-    toast.innerHTML = `<span class="duo-toast-icon">${icon}</span><span>${escapeHtml(message)}</span>`;
+    toast.innerHTML = `<span class="duo-toast-icon">${getDuoIcon(icon)}</span><span>${escapeHtml(message)}</span>`;
     toast.classList.remove('hidden');
     if (window._duoToastTimeout) clearTimeout(window._duoToastTimeout);
     window._duoToastTimeout = setTimeout(() => {
@@ -143,11 +208,11 @@ function toggleSoundEffects() {
     sfxEnabled = !sfxEnabled;
     try { localStorage.setItem('quizable_sfx', sfxEnabled ? 'true' : 'false'); } catch {}
     const icon = document.getElementById('sfx-icon');
-    if (icon) icon.textContent = sfxEnabled ? '🔊' : '🔇';
+    if (icon) icon.innerHTML = sfxEnabled ? DUO_ICONS.soundOn : DUO_ICONS.soundOff;
     const sfxBtn = document.getElementById('sfx-toggle-btn');
     if (sfxBtn) sfxBtn.classList.toggle('muted', !sfxEnabled);
     if (sfxEnabled) playOptionSelectSound();
-    showDuoToast(sfxEnabled ? 'Sound effects enabled!' : 'Sound effects muted', 'info', sfxEnabled ? '🔊' : '🔇');
+    showDuoToast(sfxEnabled ? 'Sound effects enabled!' : 'Sound effects muted', 'info', sfxEnabled ? 'soundOn' : 'soundOff');
 }
 
 function spawnConfetti() {
@@ -1119,7 +1184,7 @@ async function loadAdminQuizResults(quizId, secretKey) {
                             <td style="color:var(--text-muted);">${i + 1}</td>
                             <td style="font-weight:600;">
                                 ${escapeHtml(res.student?.lastName || '')}, ${escapeHtml(res.student?.firstName || '')}
-                                ${res.isRetake ? `<span style="font-size:0.68rem; background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:3px; border:1px solid #fde68a;">🔄 Retake</span>` : ''}
+                                ${res.isRetake ? `<span style="font-size:0.68rem; background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:3px; border:1px solid #fde68a; display:inline-flex; align-items:center; gap:2px;">${DUO_ICONS.refresh} Retake</span>` : ''}
                             </td>
                             <td style="font-weight:700; color:var(--primary);">${escapeHtml(res.score)}/${escapeHtml(res.totalQuestions)}</td>
                             <td>${res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A'}</td>
@@ -1907,7 +1972,7 @@ async function loadTeacherDashboardQuizzes() {
                             <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #ecfdf5; color: var(--primary); font-weight: 600; border: 1px solid rgba(16,185,129,0.2);">
                                 ${escapeHtml(q.subject)}
                             </span>
-                            ${q.sampleCount ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #eff6ff; color: #2563eb; font-weight: 600; border: 1px solid rgba(37,99,235,0.2);">🎯 ${q.sampleCount} items pooled</span>` : ''}
+                            ${q.sampleCount ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #eff6ff; color: #2563eb; font-weight: 600; border: 1px solid rgba(37,99,235,0.2); display:inline-flex; align-items:center; gap:3px;">${DUO_ICONS.target} ${q.sampleCount} items pooled</span>` : ''}
                         </div>
                         <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap;">
                             <span>Created: <strong>${dateStr}</strong></span>
@@ -3026,13 +3091,13 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                         <div style="flex:1; min-width:240px;">
                             <div style="font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                                 ${escapeHtml(res.student?.lastName || '')}, ${escapeHtml(res.student?.firstName || '')}
-                                ${res.isRetake ? `<span style="font-size:0.7rem; background:#fef3c7; color:#92400e; padding:2px 7px; border-radius:4px; font-weight:600; border:1px solid #fde68a;">🔄 Retake</span>` : ''}
+                                ${res.isRetake ? `<span style="font-size:0.7rem; background:#fef3c7; color:#92400e; padding:2px 7px; border-radius:4px; font-weight:600; border:1px solid #fde68a; display:inline-flex; align-items:center; gap:3px;">${DUO_ICONS.refresh} Retake</span>` : ''}
                             </div>
                             <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">
                                 ID: ${escapeHtml(res.student?.institutionalId || 'N/A')} | Section: ${escapeHtml(res.student?.section || 'N/A')}
                             </div>
                             ${res.isRetake && res.retakeReason ? `<div style="font-size:0.75rem; color:#b45309; margin-top:3px; background:#fffbeb; padding:3px 8px; border-radius:4px; display:inline-block; border-left:3px solid #f59e0b;"><strong>Reason:</strong> <em>${escapeHtml(res.retakeReason)}</em></div>` : ''}
-                            ${res.securityViolations > 0 ? `<div style="font-size:0.7rem; color:var(--danger); font-weight:700; margin-top:4px;">⚠️ ${res.securityViolations} Security Violations</div>` : ''}
+                            ${res.securityViolations > 0 ? `<div style="font-size:0.7rem; color:var(--danger); font-weight:700; margin-top:4px; display:inline-flex; align-items:center; gap:3px;">${DUO_ICONS.warning} ${res.securityViolations} Security Violations</div>` : ''}
                         </div>
                         <div style="display:flex; align-items:center; gap:14px;">
                             <div style="text-align:right;">
@@ -3865,17 +3930,17 @@ window.toggleFlagQuestion = function (index) {
     if (flaggedQuestions.has(index)) {
         flaggedQuestions.delete(index);
         showToast(`Unflagged Question ${index + 1}`, 'info');
-        showDuoToast(`Unflagged Question ${index + 1}`, 'info', '🏳️');
+        showDuoToast(`Unflagged Question ${index + 1}`, 'info', 'flagOutline');
     } else {
         flaggedQuestions.add(index);
         showToast(`Flagged Question ${index + 1} for review`, 'warning');
-        showDuoToast(`Question ${index + 1} flagged for review`, 'warning', '🚩');
+        showDuoToast(`Question ${index + 1} flagged for review`, 'warning', 'flagFilled');
     }
     const flagBtn = document.getElementById(`flag-btn-${index}`);
     const isFlagged = flaggedQuestions.has(index);
     if (flagBtn) {
         flagBtn.className = `duo-flag-btn ${isFlagged ? 'flagged' : ''}`;
-        flagBtn.innerHTML = `<span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>`;
+        flagBtn.innerHTML = `<span>${isFlagged ? DUO_ICONS.flagFilled + ' Flagged' : DUO_ICONS.flagOutline + ' Flag for Review'}</span>`;
         flagBtn.title = isFlagged ? 'Remove flag' : 'Flag this question for review';
     }
     saveProgress();
@@ -3939,9 +4004,9 @@ function displayQuestion(index) {
             <button class="btn btn-outline" ${index === 0 ? 'disabled' : ''} id="prev-btn">← Previous</button>
             <div class="duo-nav-center">
                 <button type="button" id="flag-btn-${index}" class="duo-flag-btn ${isFlagged ? 'flagged' : ''}" onclick="toggleFlagQuestion(${index}); playFlagSound();" title="${isFlagged ? 'Remove flag' : 'Flag this question for review'}">
-                    <span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>
+                    <span>${isFlagged ? DUO_ICONS.flagFilled + ' Flagged' : DUO_ICONS.flagOutline + ' Flag for Review'}</span>
                 </button>
-                <button class="btn btn-outline btn-sm" id="jump-review-btn" style="color:var(--duo-blue-border);" title="View all answers overview">📋 Review Answers</button>
+                <button class="btn btn-outline btn-sm" id="jump-review-btn" style="color:var(--duo-blue-border); display:inline-flex; align-items:center; gap:4px;" title="View all answers overview">${DUO_ICONS.clipboard} Review Answers</button>
             </div>
             ${index === quizData.questions.length - 1
             ? '<button class="btn btn-info" id="review-btn">Finish & Review →</button>'
@@ -4008,9 +4073,9 @@ function showReviewPage() {
         </div>
         <div class="duo-review-filters">
             <button type="button" class="duo-filter-btn active" data-filter="all" onclick="filterReviewGrid('all')">All (${quizData.questions.length})</button>
-            <button type="button" class="duo-filter-btn" data-filter="answered" onclick="filterReviewGrid('answered')">✓ Answered (${answeredCount})</button>
-            <button type="button" class="duo-filter-btn" data-filter="missing" onclick="filterReviewGrid('missing')">✗ Missing (${missingCount})</button>
-            ${flaggedCount > 0 ? `<button type="button" class="duo-filter-btn" data-filter="flagged" onclick="filterReviewGrid('flagged')">🚩 Flagged (${flaggedCount})</button>` : ''}
+            <button type="button" class="duo-filter-btn" data-filter="answered" onclick="filterReviewGrid('answered')">${DUO_ICONS.check} Answered (${answeredCount})</button>
+            <button type="button" class="duo-filter-btn" data-filter="missing" onclick="filterReviewGrid('missing')">${DUO_ICONS.cross} Missing (${missingCount})</button>
+            ${flaggedCount > 0 ? `<button type="button" class="duo-filter-btn" data-filter="flagged" onclick="filterReviewGrid('flagged')">${DUO_ICONS.flagFilled} Flagged (${flaggedCount})</button>` : ''}
         </div>
         <div class="duo-review-grid" role="navigation" aria-label="Question review list">
             ${quizData.questions.map((q, i) => {
@@ -4020,10 +4085,10 @@ function showReviewPage() {
                 <div role="button" tabindex="0" onclick="displayQuestion(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();displayQuestion(${i});}" class="duo-review-tile ${isAnswered ? 'answered' : 'missing'} ${isFlagged ? 'flagged' : ''}">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <strong style="font-family:var(--duo-font-heading); font-size:1.05rem;">Q${i + 1}</strong>
-                        ${isFlagged ? '<span style="font-size:0.75rem; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:999px; font-weight:700; border:1px solid #fde68a;">🚩 Flagged</span>' : ''}
+                        ${isFlagged ? `<span style="font-size:0.75rem; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:999px; font-weight:700; border:1px solid #fde68a; display:inline-flex; align-items:center; gap:2px;">${DUO_ICONS.flagFilled} Flagged</span>` : ''}
                     </div>
-                    <div style="margin-top:8px; font-size:0.88rem; font-weight:700; color:${isAnswered ? '#15803d' : '#b91c1c'};">
-                        ${isAnswered ? '✓ Answered' : '✗ Missing'}
+                    <div style="margin-top:8px; font-size:0.88rem; font-weight:700; color:${isAnswered ? '#15803d' : '#b91c1c'}; display:flex; align-items:center;">
+                        ${isAnswered ? `${DUO_ICONS.check} Answered` : `${DUO_ICONS.cross} Missing`}
                     </div>
                 </div>
                 `;
@@ -4031,7 +4096,7 @@ function showReviewPage() {
         </div>
         <div class="duo-quiz-nav">
             <button class="btn btn-outline" onclick="displayQuestion(${quizData.questions.length - 1})">← Back to Quiz</button>
-            <button class="btn btn-primary" id="submit-btn" style="padding:15px 36px; font-size:1.05rem;">Final Submit 🎉</button>
+            <button class="btn btn-primary" id="submit-btn" style="padding:15px 36px; font-size:1.05rem; display:inline-flex; align-items:center; gap:8px;">Final Submit ${DUO_ICONS.party}</button>
         </div>
     `;
     document.getElementById('submit-btn').onclick = () => submitQuiz();
@@ -4381,17 +4446,17 @@ function submitQuiz(auto = false) {
             let penaltyNotice = '';
             if (isRetake) {
                 penaltyNotice = `
-                    <div style="margin-top:12px; padding:8px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; font-size:0.85rem; color:#991b1b; display:inline-block; line-height:1.4;">
-                        ⚠️ <strong>10% Retake Penalty Applied:</strong> Raw Score: ${rawScore}/${totalQuestions} (${parseFloat(rawPercentage.toFixed(1))}%) &rarr; Final: ${finalScore}/${totalQuestions} (${finalPercentage}%)
+                    <div style="margin-top:12px; padding:8px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; font-size:0.85rem; color:#991b1b; display:inline-flex; align-items:center; gap:6px; line-height:1.4;">
+                        ${DUO_ICONS.warning} <span><strong>10% Retake Penalty Applied:</strong> Raw Score: ${rawScore}/${totalQuestions} (${parseFloat(rawPercentage.toFixed(1))}%) &rarr; Final: ${finalScore}/${totalQuestions} (${finalPercentage}%)</span>
                     </div>
                 `;
             }
 
             const scoreHtml = showScore ? `
                 <div class="duo-results-card">
-                    <div class="duo-results-icon-badge">🏆</div>
+                    <div class="duo-results-icon-badge">${DUO_ICONS.trophy}</div>
                     <div class="duo-results-banner">
-                        <span class="duo-pill-badge" style="background:#FFFBEB; border-color:#FFC800; color:#B45309;">✨ Quiz Complete!</span>
+                        <span class="duo-pill-badge" style="background:#FFFBEB; border-color:#FFC800; color:#B45309; display:inline-flex; align-items:center; gap:4px;">${DUO_ICONS.sparkle} Quiz Complete!</span>
                         <h2 class="duo-results-title">${escapeHtml(gradeLabel)}, ${escapeHtml(quizData.student?.firstName || 'Student')}!</h2>
                         <p class="duo-results-sub">Your exam has been submitted securely.</p>
                     </div>
@@ -4419,8 +4484,8 @@ function submitQuiz(auto = false) {
                     ${detail.map((a, i) => `
                         <div class="duo-answer-breakdown-card ${a.isCorrect ? '' : 'incorrect'}">
                             <div style="font-weight: 800; color: #1E293B; margin-bottom: 6px;">Q${i + 1}: ${escapeHtml(a.questionText)}</div>
-                            <div style="font-size: 0.92rem; color: #475569;">
-                                Your Answer: <strong>${escapeHtml(a.studentAnswerText)}</strong> ${a.isCorrect ? '<span style="color: #16a34a; font-weight: 800; margin-left: 6px;">✓ Correct</span>' : '<span style="color: #dc2626; font-weight: 800; margin-left: 6px;">✗ Incorrect</span>'}
+                            <div style="font-size: 0.92rem; color: #475569; display: flex; align-items: center; flex-wrap: wrap;">
+                                <span>Your Answer:&nbsp;<strong>${escapeHtml(a.studentAnswerText)}</strong></span> ${a.isCorrect ? `<span style="color: #16a34a; font-weight: 800; margin-left: 8px; display:inline-flex; align-items:center; gap:3px;">${DUO_ICONS.check} Correct</span>` : `<span style="color: #dc2626; font-weight: 800; margin-left: 8px; display:inline-flex; align-items:center; gap:3px;">${DUO_ICONS.cross} Incorrect</span>`}
                             </div>
                             ${!a.isCorrect ? `<div style="font-size: 0.92rem; color: #15803d; font-weight: 700; margin-top: 4px;">Correct Answer: ${escapeHtml(a.correctAnswerText)}</div>` : ''}
                         </div>
@@ -4580,7 +4645,7 @@ function downloadStudentResultsAsPdf() {
             i + 1,
             a.questionText,
             a.studentAnswerText,
-            a.isCorrect ? 'Correct ✓' : 'Incorrect ✗'
+            a.isCorrect ? 'Correct' : 'Incorrect'
         ]),
         startY: 85,
         headStyles: { fillColor: [16, 185, 129] },
