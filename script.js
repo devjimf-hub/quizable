@@ -25,6 +25,7 @@ let flaggedQuestions = new Set();
 let focusLostCount = 0;
 let isQuizActive = false;
 let isHandlingFocusLoss = false; // Flag to prevent double counting
+let focusLossCooldownTimer = null;
 const MAX_ATTEMPTS = 5;
 let timerInterval = null;
 let devToolsInterval = null; // For DevTools detection
@@ -33,6 +34,25 @@ let processedStudentResults = []; // To store results for PDF export
 let quizStartTime = 0;
 let allAdminQuizzes = []; // Global store for admin search
 const adminResultsCache = {}; // Cache admin quiz results by quizId
+let isSubmittingQuiz = false;
+let serverTimeOffsetMs = 0;
+let isDraftDirty = false;
+let initialAuthResolved = false;
+let domLoaded = false;
+let appInitialized = false;
+
+function isExamInProgress() {
+    if (!isQuizActive || isSubmittingQuiz) return false;
+    if (!quizSection || quizSection.classList.contains('hidden')) return false;
+    if (resultsSection && !resultsSection.classList.contains('hidden')) return false;
+    return true;
+}
+
+function tryInitializeApp() {
+    if (!domLoaded || !initialAuthResolved || appInitialized) return;
+    appInitialized = true;
+    initializeApp();
+}
 
 // --- AUTHORIZED ADMINISTRATOR CONFIGURATION ---
 // Add the administrator email addresses who are permitted to access the Admin Dashboard.
@@ -79,6 +99,10 @@ function updateAuthUI(user) {
 // Listen to Firebase Auth state transitions
 auth.onAuthStateChanged((user) => {
     updateAuthUI(user);
+    if (!initialAuthResolved) {
+        initialAuthResolved = true;
+        tryInitializeApp();
+    }
 });
 
 function openAuthModal(tab = 'login') {
@@ -255,29 +279,47 @@ function escapeHtml(text) {
         .replace(/'/g, '&#039;');
 }
 
+function escapeJsSingle(val) {
+    return escapeHtml(
+        String(val ?? '')
+            .replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/\r/g, '\\r')
+            .replace(/\n/g, '\\n')
+            .replace(/\u2028/g, '\\u2028')
+            .replace(/\u2029/g, '\\u2029')
+    );
+}
+
 function sanitizeFigure(figureHtml) {
     if (!figureHtml) return '';
     try {
-        const temp = document.createElement('div');
-        temp.innerHTML = figureHtml;
-        const dangerousTags = ['script', 'iframe', 'object', 'embed', 'form', 'link', 'style', 'base', 'meta'];
+        const doc = new DOMParser().parseFromString(String(figureHtml), 'text/html');
+        const dangerousTags = ['script', 'iframe', 'object', 'embed', 'form', 'link', 'style', 'base', 'meta', 'foreignobject', 'animate', 'set', 'handler'];
         dangerousTags.forEach(tag => {
-            temp.querySelectorAll(tag).forEach(el => el.remove());
+            doc.body.querySelectorAll(tag).forEach(el => el.remove());
         });
-        temp.querySelectorAll('*').forEach(el => {
+        doc.body.querySelectorAll('*').forEach(el => {
             Array.from(el.attributes).forEach(attr => {
-                if (/^on/i.test(attr.name)) {
+                const attrName = attr.name.toLowerCase();
+                if (/^on/i.test(attrName) || attrName === 'srcdoc' || attrName === 'formaction') {
                     el.removeAttribute(attr.name);
+                    return;
                 }
-                if (/^(href|src|xlink:href)$/i.test(attr.name)) {
-                    const val = attr.value.trim().toLowerCase();
-                    if (val.startsWith('javascript:') || val.startsWith('data:text/html')) {
+                if (/^(href|src|xlink:href|action)$/i.test(attrName)) {
+                    const normalized = attr.value.replace(/[\s\x00-\x1f\x7f]+/g, '').toLowerCase();
+                    if (
+                        normalized.startsWith('javascript:') ||
+                        normalized.startsWith('vbscript:') ||
+                        normalized.startsWith('data:text/html') ||
+                        normalized.startsWith('data:application/')
+                    ) {
                         el.removeAttribute(attr.name);
                     }
                 }
             });
         });
-        return temp.innerHTML;
+        return doc.body.innerHTML;
     } catch (e) {
         return '';
     }
@@ -369,13 +411,17 @@ function showToast(message, type = 'info') {
     const icons = {
         success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success)"><polyline points="20 6 9 17 4 12"></polyline></svg>',
         info: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--info)"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>',
+        warning: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--warning)"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
         error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--danger)"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>'
     };
 
-    toast.innerHTML = `
-        ${icons[type] || icons.info}
-        <span style="font-size:0.9rem; font-weight:500;">${message}</span>
-    `;
+    toast.innerHTML = icons[type] || icons.info;
+    const msgSpan = document.createElement('span');
+    msgSpan.style.fontSize = '0.9rem';
+    msgSpan.style.fontWeight = '500';
+    msgSpan.textContent = message == null ? '' : String(message);
+    toast.appendChild(msgSpan);
+
     container.appendChild(toast);
     setTimeout(() => {
         toast.style.opacity = '0';
@@ -416,6 +462,7 @@ let widgetTimeout;
 
 // Show Student Portal View
 function showStudentPortal(cleanUrl = false) {
+    cleanupQuizSession();
     const header = document.getElementById('app-header');
     if (header) header.classList.add('hidden');
     closeAuthModal();
@@ -452,34 +499,36 @@ function initializeApp() {
 
     const part = urlParams.get('part');
     const qParam = urlParams.get('q');
+    let linkQuizId = null;
+    let handledTeacherLink = false;
 
     if (qParam) {
         try {
             const safeBase64 = qParam.replace(/ /g, '+');
-            const decoded = JSON.parse(atob(safeBase64));
+            const decoded = JSON.parse(decodeBase64Utf8(safeBase64));
             if (decoded.i && decoded.k) {
-                setTimeout(() => {
-                    const idField = document.getElementById(part === 'teacher' ? 'results-quiz-id' : 'student-quiz-id');
-                    const keyField = document.getElementById(part === 'teacher' ? 'results-secret-key' : 'student-secret-key');
-                    if (idField && keyField) {
-                        idField.value = decoded.i;
-                        keyField.value = decoded.k;
-                        showToast(`Quiz details loaded from link.`, 'success');
+                linkQuizId = decoded.i;
+                const idField = document.getElementById(part === 'teacher' ? 'results-quiz-id' : 'student-quiz-id');
+                const keyField = document.getElementById(part === 'teacher' ? 'results-secret-key' : 'student-secret-key');
+                if (idField && keyField) {
+                    idField.value = decoded.i;
+                    keyField.value = decoded.k;
+                    showToast('Quiz details loaded from link.', 'success');
 
-                        if (part === 'teacher') {
-                            const header = document.getElementById('app-header');
-                            if (header) header.classList.remove('hidden');
-                            if (auth.currentUser) {
-                                showTeacherMenu();
-                                showViewResults();
-                                fetchAndDisplayResults(decoded.i, decoded.k);
-                            } else {
-                                openAuthModal('login');
-                                showToast('Please sign in to access teacher results.', 'info');
-                            }
+                    if (part === 'teacher') {
+                        handledTeacherLink = true;
+                        const header = document.getElementById('app-header');
+                        if (header) header.classList.remove('hidden');
+                        if (auth.currentUser) {
+                            showTeacherMenu();
+                            showViewResults();
+                            fetchAndDisplayResults(decoded.i, decoded.k);
+                        } else {
+                            openAuthModal('login');
+                            showToast('Please sign in to access teacher results.', 'info');
                         }
                     }
-                }, 500);
+                }
             }
         } catch (e) {
             console.error("Invalid quiz link data", e);
@@ -499,7 +548,7 @@ function initializeApp() {
             document.getElementById('admin-dashboard-section').classList.remove('hidden');
             loadAdminDashboard();
         }
-    } else if (part === 'teacher' && !qParam) {
+    } else if (part === 'teacher' && !handledTeacherLink) {
         const header = document.getElementById('app-header');
         if (header) header.classList.remove('hidden');
 
@@ -512,7 +561,7 @@ function initializeApp() {
         }
     } else if (part !== 'teacher') {
         showStudentPortal(false);
-        checkAutoLogin();
+        checkAutoLogin(linkQuizId);
     }
 }
 
@@ -533,6 +582,7 @@ async function loadAdminDashboard() {
     const header = document.getElementById('app-header');
     if (header) header.classList.remove('hidden');
 
+    cleanupQuizSession();
     studentSection.classList.add('hidden');
     teacherMenu.classList.add('hidden');
     teacherCreateSection.classList.add('hidden');
@@ -599,11 +649,92 @@ async function loadAdminDashboard() {
         `;
 
         renderAdminDashboard(grouped);
+        loadAdminStats();
     } catch (e) {
         console.error("Dashboard error", e);
         showToast('Error loading dashboard', 'error');
     }
     hideLoading();
+}
+
+async function decryptEntriesInBatches(entries, secretKey, batchSize = 15) {
+    const out = [];
+    for (let i = 0; i < entries.length; i += batchSize) {
+        const batch = entries.slice(i, i + batchSize);
+        const batchResults = await Promise.all(
+            batch.map(async ([key, encData]) => {
+                try {
+                    const dec = await decryptData(encData, secretKey);
+                    const parsed = JSON.parse(dec);
+                    return { key, data: parsed };
+                } catch (_) {
+                    return null;
+                }
+            })
+        );
+        for (const item of batchResults) {
+            if (item) out.push(item);
+        }
+    }
+    return out;
+}
+
+async function loadAdminStats() {
+    try {
+        const snap = await database.ref('results').once('value');
+        const results = snap.val() || {};
+        let count = 0;
+        let totalScorePerc = 0;
+        let totalSubmissionsWithScore = 0;
+        let totalViolations = 0;
+
+        const keyMap = {};
+        allAdminQuizzes.forEach(q => { keyMap[q.id] = q.secretKey; });
+
+        for (const quizId in results) {
+            const quizResults = results[quizId];
+            if (!quizResults || typeof quizResults !== 'object') continue;
+            const secretKey = keyMap[quizId];
+            const entries = Object.entries(quizResults);
+            count += entries.length;
+
+            if (secretKey && secretKey !== 'N/A' && secretKey !== 'Manual entry required') {
+                const decryptedList = await decryptEntriesInBatches(entries, secretKey);
+                for (const { data: res } of decryptedList) {
+                    if (res.totalQuestions > 0) {
+                        totalScorePerc += (res.score / res.totalQuestions) * 100;
+                        totalSubmissionsWithScore++;
+                    }
+                    totalViolations += (res.securityViolations || 0);
+                }
+            }
+        }
+
+        const avgScore = totalSubmissionsWithScore > 0 ? (totalScorePerc / totalSubmissionsWithScore).toFixed(1) : 0;
+
+        const totalSubsEl = document.getElementById('admin-total-submissions');
+        if (totalSubsEl) totalSubsEl.textContent = count;
+
+        const statsContainer = document.getElementById('admin-stats');
+        if (statsContainer) {
+            statsContainer.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${allAdminQuizzes.length}</div>
+                    <div class="stat-label">Stored Quizzes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${count}</div>
+                    <div class="stat-label">Total Submissions</div>
+                </div>
+                <div class="stat-card" title="Total Violations: ${totalViolations}">
+                    <div class="stat-value">${avgScore}%</div>
+                    <div class="stat-label">Avg. Class Score</div>
+                </div>
+            `;
+        }
+    } catch (e) {
+        console.warn("Stats calculation error:", e);
+    }
 }
 
 function renderAdminDashboard(grouped) {
@@ -642,79 +773,24 @@ function renderAdminDashboard(grouped) {
         groupEl.innerHTML = `
             <div class="subject-header">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-                <h2 style="color:white; margin:0; font-size:1.2rem;">${subject}</h2>
+                <h2 style="color:white; margin:0; font-size:1.2rem;">${escapeHtml(subject)}</h2>
             </div>
             <div class="quizzes-in-group">
                 ${initialQuizzes.map(q => renderAdminQuizItem(q)).join('')}
                 
-                <div id="${groupNormalizedId}" class="hidden">
+                <div id="${escapeHtml(groupNormalizedId)}" class="hidden">
                     ${extraQuizzes.map(q => renderAdminQuizItem(q)).join('')}
                 </div>
 
                 ${extraQuizzes.length > 0 ? `
                     <button class="btn btn-outline" style="width:100%; margin: 10px 0; border-style: dashed; background: white;" 
-                            onclick="toggleExtraQuizzes('${groupNormalizedId}', this)">
+                            onclick="toggleExtraQuizzes('${escapeJsSingle(groupNormalizedId)}', this)">
                         Show More (${extraQuizzes.length} more)
                     </button>
                 ` : ''}
             </div>
         `;
         container.appendChild(groupEl);
-    });
-
-    // Count total submissions in background and calculate stats
-    database.ref('results').once('value').then(async (snap) => {
-        const results = snap.val() || {};
-        let count = 0;
-        let totalScorePerc = 0;
-        let totalSubmissionsWithScore = 0;
-        let totalViolations = 0;
-
-        // Build key map for decryption
-        const keyMap = {};
-        allAdminQuizzes.forEach(q => keyMap[q.id] = q.secretKey);
-
-        for (const quizId in results) {
-            const quizResults = results[quizId];
-            const secretKey = keyMap[quizId];
-            const submissions = Object.keys(quizResults);
-            count += submissions.length;
-
-            if (secretKey) {
-                for (const studentKey in quizResults) {
-                    try {
-                        const decrypted = await decryptData(quizResults[studentKey], secretKey);
-                        const res = JSON.parse(decrypted);
-                        if (res.totalQuestions > 0) {
-                            totalScorePerc += (res.score / res.totalQuestions) * 100;
-                            totalSubmissionsWithScore++;
-                        }
-                        totalViolations += (res.securityViolations || 0);
-                    } catch (e) { }
-                }
-            }
-        }
-
-        const avgScore = totalSubmissionsWithScore > 0 ? (totalScorePerc / totalSubmissionsWithScore).toFixed(1) : 0;
-
-        document.getElementById('admin-total-submissions').textContent = count;
-
-        // Update stats container with more detailed info
-        const statsContainer = document.getElementById('admin-stats');
-        statsContainer.innerHTML = `
-            <div class="stat-card">
-                <div class="stat-value">${allAdminQuizzes.length}</div>
-                <div class="stat-label">Stored Quizzes</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value">${count}</div>
-                <div class="stat-label">Total Submissions</div>
-            </div>
-            <div class="stat-card" title="Total Violations: ${totalViolations}">
-                <div class="stat-value">${avgScore}%</div>
-                <div class="stat-label">Avg. Class Score</div>
-            </div>
-        `;
     });
 }
 
@@ -730,9 +806,9 @@ function renderAdminQuizItem(q) {
                     </div>
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <button class="btn btn-info btn-sm" onclick="loadAdminQuizResults('${escapeHtml(q.id)}', '${escapeHtml(q.secretKey)}')">Results</button>
-                    <button class="btn btn-warning btn-sm" onclick="showAdminSettingsModal('${escapeHtml(q.id)}', '${escapeHtml(q.secretKey)}')">Settings</button>
-                    <button class="btn btn-outline btn-sm" onclick="deleteQuizAdmin('${escapeHtml(q.id)}')" style="color:var(--danger)">Delete</button>
+                    <button class="btn btn-info btn-sm" onclick="loadAdminQuizResults('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')">Results</button>
+                    <button class="btn btn-warning btn-sm" onclick="showAdminSettingsModal('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')">Settings</button>
+                    <button class="btn btn-outline btn-sm" onclick="deleteQuizAdmin('${escapeJsSingle(q.id)}')" style="color:var(--danger)">Delete</button>
                 </div>
             </div>
             <div id="admin-results-${escapeHtml(q.id)}" class="hidden">
@@ -779,15 +855,15 @@ async function loadAdminQuizResults(quizId, secretKey) {
             return;
         }
 
-        validResults.sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
+        validResults.sort((a, b) => (a.student?.lastName || '').localeCompare(b.student?.lastName || ''));
         adminResultsCache[quizId] = validResults;
 
         container.innerHTML = `
             <div style="display:flex; justify-content:flex-end; gap:8px; padding:8px 4px;">
-                <button class="btn btn-primary btn-sm" onclick="exportAdminQuizResultsPdf('${escapeHtml(quizId)}', '${escapeHtml(secretKey)}')">
+                <button class="btn btn-primary btn-sm" onclick="exportAdminQuizResultsPdf('${escapeJsSingle(quizId)}', '${escapeJsSingle(secretKey)}')">
                     Export PDF
                 </button>
-                <button class="btn btn-info btn-sm" onclick="exportAdminQuizResultsExcel('${escapeHtml(quizId)}', '${escapeHtml(secretKey)}')">
+                <button class="btn btn-info btn-sm" onclick="exportAdminQuizResultsExcel('${escapeJsSingle(quizId)}', '${escapeJsSingle(secretKey)}')">
                     Export Excel
                 </button>
             </div>
@@ -816,7 +892,7 @@ async function loadAdminQuizResults(quizId, secretKey) {
                             <td style="color:${res.securityViolations > 0 ? 'var(--danger)' : 'inherit'}">${res.securityViolations || 0}</td>
                             <td style="font-size:0.75rem; color:var(--text-muted);">${new Date(res.submittedAt).toLocaleString()}</td>
                             <td style="text-align:center;">
-                                <button class="btn btn-sm btn-danger-outline" style="padding:2px 8px; font-size:0.75rem;" onclick="confirmResetStudentAttempt('${escapeHtml(quizId)}', '${escapeHtml(secretKey)}', '${escapeHtml(res.dbKey)}', '${escapeHtml((res.student?.lastName || '') + ', ' + (res.student?.firstName || ''))}', '${escapeHtml(res.student?.institutionalId || '')}', true)" title="Reset attempt and clear lockout">
+                                <button class="btn btn-sm btn-danger-outline" style="padding:2px 8px; font-size:0.75rem;" onclick="confirmResetStudentAttempt('${escapeJsSingle(quizId)}', '${escapeJsSingle(secretKey)}', '${escapeJsSingle(res.dbKey)}', '${escapeJsSingle((res.student?.lastName || '') + ', ' + (res.student?.firstName || ''))}', '${escapeJsSingle(res.student?.institutionalId || '')}', true)" title="Reset attempt and clear lockout">
                                     Reset
                                 </button>
                             </td>
@@ -916,29 +992,23 @@ async function exportAllSubmissionsCsv() {
             const quizResults = allResultsRaw[quizId];
             const secretKey = keyMap[quizId];
 
-            if (!secretKey) continue; // Skip if we don't have the key
+            if (!secretKey || !quizResults || typeof quizResults !== 'object') continue; // Skip if we don't have the key
 
-            for (const studentKey in quizResults) {
-                try {
-                    const decrypted = await decryptData(quizResults[studentKey], secretKey);
-                    const res = JSON.parse(decrypted);
-
-                    csvRows.push([
-                        quizId,
-                        res.quizTitle || 'N/A',
-                        res.subject || 'N/A',
-                        `${res.student?.lastName || ''}, ${res.student?.firstName || ''}`,
-                        res.student?.institutionalId || 'N/A',
-                        res.student?.section || 'N/A',
-                        res.score,
-                        res.totalQuestions,
-                        res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) : '0',
-                        res.securityViolations || 0,
-                        new Date(res.submittedAt).toLocaleString().replace(',', '')
-                    ]);
-                } catch (e) {
-                    console.error(`Failed to decrypt result for ${studentKey} in ${quizId}`);
-                }
+            const decryptedList = await decryptEntriesInBatches(Object.entries(quizResults), secretKey);
+            for (const { data: res } of decryptedList) {
+                csvRows.push([
+                    quizId,
+                    res.quizTitle || 'N/A',
+                    res.subject || 'N/A',
+                    `${res.student?.lastName || ''}, ${res.student?.firstName || ''}`,
+                    res.student?.institutionalId || 'N/A',
+                    res.student?.section || 'N/A',
+                    res.score,
+                    res.totalQuestions,
+                    res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) : '0',
+                    res.securityViolations || 0,
+                    new Date(res.submittedAt).toLocaleString().replace(',', '')
+                ]);
             }
         }
 
@@ -957,6 +1027,7 @@ async function exportAllSubmissionsCsv() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         showToast(`Exported ${csvRows.length - 1} submissions to CSV.`, 'success');
     } catch (e) {
@@ -997,7 +1068,7 @@ async function exportAdminQuizResultsPdf(quizId, secretKey) {
         return;
     }
 
-    const sorted = [...results].sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
+    const sorted = [...results].sort((a, b) => (a.student?.lastName || '').localeCompare(b.student?.lastName || ''));
 
     const quizMeta = allAdminQuizzes.find(q => q.id === quizId);
     const quizTitle = sorted[0]?.quizTitle || quizMeta?.title || 'Quiz';
@@ -1007,7 +1078,7 @@ async function exportAdminQuizResultsPdf(quizId, secretKey) {
     const doc = new jsPDF({ orientation: 'landscape' });
 
     // Analytics
-    const scores = sorted.map(r => (r.score / r.totalQuestions) * 100);
+    const scores = sorted.map(r => r.totalQuestions > 0 ? (r.score / r.totalQuestions) * 100 : 0);
     const avgScore = (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1);
     const highest = Math.max(...scores).toFixed(1);
     const passCount = scores.filter(s => s >= 75).length;
@@ -1044,12 +1115,12 @@ async function exportAdminQuizResultsPdf(quizId, secretKey) {
         head: [['#', 'Last Name', 'First Name', 'ID', 'Section', 'Score', '%', 'Time', 'Violations', 'Submitted At']],
         body: sorted.map((r, i) => [
             i + 1,
-            r.student.lastName,
-            r.student.firstName,
-            r.student.institutionalId || 'N/A',
-            r.student.section || 'N/A',
+            r.student?.lastName || '',
+            r.student?.firstName || '',
+            r.student?.institutionalId || 'N/A',
+            r.student?.section || 'N/A',
             `${r.score}/${r.totalQuestions}`,
-            `${((r.score / r.totalQuestions) * 100).toFixed(1)}%`,
+            `${r.totalQuestions > 0 ? ((r.score / r.totalQuestions) * 100).toFixed(1) : '0.0'}%`,
             r.timeTakenMs ? (r.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A',
             r.securityViolations || 0,
             r.submittedAt ? new Date(r.submittedAt).toLocaleString() : 'N/A'
@@ -1210,8 +1281,7 @@ function exportCurrentTeacherQuizExcel() {
         showToast('No results available to export.', 'info');
         return;
     }
-    const quizTitle = document.getElementById('quiz-title-display')?.textContent ||
-                      allStudentResults[0]?.quizTitle || 'Quiz';
+    const quizTitle = allStudentResults[0]?.quizTitle || 'Quiz';
     const wb = XLSX.utils.book_new();
     const existingSheetNames = new Set();
 
@@ -1289,29 +1359,24 @@ async function exportAugust2026Excel(startDate = new Date(2026, 7, 1, 0, 0, 0, 0
         for (const q of quizzes) {
             if (!q.secretKey || q.secretKey === 'N/A' || q.secretKey === 'Manual entry required') continue;
 
-            const isCreatedAfterCutoff = q.createdAt && q.createdAt >= cutoffTime;
+            const isCreatedAfterCutoff = !!(q.createdAt && q.createdAt >= cutoffTime);
             const quizResultsRaw = allResultsRaw[q.id] || {};
             const rawEntries = Object.entries(quizResultsRaw);
 
             // Decrypt student submissions for this quiz
-            const decryptedSubmissions = [];
-            for (const [studentKey, encData] of rawEntries) {
-                try {
-                    const dec = await decryptData(encData, q.secretKey);
-                    const parsed = JSON.parse(dec);
-                    parsed.dbKey = studentKey;
-                    decryptedSubmissions.push(parsed);
-                } catch (e) {
-                    console.warn(`Failed to decrypt result ${studentKey} for quiz ${q.id}`);
-                }
-            }
+            const decryptedList = await decryptEntriesInBatches(rawEntries, q.secretKey);
+            const decryptedSubmissions = decryptedList.map(({ key, data }) => {
+                data.dbKey = key;
+                return data;
+            });
 
-            const hasSubmissionsAfterCutoff = decryptedSubmissions.some(s => (s.submittedAt || 0) >= cutoffTime);
+            const submissionsAfterCutoff = decryptedSubmissions.filter(s => (s.submittedAt || 0) >= cutoffTime);
+            const hasSubmissionsAfterCutoff = submissionsAfterCutoff.length > 0;
 
             if (isCreatedAfterCutoff || hasSubmissionsAfterCutoff) {
                 qualifyingQuizzes.push({
                     quiz: q,
-                    submissions: decryptedSubmissions
+                    submissions: isCreatedAfterCutoff ? decryptedSubmissions : submissionsAfterCutoff
                 });
             }
         }
@@ -1448,14 +1513,14 @@ async function showAdminSettingsModal(quizId, secretKey) {
         newUpdateBtn.onclick = async () => {
             const expiryInput = document.getElementById('modal-modify-expiry').value;
             const newSettings = {
-                duration: parseInt(document.getElementById('modal-modify-duration').value) || 0,
+                duration: parseFloat(document.getElementById('modal-modify-duration').value) || 0,
                 expiry: parseExpiryInput(expiryInput),
                 sampleCount: parseInt(document.getElementById('modal-modify-sample-count').value) || 0,
                 showResultsToStudent: document.getElementById('modal-modify-show-results').checked,
                 showAnswerSummary: document.getElementById('modal-modify-show-answer-summary').checked
             };
 
-            await updateQuizSettings(quizId, secretKey, newSettings, quiz);
+            await updateQuizSettings(quizId, secretKey, newSettings, quiz, data.creatorUid || null);
             modal.classList.add('hidden');
             loadAdminDashboard(); // Refresh
         };
@@ -1468,13 +1533,16 @@ async function showAdminSettingsModal(quizId, secretKey) {
     hideLoading();
 }
 
-function checkAutoLogin() {
+function checkAutoLogin(expectedQuizId = null) {
     const activeSession = localStorage.getItem('quizable_active_session');
     if (activeSession) {
         try {
             const session = JSON.parse(activeSession);
             // Check if session is recent (e.g., less than 4 hours)
             if (Date.now() - session.timestamp < 14400000) {
+                if (expectedQuizId && session.quizId !== expectedQuizId) {
+                    return;
+                }
                 // Populate fields
                 if (session.quizId) document.getElementById('student-quiz-id').value = session.quizId;
                 if (session.firstName) document.getElementById('student-first-name').value = session.firstName;
@@ -1506,6 +1574,7 @@ function showTeacherMenu() {
     const header = document.getElementById('app-header');
     if (header) header.classList.remove('hidden');
 
+    cleanupQuizSession();
     teacherMenu.classList.remove('hidden');
     teacherCreateSection.classList.add('hidden');
     teacherResultsSection.classList.add('hidden');
@@ -1615,15 +1684,15 @@ async function loadTeacherDashboardQuizzes() {
                         </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn btn-sm btn-primary" onclick="openTeacherQuizResults('${escapeHtml(q.id)}', '${escapeHtml(q.secretKey)}')">
+                        <button class="btn btn-sm btn-primary" onclick="openTeacherQuizResults('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
                             View Results
                         </button>
-                        <button class="btn btn-sm btn-outline" onclick="copyToClipboard('${studentLink}', 'Student quiz link copied!')" title="Copy Student Link">
+                        <button class="btn btn-sm btn-outline" onclick="copyToClipboard('${escapeJsSingle(studentLink)}', 'Student quiz link copied!')" title="Copy Student Link">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                             Student Link
                         </button>
-                        <button class="btn btn-sm btn-outline" style="color: var(--danger); padding: 6px 10px;" onclick="deleteTeacherQuiz('${escapeHtml(q.id)}')" title="Delete from list">
+                        <button class="btn btn-sm btn-outline" style="color: var(--danger); padding: 6px 10px;" onclick="deleteTeacherQuiz('${escapeJsSingle(q.id)}')" title="Delete from list">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                         </button>
                     </div>
@@ -1653,7 +1722,7 @@ async function deleteTeacherQuiz(id) {
             updates[`admin/quizzes/${id}`] = null;
             await database.ref().update(updates);
         }
-        deleteFromHistory(id);
+        removeFromLocalHistory(id);
         await loadTeacherDashboardQuizzes();
         showToast('Quiz and associated cloud data deleted.', 'info');
     } catch (e) {
@@ -1672,6 +1741,7 @@ function showCreateQuiz() {
     const header = document.getElementById('app-header');
     if (header) header.classList.remove('hidden');
 
+    cleanupQuizSession();
     teacherMenu.classList.add('hidden');
     teacherCreateSection.classList.remove('hidden');
     document.getElementById('quiz-navigator').classList.remove('hidden');
@@ -1699,6 +1769,7 @@ function showViewResults() {
     const header = document.getElementById('app-header');
     if (header) header.classList.remove('hidden');
 
+    cleanupQuizSession();
     teacherMenu.classList.add('hidden');
     teacherResultsSection.classList.remove('hidden');
     loadTeacherHistory();
@@ -1709,7 +1780,10 @@ function showViewResults() {
     const el = document.getElementById(id);
     if (el) {
         const eventType = (el.type === 'checkbox') ? 'change' : 'input';
-        el.addEventListener(eventType, saveDraft);
+        el.addEventListener(eventType, () => {
+            isDraftDirty = true;
+            saveDraft();
+        });
     }
 });
 
@@ -1765,15 +1839,15 @@ async function loadTeacherHistory() {
     container.classList.remove('hidden');
     list.innerHTML = combinedList.map(h => `
         <div class="card" style="padding:15px; margin-bottom:0; display:flex; justify-content:space-between; align-items:center;">
-            <div onclick="fillCredentials('${escapeHtml(h.id)}', '${escapeHtml(h.key)}')" style="cursor:pointer; flex-grow:1;">
+            <div onclick="fillCredentials('${escapeJsSingle(h.id)}', '${escapeJsSingle(h.key)}')" style="cursor:pointer; flex-grow:1;">
                 <div style="font-weight:600;">${escapeHtml(h.title)}</div>
                 <div style="font-size:0.75rem; color:var(--text-muted);">${new Date(h.timestamp).toLocaleDateString()} &bull; ID: <code>${escapeHtml(h.id)}</code></div>
             </div>
             <div style="display:flex; gap:8px;">
-                <button class="btn btn-outline" style="padding:5px 8px; border-radius:6px;" onclick="copyToClipboard('${escapeHtml(h.id)}', 'Quiz ID copied!')" title="Copy ID">
+                <button class="btn btn-outline" style="padding:5px 8px; border-radius:6px;" onclick="copyToClipboard('${escapeJsSingle(h.id)}', 'Quiz ID copied!')" title="Copy ID">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
                 </button>
-                <button class="btn btn-outline" style="padding:5px 8px; border-radius:6px; color:var(--danger);" onclick="deleteFromHistory('${escapeHtml(h.id)}')" title="Delete from history">
+                <button class="btn btn-outline" style="padding:5px 8px; border-radius:6px; color:var(--danger);" onclick="deleteFromHistory('${escapeJsSingle(h.id)}')" title="Delete from history">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
             </div>
@@ -1787,11 +1861,15 @@ window.copyToClipboard = (text, message) => {
     });
 };
 
-window.deleteFromHistory = (id) => {
-    if (!confirm('Remove this quiz from your recent history?')) return;
+function removeFromLocalHistory(id) {
     let history = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
     history = history.filter(h => h.id !== id);
     localStorage.setItem('quizable_teacher_history', JSON.stringify(history));
+}
+
+window.deleteFromHistory = (id) => {
+    if (!confirm('Remove this quiz from your recent history?')) return;
+    removeFromLocalHistory(id);
     loadTeacherHistory();
     showToast('Removed from history', 'info');
 };
@@ -1833,19 +1911,6 @@ document.getElementById('return-to-quiz').addEventListener('click', returnToQuiz
 document.getElementById('restart-quiz').addEventListener('click', restartQuiz);
 document.getElementById('view-results-btn').addEventListener('click', handleViewResultsClick);
 
-const togglePaletteBtn = document.getElementById('toggle-palette-btn');
-if (togglePaletteBtn) {
-    togglePaletteBtn.addEventListener('click', () => {
-        const grid = document.getElementById('student-palette-grid');
-        const text = document.getElementById('toggle-palette-text');
-        if (grid) {
-            const isHidden = grid.classList.toggle('hidden');
-            if (text) text.textContent = isHidden ? 'Show Grid' : 'Hide Grid';
-            togglePaletteBtn.setAttribute('aria-expanded', !isHidden);
-        }
-    });
-}
-
 ['student-quiz-id', 'results-quiz-id'].forEach(id => {
     const element = document.getElementById(id);
     if (element) {
@@ -1879,40 +1944,59 @@ function isDevToolsOpen() {
     const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     if (isTouchDevice) return false;
 
-    // Method 1: Debugger delay
+    // Debugger delay check
     const start = performance.now();
     debugger;
     if (performance.now() - start > 220) return true;
-
-    // Method 2: Significant window size discrepancy (docked desktop DevTools)
-    if (window.outerWidth && window.innerWidth) {
-        const widthDiff = window.outerWidth - window.innerWidth;
-        const heightDiff = window.outerHeight - window.innerHeight;
-        if (widthDiff > 280 || heightDiff > 280) return true;
-    }
 
     return false;
 }
 
 // --- CHEATING PREVENTION ---
-window.addEventListener('contextmenu', (e) => { if (isQuizActive) e.preventDefault(); });
+window.addEventListener('contextmenu', (e) => { if (isExamInProgress()) e.preventDefault(); });
 ['copy', 'cut', 'dragstart'].forEach(event => {
-    window.addEventListener(event, (e) => { if (isQuizActive) e.preventDefault(); });
+    window.addEventListener(event, (e) => { if (isExamInProgress()) e.preventDefault(); });
 });
 window.addEventListener('keydown', (e) => {
     // Block DevTools
-    if (isQuizActive && (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')))) {
+    if (isExamInProgress() && (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')))) {
         e.preventDefault();
     }
     // Block Save, View Source, Select All
-    if (isQuizActive && e.ctrlKey && (e.key === 's' || e.key === 'u' || e.key === 'a')) {
+    if (isExamInProgress() && e.ctrlKey && (e.key === 's' || e.key === 'u' || e.key === 'a')) {
         e.preventDefault();
+    }
+    // Close utility modals on Escape outside of an active quiz
+    if (e.key === 'Escape' && !isExamInProgress()) {
+        const authModal = document.getElementById('auth-modal');
+        if (authModal && !authModal.classList.contains('hidden')) {
+            closeAuthModal();
+            return;
+        }
+        const settingsModal = document.getElementById('admin-settings-modal');
+        if (settingsModal && !settingsModal.classList.contains('hidden')) {
+            settingsModal.classList.add('hidden');
+            return;
+        }
+        const createdModal = document.getElementById('quiz-created-modal');
+        if (createdModal && !createdModal.classList.contains('hidden')) {
+            createdModal.classList.add('hidden');
+            return;
+        }
+        const retakeModal = document.getElementById('retake-modal');
+        if (retakeModal && !retakeModal.classList.contains('hidden')) {
+            closeRetakeModal();
+            return;
+        }
+        if (confirmationModal && !confirmationModal.classList.contains('hidden')) {
+            confirmationModal.classList.add('hidden');
+        }
     }
 });
 document.getElementById('export-pdf-btn').addEventListener('click', exportResultsToPdf);
 
 function handleVisibilityChange() {
-    if (document.hidden && isQuizActive) handleFocusLoss();
+    if (document.hidden && isExamInProgress()) handleFocusLoss();
 }
 
 function debounce(func, wait) {
@@ -2010,6 +2094,7 @@ function addQuestion(questionData = null) {
     questionDiv.querySelector('.remove-question').addEventListener('click', function () {
         questionsContainer.removeChild(questionDiv);
         updateQuestionNumbers();
+        isDraftDirty = true;
         saveDraft();
     });
 
@@ -2017,11 +2102,13 @@ function addQuestion(questionData = null) {
         const currentData = getQuestionData(questionDiv);
         addQuestion(currentData);
         updateQuestionNumbers();
+        isDraftDirty = true;
         saveDraft();
     });
 
     questionDiv.querySelector('.add-option-btn').addEventListener('click', function () {
         addOptionInput(optionsBuilder, '');
+        isDraftDirty = true;
         saveDraft();
     });
 
@@ -2045,6 +2132,7 @@ function addQuestion(questionData = null) {
         if (confirm('Clear the illustration/figure for this question?')) {
             figureInput.value = '';
             refreshEditorFigure();
+            isDraftDirty = true;
             saveDraft();
         }
     });
@@ -2061,6 +2149,7 @@ function addQuestion(questionData = null) {
     questionDiv.addEventListener('input', (e) => {
         if (e.target.classList.contains('question-figure')) refreshEditorFigure();
         if (previewContainer.classList.contains('active')) updateLivePreview(questionDiv);
+        isDraftDirty = true;
         debouncedSaveDraft();
     });
 
@@ -2084,22 +2173,37 @@ function addOptionInput(container, value = '', isCorrect = false) {
     div.querySelector('.option-index-badge').addEventListener('click', () => {
         const card = container.closest('.quiz-question');
         const hiddenInput = card.querySelector('.correct-answer');
-        hiddenInput.value = index;
+        const currentIndex = Array.from(container.children).indexOf(div);
+        hiddenInput.value = currentIndex;
 
         // Update visual state for all options in this card
         container.querySelectorAll('.option-input-group').forEach((group, i) => {
             const badge = group.querySelector('.option-index-badge');
-            const match = (i === index);
-            if (match) badge.classList.add('correct');
-            else badge.classList.remove('correct');
+            if (badge) badge.classList.toggle('correct', i === currentIndex);
         });
+        isDraftDirty = true;
         saveDraft();
     });
 
     div.querySelector('.remove-option-btn').addEventListener('click', () => {
         if (container.children.length > 2) {
+            const card = container.closest('.quiz-question');
+            const hiddenInput = card.querySelector('.correct-answer');
+            const removedIndex = Array.from(container.children).indexOf(div);
+            let currentCorrect = parseInt(hiddenInput.value, 10);
+            if (isNaN(currentCorrect)) currentCorrect = 0;
+
             container.removeChild(div);
-            updateOptionIndices(container);
+            const newCount = container.children.length;
+            if (removedIndex < currentCorrect) {
+                currentCorrect--;
+            } else if (removedIndex === currentCorrect) {
+                currentCorrect = Math.min(currentCorrect, Math.max(0, newCount - 1));
+            }
+            hiddenInput.value = currentCorrect;
+
+            updateOptionIndices(container, currentCorrect);
+            isDraftDirty = true;
             saveDraft();
         } else {
             alert("Minimum 2 options required.");
@@ -2107,14 +2211,24 @@ function addOptionInput(container, value = '', isCorrect = false) {
     });
 
     // Save draft on keystroke with debounce
-    div.querySelector('.option-val').addEventListener('input', debouncedSaveDraft);
+    div.querySelector('.option-val').addEventListener('input', () => {
+        isDraftDirty = true;
+        debouncedSaveDraft();
+    });
 }
 
-function updateOptionIndices(container) {
+function updateOptionIndices(container, correctIdx = null) {
+    if (correctIdx === null) {
+        const card = container.closest('.quiz-question');
+        correctIdx = card ? (parseInt(card.querySelector('.correct-answer')?.value, 10) || 0) : 0;
+    }
     const groups = container.querySelectorAll('.option-input-group');
     groups.forEach((group, i) => {
         const badge = group.querySelector('.option-index-badge');
-        if (badge) badge.textContent = i;
+        if (badge) {
+            badge.textContent = i;
+            badge.classList.toggle('correct', i === correctIdx);
+        }
     });
 }
 
@@ -2136,11 +2250,25 @@ function updateLivePreview(card) {
 }
 
 function getQuestionData(card) {
+    const rawOptions = Array.from(card.querySelectorAll('.option-val')).map(i => i.value);
+    const rawCorrect = parseInt(card.querySelector('.correct-answer').value, 10) || 0;
+    const options = [];
+    let mappedCorrect = 0;
+    let foundCorrect = false;
+    rawOptions.forEach((val, idx) => {
+        if (val.trim() !== '') {
+            if (idx === rawCorrect) {
+                mappedCorrect = options.length;
+                foundCorrect = true;
+            }
+            options.push(val);
+        }
+    });
     return {
         text: card.querySelector('.question-text').value,
         figure: card.querySelector('.question-figure').value,
-        options: Array.from(card.querySelectorAll('.option-val')).map(i => i.value).filter(v => v.trim() !== ''),
-        correctAnswer: parseInt(card.querySelector('.correct-answer').value) || 0
+        options,
+        correctAnswer: foundCorrect ? mappedCorrect : Math.min(rawCorrect, Math.max(0, options.length - 1))
     };
 }
 
@@ -2223,7 +2351,7 @@ function clearClipboard() {
 
 // Handle Ctrl+P
 window.addEventListener('keydown', (e) => {
-    if (isQuizActive && (e.ctrlKey || e.metaKey) && e.key === 'p') {
+    if (isExamInProgress() && (e.ctrlKey || e.metaKey) && e.key === 'p') {
         e.preventDefault();
         handleFocusLoss(); // Log as violation
         alert('Printing is disabled for security. This attempt has been logged.');
@@ -2257,9 +2385,22 @@ function processJsonData(jsonDataString) {
             throw new Error('Invalid JSON format.');
         }
         document.getElementById('quiz-title').value = quizJson.title;
+        if (quizJson.subject !== undefined) document.getElementById('quiz-subject').value = quizJson.subject || '';
+        if (quizJson.duration !== undefined) document.getElementById('quiz-duration').value = quizJson.duration || '0';
+        if (quizJson.expiry !== undefined) {
+            document.getElementById('quiz-expiry').value = formatDateTimeLocal(quizJson.expiry) || (typeof quizJson.expiry === 'string' ? quizJson.expiry : '');
+        }
+        const sampleEl = document.getElementById('sample-question-count');
+        if (sampleEl && quizJson.sampleCount !== undefined) sampleEl.value = quizJson.sampleCount || '';
+        if (typeof quizJson.showResultsToStudent === 'boolean') document.getElementById('show-results-to-student').checked = quizJson.showResultsToStudent;
+        if (typeof quizJson.showAnswerSummary === 'boolean') document.getElementById('show-answer-summary').checked = quizJson.showAnswerSummary;
+        if (typeof quizJson.saveResultsToCloud === 'boolean') document.getElementById('save-results-to-cloud').checked = quizJson.saveResultsToCloud;
+        if (typeof quizJson.randomizeOrder === 'boolean') document.getElementById('randomize-order').checked = quizJson.randomizeOrder;
+
         const questionsContainer = document.getElementById('questions-container');
         questionsContainer.innerHTML = '';
         quizJson.questions.forEach(q => addQuestion(q));
+        saveDraft();
         alert('Quiz loaded successfully!');
     } catch (error) {
         alert('Failed to load JSON: ' + error.message);
@@ -2359,7 +2500,8 @@ function generateEncryptedFile() {
             a.href = url;
             a.download = `quiz_credentials_${quizTitle.replace(/\s+/g, '_')}.txt`;
             a.click();
-            resetQuizForm();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            resetQuizForm(true);
             showQuizCreatedModal(studentLink, teacherLink);
         }).catch(err => {
             hideLoading();
@@ -2371,7 +2513,7 @@ function generateEncryptedFile() {
     });
 }
 
-function resetQuizForm() {
+function resetQuizForm(silent = false) {
     document.getElementById('quiz-title').value = '';
     document.getElementById('quiz-subject').value = '';
     document.getElementById('quiz-duration').value = '0';
@@ -2386,7 +2528,8 @@ function resetQuizForm() {
     // Add one empty question to start fresh
     addQuestion();
     localStorage.removeItem('quizable_quiz_draft');
-    alert("Form cleared.");
+    isDraftDirty = false;
+    if (!silent) alert("Form cleared.");
 }
 
 // --- DRAFT SYSTEM ---
@@ -2412,6 +2555,7 @@ function saveDraft() {
     });
 
     localStorage.setItem('quizable_quiz_draft', JSON.stringify(draft));
+    isDraftDirty = false;
 }
 
 function loadDraft() {
@@ -2448,11 +2592,13 @@ function loadDraft() {
 function exportDraftAsJson() {
     const questions = document.querySelectorAll('.quiz-question');
     const quizTitle = document.getElementById('quiz-title').value || 'Untitled Quiz';
+    const sampleInput = document.getElementById('sample-question-count');
     const draft = {
         title: quizTitle,
         subject: document.getElementById('quiz-subject').value,
         duration: document.getElementById('quiz-duration').value,
         expiry: document.getElementById('quiz-expiry').value,
+        sampleCount: sampleInput ? sampleInput.value : '',
         showResultsToStudent: document.getElementById('show-results-to-student').checked,
         showAnswerSummary: document.getElementById('show-answer-summary').checked,
         saveResultsToCloud: document.getElementById('save-results-to-cloud').checked,
@@ -2470,13 +2616,13 @@ function exportDraftAsJson() {
     a.href = url;
     a.download = `${quizTitle.replace(/\s+/g, '_')}_structure.json`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// Periodic Auto-Save every 5 seconds (Safety First)
+// Periodic Auto-Save every 5 seconds (only when changes are pending)
 setInterval(() => {
-    if (!teacherCreateSection.classList.contains('hidden')) {
+    if (!teacherCreateSection.classList.contains('hidden') && isDraftDirty) {
         saveDraft();
-        console.log("Draft auto-saved...");
     }
 }, 5000);
 
@@ -2550,7 +2696,7 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                         sampleCount: newSampleCount,
                         showResultsToStudent: showResults,
                         showAnswerSummary: showAnswerSummaryVal
-                    }, quizDetails);
+                    }, quizDetails, quizDataEnc.creatorUid || null);
                 };
             }
         }
@@ -2589,21 +2735,21 @@ async function fetchAndDisplayResults(quizId, secretKey) {
         const sortedSections = Object.keys(resultsBySection).sort();
         const checkboxGroup = document.getElementById('section-checkboxes');
         checkboxGroup.innerHTML = sortedSections.map(sec => `
-            <label><input type="checkbox" class="section-checkbox" value="${sec}" checked> ${sec}</label>
+            <label><input type="checkbox" class="section-checkbox" value="${escapeHtml(sec)}" checked> ${escapeHtml(sec)}</label>
         `).join('');
         sectionContainer.classList.remove('hidden');
 
         const render = (selected) => {
             let list = [];
             selected.forEach(s => list.push(...resultsBySection[s]));
-            list.sort((a, b) => a.student.lastName.localeCompare(b.student.lastName));
+            list.sort((a, b) => (a.student?.lastName || '').localeCompare(b.student?.lastName || ''));
             processedStudentResults = list;
             document.getElementById('export-pdf-btn').classList.toggle('hidden', list.length === 0);
             const expExcelBtnToggle = document.getElementById('export-excel-btn');
             if (expExcelBtnToggle) expExcelBtnToggle.classList.toggle('hidden', list.length === 0);
 
             // Analytics Calculation
-            const scores = list.map(r => (r.score / r.totalQuestions) * 100);
+            const scores = list.map(r => r.totalQuestions > 0 ? (r.score / r.totalQuestions) * 100 : 0);
             const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
             const highest = scores.length ? Math.max(...scores).toFixed(1) : 0;
             const passCount = scores.filter(s => s >= 75).length;
@@ -2660,7 +2806,7 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                                 <div style="font-size:0.7rem; color:var(--text-muted);">${res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A'} | ${submissionDate}</div>
                             </div>
                             <button class="btn btn-sm btn-danger-outline reset-student-btn" 
-                                onclick="confirmResetStudentAttempt('${escapeHtml(quizId)}', '${escapeHtml(secretKey)}', '${escapeHtml(res.dbKey)}', '${escapeHtml((res.student?.lastName || '') + ', ' + (res.student?.firstName || ''))}', '${escapeHtml(res.student?.institutionalId || '')}')" 
+                                onclick="confirmResetStudentAttempt('${escapeJsSingle(quizId)}', '${escapeJsSingle(secretKey)}', '${escapeJsSingle(res.dbKey)}', '${escapeJsSingle((res.student?.lastName || '') + ', ' + (res.student?.firstName || ''))}', '${escapeJsSingle(res.student?.institutionalId || '')}')" 
                                 title="Reset attempt and clear lockout for this student">
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
                                 Reset
@@ -2685,7 +2831,7 @@ async function fetchAndDisplayResults(quizId, secretKey) {
     }
 }
 
-async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizData) {
+async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizData, creatorUid = null) {
     if (!auth.currentUser) {
         alert('You must be logged in as the quiz creator to update quiz settings.');
         return;
@@ -2717,10 +2863,15 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
             encryptedQuizData: encrypted
         });
 
-        if (auth.currentUser && newSettings.hasOwnProperty('sampleCount')) {
-            await database.ref(`teachers/${auth.currentUser.uid}/quizzes/${quizId}`).update({
-                sampleCount: newSettings.sampleCount || 0
-            }).catch(() => {});
+        const targetUid = creatorUid || (auth.currentUser ? auth.currentUser.uid : null);
+        if (targetUid && newSettings.hasOwnProperty('sampleCount')) {
+            const teacherQuizRef = database.ref(`teachers/${targetUid}/quizzes/${quizId}`);
+            const teacherQuizSnap = await teacherQuizRef.once('value').catch(() => null);
+            if (teacherQuizSnap && teacherQuizSnap.exists()) {
+                await teacherQuizRef.update({
+                    sampleCount: newSettings.sampleCount || 0
+                }).catch(() => {});
+            }
         }
 
         hideLoading();
@@ -2767,7 +2918,7 @@ function exportResultsToPdf() {
     const res0 = processedStudentResults[0];
 
     // Analytics Calculation
-    const scores = processedStudentResults.map(r => (r.score / r.totalQuestions) * 100);
+    const scores = processedStudentResults.map(r => r.totalQuestions > 0 ? (r.score / r.totalQuestions) * 100 : 0);
     const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 0;
     const highest = scores.length ? Math.max(...scores).toFixed(1) : 0;
     const passCount = scores.filter(s => s >= 75).length;
@@ -2841,7 +2992,8 @@ function exportResultsToPdf() {
             doc.setTextColor(100, 116, 139);
             doc.text(`Institutional ID: ${res.student.institutionalId || 'N/A'} | Section: ${res.student.section}`, 14, 28);
             const duration = res.timeTakenMs ? (res.timeTakenMs / 60000).toFixed(1) + 'm' : 'N/A';
-            doc.text(`Final Score: ${res.score}/${res.totalQuestions} (${((res.score / res.totalQuestions) * 100).toFixed(1)}%) | Duration: ${duration}`, 14, 35);
+            const pctStr = res.totalQuestions > 0 ? ((res.score / res.totalQuestions) * 100).toFixed(1) : '0.0';
+            doc.text(`Final Score: ${res.score}/${res.totalQuestions} (${pctStr}%) | Duration: ${duration}`, 14, 35);
 
             doc.autoTable({
                 head: [['#', 'Question', 'Student Answer', 'Correct Answer', 'Result']],
@@ -2887,15 +3039,20 @@ function shuffleQuiz(quiz) {
         if (cleanOpts.length < 2) return;
 
         const originalCorrectIndex = typeof q.correctAnswer === 'number' ? q.correctAnswer : 0;
+        const baseOrder = Array.isArray(q.optionOrder) && q.optionOrder.length === cleanOpts.length
+            ? q.optionOrder
+            : cleanOpts.map((_, idx) => idx);
         const mappedOptions = cleanOpts.map((opt, idx) => ({
             text: opt,
-            isCorrect: idx === originalCorrectIndex
+            isCorrect: idx === originalCorrectIndex,
+            origOptIdx: baseOrder[idx]
         }));
         for (let i = mappedOptions.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [mappedOptions[i], mappedOptions[j]] = [mappedOptions[j], mappedOptions[i]];
         }
         q.options = mappedOptions.map(o => (o && o.text !== undefined) ? o.text : String(o || '')).filter(Boolean);
+        q.optionOrder = mappedOptions.map(o => o.origOptIdx);
         const newCorrectIndex = mappedOptions.findIndex(o => o && o.isCorrect);
         q.correctAnswer = newCorrectIndex !== -1 ? newCorrectIndex : 0;
     });
@@ -2978,7 +3135,9 @@ function fetchServerTimeOffset() {
             if (!done) {
                 done = true;
                 clearTimeout(timer);
-                resolve(snap.val() || 0);
+                const val = snap.val() || 0;
+                serverTimeOffsetMs = val;
+                resolve(val);
             }
         }).catch(() => {
             if (!done) {
@@ -3019,12 +3178,15 @@ async function getServerTime() {
 }
 
 function togglePrivacyBlur(e) {
-    if (!isQuizActive) return;
+    if (!isExamInProgress()) {
+        document.body.classList.remove('privacy-blur');
+        return;
+    }
     document.body.classList.toggle('privacy-blur', e.type === 'blur');
 }
 
 function handlePrintScreen(e) {
-    if (isQuizActive && e.key === 'PrintScreen') {
+    if (isExamInProgress() && e.key === 'PrintScreen') {
         showToast('Screenshots are disabled during the examination.', 'warning');
     }
 }
@@ -3198,7 +3360,9 @@ async function proceedWithQuizExecution(ctx) {
                     text,
                     options: finalOptions,
                     correctAnswer: finalCorrectAnswer,
-                    figure: q.figure || ''
+                    figure: q.figure || '',
+                    origIndex: idx,
+                    optionOrder: finalOptions.map((_, oIdx) => oIdx)
                 };
             });
 
@@ -3207,6 +3371,11 @@ async function proceedWithQuizExecution(ctx) {
             alert('No valid questions found in this quiz. Please contact your instructor.');
             return;
         }
+
+        const originalBank = quizData.questions.map(q => ({
+            ...q,
+            options: [...q.options]
+        }));
 
         const serverTime = await getServerTime();
         const quizExpiry = parseExpiryTimestamp(quizData.expiry);
@@ -3250,16 +3419,41 @@ async function proceedWithQuizExecution(ctx) {
                             localStorage.removeItem(persistenceKey);
                             savedState = null;
                         } else {
-                            // Restore shuffled order if it exists
+                            // Restore shuffled order and reconstruct exact correctAnswer from freshly decrypted bank
                             if (state.questions && Array.isArray(state.questions) && state.questions.length > 0) {
                                 quizData.questions = state.questions
                                     .filter(q => q && typeof q === 'object')
-                                    .map((q, idx) => ({
-                                        text: (q.text || `Question ${idx + 1}`).toString(),
-                                        options: Array.isArray(q.options) ? q.options.filter(Boolean) : ['Option 1', 'Option 2'],
-                                        correctAnswer: (typeof q.correctAnswer === 'number') ? q.correctAnswer : (quizData.questions[idx]?.correctAnswer || 0),
-                                        figure: q.figure || ''
-                                    }));
+                                    .map((q, idx) => {
+                                        const opts = Array.isArray(q.options) ? q.options.filter(Boolean) : ['Option 1', 'Option 2'];
+                                        let origQ = (typeof q.origIndex === 'number' && originalBank[q.origIndex])
+                                            ? originalBank[q.origIndex]
+                                            : null;
+                                        if (!origQ) {
+                                            const savedText = (q.text || '').toString().trim();
+                                            origQ = originalBank.find(oq => oq.text === savedText) || originalBank[idx];
+                                        }
+
+                                        let restoredCorrect = 0;
+                                        if (origQ) {
+                                            if (Array.isArray(q.optionOrder) && q.optionOrder.length === opts.length) {
+                                                const mappedIdx = q.optionOrder.indexOf(origQ.correctAnswer);
+                                                restoredCorrect = mappedIdx !== -1 ? mappedIdx : 0;
+                                            } else {
+                                                const correctText = origQ.options[origQ.correctAnswer];
+                                                const textMatchIdx = opts.findIndex(o => String(o).trim() === String(correctText).trim());
+                                                restoredCorrect = textMatchIdx !== -1 ? textMatchIdx : (origQ.correctAnswer || 0);
+                                            }
+                                        }
+
+                                        return {
+                                            text: (q.text || `Question ${idx + 1}`).toString(),
+                                            options: opts,
+                                            correctAnswer: restoredCorrect,
+                                            figure: q.figure || '',
+                                            origIndex: typeof q.origIndex === 'number' ? q.origIndex : (origQ ? origQ.origIndex : idx),
+                                            optionOrder: Array.isArray(q.optionOrder) ? q.optionOrder : opts.map((_, oIdx) => oIdx)
+                                        };
+                                    });
                             } else if (quizData.randomizeOrder !== false) {
                                 shuffleQuiz(quizData);
                             }
@@ -3316,6 +3510,8 @@ async function proceedWithQuizExecution(ctx) {
 
                     studentAnswers = new Array(quizData.questions.length).fill(null);
                     flaggedQuestions = new Set();
+                    focusLostCount = 0;
+                    isHandlingFocusLoss = false;
                     quizStartTime = Date.now();
                     saveProgress(); // Initial save to lock in the sample and shuffle order
                 }
@@ -3329,7 +3525,6 @@ async function proceedWithQuizExecution(ctx) {
                     showToast('Retake Session: A 10% deduction will be applied to your final score.', 'warning');
                 }
 
-                updateStudentPalette();
                 displayQuestion(0);
 
                 const quizExpiryTs = parseExpiryTimestamp(quizData.expiry);
@@ -3344,7 +3539,16 @@ async function proceedWithQuizExecution(ctx) {
                 // Clear Clipboard
                 clearClipboard();
 
+                isSubmittingQuiz = false;
                 isQuizActive = true;
+                window.removeEventListener('blur', handleFocusLoss);
+                document.removeEventListener('visibilitychange', handleVisibilityChange);
+                window.removeEventListener('blur', togglePrivacyBlur);
+                window.removeEventListener('focus', togglePrivacyBlur);
+                document.removeEventListener('keyup', handlePrintScreen);
+                document.removeEventListener('fullscreenchange', handleFullscreenChange);
+                document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+
                 window.addEventListener('blur', handleFocusLoss);
                 document.addEventListener('visibilitychange', handleVisibilityChange);
                 window.addEventListener('blur', togglePrivacyBlur);
@@ -3356,10 +3560,11 @@ async function proceedWithQuizExecution(ctx) {
                     document.documentElement.requestFullscreen().catch(e => console.log('Fullscreen blocked:', e));
                 }
                 document.addEventListener('fullscreenchange', handleFullscreenChange);
+                document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
 
                 // Print Disruption
                 window.onbeforeprint = () => {
-                    if (isQuizActive) {
+                    if (isExamInProgress()) {
                         handleFocusLoss(); // Log as violation
                         return false;
                     }
@@ -3397,46 +3602,6 @@ async function proceedWithQuizExecution(ctx) {
     }
 }
 
-function updateStudentPalette() {
-    if (!quizData || !quizData.questions) return;
-    const grid = document.getElementById('student-palette-grid');
-    if (!grid) return;
-
-    let answered = 0;
-    let flagged = 0;
-    const total = quizData.questions.length;
-
-    grid.innerHTML = '';
-    for (let i = 0; i < total; i++) {
-        const isAnswered = studentAnswers[i] !== null;
-        const isFlag = flaggedQuestions.has(i);
-        const isCurrent = (i === currentQuestionIndex);
-
-        if (isAnswered) answered++;
-        if (isFlag) flagged++;
-
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = `palette-item ${isAnswered ? 'answered' : 'unanswered'} ${isFlag ? 'flagged' : ''} ${isCurrent ? 'current' : ''}`;
-        btn.title = `Question ${i + 1}: ${isAnswered ? 'Answered' : 'Unanswered'}${isFlag ? ' (Flagged)' : ''}`;
-        btn.setAttribute('aria-label', `Question ${i + 1}`);
-
-        btn.innerHTML = `<span>${i + 1}</span>${isFlag ? '<span class="palette-flag-icon">🚩</span>' : ''}`;
-
-        btn.onclick = () => {
-            displayQuestion(i);
-        };
-        grid.appendChild(btn);
-    }
-
-    const answeredEl = document.getElementById('palette-count-answered');
-    const flaggedEl = document.getElementById('palette-count-flagged');
-    const unansweredEl = document.getElementById('palette-count-unanswered');
-    if (answeredEl) answeredEl.textContent = answered;
-    if (flaggedEl) flaggedEl.textContent = flagged;
-    if (unansweredEl) unansweredEl.textContent = Math.max(0, total - answered);
-}
-
 window.toggleFlagQuestion = function (index) {
     if (flaggedQuestions.has(index)) {
         flaggedQuestions.delete(index);
@@ -3452,7 +3617,6 @@ window.toggleFlagQuestion = function (index) {
         flagBtn.innerHTML = `<span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>`;
         flagBtn.title = isFlagged ? 'Remove flag' : 'Flag this question for review';
     }
-    updateStudentPalette();
     saveProgress();
 };
 
@@ -3481,7 +3645,9 @@ function displayQuestion(index) {
 
     const progressEl = document.getElementById('quiz-progress');
     if (progressEl && quizData.questions.length > 0) {
-        progressEl.style.width = `${((index + 1) / quizData.questions.length) * 100}%`;
+        const pct = ((index + 1) / quizData.questions.length) * 100;
+        progressEl.style.width = `${pct}%`;
+        progressEl.setAttribute('aria-valuenow', Math.round(pct));
     }
 
     container.innerHTML = `
@@ -3523,7 +3689,6 @@ function displayQuestion(index) {
         el.setAttribute('aria-checked', 'true');
         studentAnswers[index] = parseInt(el.dataset.index);
         saveProgress();
-        updateStudentPalette();
     };
 
     container.querySelectorAll('.quiz-option').forEach(el => {
@@ -3544,8 +3709,6 @@ function displayQuestion(index) {
     if (review) review.onclick = () => showReviewPage();
     const jumpReview = document.getElementById('jump-review-btn');
     if (jumpReview) jumpReview.onclick = () => showReviewPage();
-
-    updateStudentPalette();
 }
 
 function showReviewPage() {
@@ -3578,7 +3741,6 @@ function showReviewPage() {
         </div>
     `;
     document.getElementById('submit-btn').onclick = () => submitQuiz();
-    updateStudentPalette();
 }
 
 function startQuizTimer(mins, expiry, startTime) {
@@ -3587,14 +3749,15 @@ function startQuizTimer(mins, expiry, startTime) {
 
     const durationMs = mins > 0 ? mins * 60000 : 0;
     const expiryTimestamp = parseExpiryTimestamp(expiry);
+    const localExpiryTime = expiryTimestamp ? (expiryTimestamp - serverTimeOffsetMs) : 0;
 
     let targetEndTime = 0;
-    if (durationMs > 0 && expiryTimestamp) {
-        targetEndTime = Math.min(startTime + durationMs, expiryTimestamp);
+    if (durationMs > 0 && localExpiryTime > 0) {
+        targetEndTime = Math.min(startTime + durationMs, localExpiryTime);
     } else if (durationMs > 0) {
         targetEndTime = startTime + durationMs;
-    } else if (expiryTimestamp) {
-        targetEndTime = expiryTimestamp;
+    } else if (localExpiryTime > 0) {
+        targetEndTime = localExpiryTime;
     }
 
     if (targetEndTime <= 0) return;
@@ -3602,7 +3765,10 @@ function startQuizTimer(mins, expiry, startTime) {
     let isTimerSubmitting = false;
 
     const updateTimer = async () => {
-        if (isTimerSubmitting || !isQuizActive) return;
+        if (isTimerSubmitting || !isExamInProgress()) {
+            if (!isExamInProgress()) stopQuizTimer();
+            return;
+        }
 
         const now = Date.now();
         const diff = targetEndTime - now;
@@ -3613,7 +3779,8 @@ function startQuizTimer(mins, expiry, startTime) {
                 clearInterval(timerInterval);
                 timerInterval = null;
             }
-            showConfirmationModal('Time is up!', 'The examination time has expired. Submitting your quiz now.', () => submitQuiz(true), true);
+            submitQuiz(true);
+            showConfirmationModal('Time is up!', 'The examination time has expired. Your quiz has been automatically submitted.', null, true);
             return;
         }
 
@@ -3642,47 +3809,59 @@ function stopQuizTimer() {
 }
 
 function startDevToolsDetection() {
+    stopDevToolsDetection();
     const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     if (isTouchDevice) return; // Prevent mobile GC pauses from false-triggering violations
     devToolsInterval = setInterval(() => {
+        if (!isExamInProgress()) {
+            stopDevToolsDetection();
+            return;
+        }
         const start = performance.now();
         debugger;
         if (performance.now() - start > 220) handleFocusLoss();
     }, 3000);
 }
 
-function stopDevToolsDetection() { if (devToolsInterval) clearInterval(devToolsInterval); }
+function stopDevToolsDetection() {
+    if (devToolsInterval) {
+        clearInterval(devToolsInterval);
+        devToolsInterval = null;
+    }
+}
 
 function handleFocusLoss() {
-    if (isClearingClipboard) return;
-    if (isQuizActive && !isHandlingFocusLoss) {
-        if (Date.now() - quizStartTime < 3000) return; // 3-second grace period
-        isHandlingFocusLoss = true;
-        focusLostCount++;
+    if (isClearingClipboard || !isExamInProgress() || isHandlingFocusLoss) return;
+    if (Date.now() - quizStartTime < 3000) return; // 3-second grace period
+    isHandlingFocusLoss = true;
+    focusLostCount++;
 
-        updateAttemptsDisplay();
-        clearClipboard();
+    updateAttemptsDisplay();
+    clearClipboard();
 
-        // Update remaining attempts in modal warning
-        const remainingEl = document.getElementById('remaining-attempts');
-        if (remainingEl) remainingEl.textContent = Math.max(0, MAX_ATTEMPTS - focusLostCount);
+    // Update remaining attempts in modal warning
+    const remainingEl = document.getElementById('remaining-attempts');
+    if (remainingEl) remainingEl.textContent = Math.max(0, MAX_ATTEMPTS - focusLostCount);
 
-        // Show Full Screen Warning
-        if (tabWarning) tabWarning.classList.remove('hidden');
+    // Show Full Screen Warning
+    if (tabWarning) tabWarning.classList.remove('hidden');
 
-        // Show/Expand Widget
-        if (focusLostCount < MAX_ATTEMPTS) {
-            expandWidget();
-        }
-
-        if (focusLostCount >= MAX_ATTEMPTS) {
-            if (tabWarning) tabWarning.classList.add('hidden');
-            showToast('Security violation threshold reached. Finalizing submission...', 'warning');
-            submitQuiz(true);
-        }
-
-        setTimeout(() => isHandlingFocusLoss = false, 1500);
+    // Show/Expand Widget
+    if (focusLostCount < MAX_ATTEMPTS) {
+        expandWidget();
     }
+
+    if (focusLostCount >= MAX_ATTEMPTS) {
+        if (tabWarning) tabWarning.classList.add('hidden');
+        showToast('Security violation threshold reached. Finalizing submission...', 'warning');
+        submitQuiz(true);
+    }
+
+    if (focusLossCooldownTimer) clearTimeout(focusLossCooldownTimer);
+    focusLossCooldownTimer = setTimeout(() => {
+        isHandlingFocusLoss = false;
+        focusLossCooldownTimer = null;
+    }, 1500);
 }
 
 function expandWidget() {
@@ -3703,9 +3882,10 @@ function expandWidget() {
 }
 
 function handleFullscreenChange() {
-    if (isQuizActive && document.fullscreenElement !== undefined && !document.fullscreenElement) {
+    if (isClearingClipboard || !isExamInProgress() || isHandlingFocusLoss) return;
+    if (document.fullscreenElement !== undefined && !document.fullscreenElement) {
         // User exited fullscreen
-        if (Date.now() - quizStartTime < 1000) return; // Grace period
+        if (Date.now() - quizStartTime < 3000) return; // Grace period
 
         isHandlingFocusLoss = true;
         focusLostCount++;
@@ -3713,21 +3893,32 @@ function handleFullscreenChange() {
 
         // Show Full Screen Warning
         if (tabWarning) tabWarning.classList.remove('hidden');
-        expandWidget();
 
         if (focusLostCount < MAX_ATTEMPTS) {
-            attemptsText.textContent = "Fullscreen Exited! Return immediately. " + attemptsText.textContent;
-            attemptsWidget.classList.add('expanded');
+            expandWidget();
+            if (attemptsText) {
+                attemptsText.textContent = "Fullscreen Exited! Return immediately. " + attemptsText.textContent;
+            }
         } else {
             if (tabWarning) tabWarning.classList.add('hidden');
-            alert('Attempts exceeded (Fullscreen Exit). Finalizing submission...');
+            showToast('Attempts exceeded (Fullscreen Exit). Finalizing submission...', 'warning');
             submitQuiz(true);
         }
-        setTimeout(() => isHandlingFocusLoss = false, 100);
+        if (focusLossCooldownTimer) clearTimeout(focusLossCooldownTimer);
+        focusLossCooldownTimer = setTimeout(() => {
+            isHandlingFocusLoss = false;
+            focusLossCooldownTimer = null;
+        }, 1500);
     }
 }
 
-function returnToQuiz() { tabWarning.classList.add('hidden'); }
+function returnToQuiz() {
+    if (tabWarning) tabWarning.classList.add('hidden');
+    if (isExamInProgress() && !document.fullscreenElement && document.documentElement && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+    }
+}
+
 function updateAttemptsDisplay() {
     if (attemptsNumber) attemptsNumber.textContent = focusLostCount;
     // Old counter fallback
@@ -3744,7 +3935,9 @@ function saveProgress() {
         .map(q => ({
             text: (q && q.text) ? q.text : '',
             options: (q && Array.isArray(q.options)) ? q.options.filter(o => o !== undefined && o !== null) : [],
-            figure: (q && q.figure) ? q.figure : ''
+            figure: (q && q.figure) ? q.figure : '',
+            origIndex: typeof q?.origIndex === 'number' ? q.origIndex : null,
+            optionOrder: Array.isArray(q?.optionOrder) ? q.optionOrder : null
         }));
     const state = {
         startTime: quizStartTime,
@@ -3757,6 +3950,45 @@ function saveProgress() {
         localStorage.setItem(persistenceKey, JSON.stringify(state));
     } catch (e) {
         console.warn("Failed to cache quiz state:", e);
+    }
+}
+
+function cleanupQuizSession() {
+    isQuizActive = false;
+    isHandlingFocusLoss = false;
+    if (focusLossCooldownTimer) {
+        clearTimeout(focusLossCooldownTimer);
+        focusLossCooldownTimer = null;
+    }
+    stopQuizTimer();
+    stopDevToolsDetection();
+    stopWatermarkRotation();
+    if (widgetTimeout) {
+        clearTimeout(widgetTimeout);
+        widgetTimeout = null;
+    }
+    window.removeEventListener('blur', handleFocusLoss);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('blur', togglePrivacyBlur);
+    window.removeEventListener('focus', togglePrivacyBlur);
+    document.removeEventListener('keyup', handlePrintScreen);
+    document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    window.onbeforeprint = null;
+
+    document.body.classList.remove('quiz-active', 'privacy-blur');
+    if (tabWarning) tabWarning.classList.add('hidden');
+    if (attemptsWidget) {
+        attemptsWidget.classList.remove('expanded');
+        attemptsWidget.classList.add('hidden');
+    }
+    if (timerDisplay) {
+        timerDisplay.classList.remove('timer-warning');
+        timerDisplay.classList.add('hidden');
+    }
+
+    if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
     }
 }
 
@@ -3790,8 +4022,13 @@ function showConfirmationModal(title, msg, onConfirm, isAlert = false) {
 }
 
 function submitQuiz(auto = false) {
-    if (!quizData) return;
+    if (!quizData || isSubmittingQuiz) return;
     const exec = () => {
+        if (isSubmittingQuiz) return;
+        isSubmittingQuiz = true;
+        if (confirmationModal) confirmationModal.classList.add('hidden');
+        cleanupQuizSession();
+        localStorage.removeItem('quizable_active_session');
         let score = 0;
         const detail = (quizData.questions || []).map((q, i) => {
             if (!q) return null;
@@ -4008,7 +4245,7 @@ function downloadStudentResultsAsPdf() {
     doc.text(`Submitted: ${res.submittedAt ? new Date(res.submittedAt).toLocaleString() : 'N/A'}`, 18, 69);
 
     // Score Circle/Badge representation
-    const percentage = ((res.score / res.totalQuestions) * 100).toFixed(1);
+    const percentage = res.totalQuestions > 0 ? ((res.score / res.totalQuestions) * 100).toFixed(1) : '0.0';
     doc.setFontSize(11);
     doc.setTextColor(100, 116, 139);
     doc.text('FINAL SCORE', 150, 47);
@@ -4039,7 +4276,7 @@ function downloadStudentResultsAsPdf() {
     const finalY = doc.lastAutoTable.finalY || 85;
     doc.setFontSize(10);
     doc.setTextColor(148, 163, 184);
-    doc.text('Generatd by Quizable - Secure Modern Quiz Platform', 14, finalY + 15);
+    doc.text('Generated by Quizable - Secure Modern Quiz Platform', 14, finalY + 15);
 
     doc.save(`${res.student.firstName}_${res.student.lastName}_Results.pdf`);
 }
@@ -4050,7 +4287,6 @@ function restartQuiz() {
 
 // Initialization
 window.onload = function () {
-    initializeApp();
     const downloadPdfBtn = document.getElementById('download-student-pdf-btn');
     if (downloadPdfBtn) downloadPdfBtn.addEventListener('click', downloadStudentResultsAsPdf);
 
@@ -4059,6 +4295,17 @@ window.onload = function () {
     if (adminSearchInput) {
         adminSearchInput.addEventListener('input', debounce(filterAdminQuizzes, 300));
     }
+
+    domLoaded = true;
+    tryInitializeApp();
+
+    // Fallback in case Firebase Auth is slow or unreachable offline
+    setTimeout(() => {
+        if (!initialAuthResolved) {
+            initialAuthResolved = true;
+            tryInitializeApp();
+        }
+    }, 3000);
 };
 
 // Global Exposure for Inline HTML Handlers
@@ -4189,25 +4436,45 @@ async function systemDecrypt(data, creatorUid = null) {
 // --- Dynamic Watermark Utility ---
 let watermarkInterval = null;
 function startWatermarkRotation(f, l, s, id) {
+    stopWatermarkRotation();
     // Rotation logic: Updates the watermark slightly every 30 seconds
     // to prevent students from using old screenshots as "proof" of progress.
     watermarkInterval = setInterval(() => {
-        if (isQuizActive) {
-            generateWatermark(f, l, s, id);
+        if (!isExamInProgress()) {
+            stopWatermarkRotation();
+            return;
         }
+        generateWatermark(f, l, s, id);
     }, 30000);
 }
 
 function stopWatermarkRotation() {
-    if (watermarkInterval) clearInterval(watermarkInterval);
+    if (watermarkInterval) {
+        clearInterval(watermarkInterval);
+        watermarkInterval = null;
+    }
 }
 
 // --- LINK SHARING HELPERS ---
 
+function encodeBase64Utf8(str) {
+    const bytes = new TextEncoder().encode(str);
+    return uint8ToBase64(bytes);
+}
+
+function decodeBase64Utf8(base64) {
+    try {
+        const bytes = base64ToUint8(base64);
+        return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch (_) {
+        return atob(base64);
+    }
+}
+
 function generateQuizLink(id, key, isTeacher = false) {
     const payload = JSON.stringify({ i: id, k: key });
-    // Simple obfuscation: Base64
-    const encoded = btoa(payload);
+    // UTF-8 safe Base64 obfuscation
+    const encoded = encodeBase64Utf8(payload);
     const url = new URL(window.location.origin + window.location.pathname);
     url.searchParams.set('q', encoded);
     if (isTeacher) url.searchParams.set('part', 'teacher');
@@ -4256,12 +4523,4 @@ function showQuizCreatedModal(studentLink, teacherLink) {
 
     setupCopy(studentCopyBtn, studentLink, 'Student Link');
     setupCopy(teacherCopyBtn, teacherLink, 'Teacher Link');
-}
-
-function debounce(func, wait) {
-    let timeout;
-    return function (...args) {
-        clearTimeout(timeout);
-        timeout = setTimeout(() => func.apply(this, args), wait);
-    };
 }

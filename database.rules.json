@@ -1,22 +1,24 @@
 {
   "rules": {
     "quizzes": {
-      // Authenticated teachers/admins can list all quizzes in admin dashboard
-      ".read": "auth != null",
+      // Only system administrator can list all quizzes in admin dashboard
+      ".read": "auth != null && auth.token.email === 'ctutc.jbocales@gmail.com'",
       "$quizId": {
         // Anyone with the Quiz ID can read encrypted quiz data
         // (decryption requires the secret key)
         ".read": true,
-        // Only the teacher who created the quiz (creatorUid) can update or delete it
-        ".write": "auth != null && (!data.exists() || data.child('creatorUid').val() === auth.uid)",
+        // Only the creator teacher or system administrator can update or delete a quiz
+        ".write": "auth != null && (!data.exists() || data.child('creatorUid').val() === auth.uid || auth.token.email === 'ctutc.jbocales@gmail.com')",
         ".validate": "newData.hasChildren(['encryptedQuizData']) && newData.child('encryptedQuizData').isString() && newData.child('encryptedQuizData').val().length < 1000000"
       }
     },
     "results": {
-      // Authenticated teachers/admins can fetch all results
-      ".read": "auth != null",
+      // Only system administrator can fetch the entire results tree
+      ".read": "auth != null && auth.token.email === 'ctutc.jbocales@gmail.com'",
       "$quizId": {
         ".read": "auth != null",
+        // Allow creator or admin to clear all results when deleting a quiz
+        ".write": "auth != null && (!data.exists() || root.child('quizzes').child($quizId).child('creatorUid').val() === auth.uid || auth.token.email === 'ctutc.jbocales@gmail.com')",
         "$studentId": {
           // Allow student to check their own prior submission status, or teacher management
           ".read": true,
@@ -28,18 +30,18 @@
     },
     "teachers": {
       "$uid": {
-        // Teachers can only read and write their own quiz repository index
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid"
+        // Teachers can read/write their own index; admin can manage/clean up on quiz deletion
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'ctutc.jbocales@gmail.com')",
+        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'ctutc.jbocales@gmail.com')"
       }
     },
     "admin": {
-      // Admin metadata is strictly restricted to authenticated users
-      ".read": "auth != null",
+      // Admin metadata is restricted to system administrator
+      ".read": "auth != null && auth.token.email === 'ctutc.jbocales@gmail.com'",
       "quizzes": {
         "$quizId": {
-          ".read": "auth != null",
-          ".write": "auth != null"
+          ".read": "auth != null && auth.token.email === 'ctutc.jbocales@gmail.com'",
+          ".write": "auth != null && (!data.exists() || root.child('quizzes').child($quizId).child('creatorUid').val() === auth.uid || auth.token.email === 'ctutc.jbocales@gmail.com')"
         }
       }
     }

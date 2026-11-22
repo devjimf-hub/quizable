@@ -16,7 +16,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <!-- Styles -->
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2.11">
     <link rel="icon" href="logo.jpg" type="image/jpeg">
 </head>
 
@@ -142,7 +142,7 @@
                     <button id="load-from-json" class="btn btn-outline">Load File</button>
                 </div>
                 <div class="form-group" style="margin-top: 20px;">
-                    <label>Or Paste JSON</label>
+                    <label for="pasted-json-input">Or Paste JSON</label>
                     <textarea id="pasted-json-input" rows="4"
                         placeholder="Paste your quiz JSON structure here..."></textarea>
                     <button id="load-from-pasted-json" class="btn btn-outline" style="margin-top: 10px;">Load From
@@ -171,25 +171,25 @@
             </div>
 
             <div class="form-group">
-                <label>Quiz Title</label>
+                <label for="quiz-title">Quiz Title</label>
                 <input type="text" id="quiz-title" placeholder="e.g., Final Examination - Web Dev">
             </div>
             <div class="form-group">
-                <label>Subject</label>
+                <label for="quiz-subject">Subject</label>
                 <input type="text" id="quiz-subject" placeholder="e.g., Information Technology">
             </div>
 
             <div class="responsive-grid">
                 <div class="form-group">
-                    <label>Duration (Minutes)</label>
+                    <label for="quiz-duration">Duration (Minutes)</label>
                     <input type="number" id="quiz-duration" value="0" min="0">
                 </div>
                 <div class="form-group">
-                    <label>Expiry Date/Time</label>
+                    <label for="quiz-expiry">Expiry Date/Time</label>
                     <input type="datetime-local" id="quiz-expiry">
                 </div>
                 <div class="form-group">
-                    <label>Question Pooling (Items to Show)</label>
+                    <label for="sample-question-count">Question Pooling (Items to Show)</label>
                     <input type="number" id="sample-question-count" placeholder="e.g., 15 (0 for all)" min="0">
                     <small style="color: var(--text-muted); font-size: 0.78rem; display: block; margin-top: 4px;">
                         Number of questions randomly drawn per student (e.g. 15 of 25). Leave 0 or blank for all questions.
@@ -198,7 +198,7 @@
             </div>
 
             <div class="form-group">
-                <label>Encryption Key (Secret)</label>
+                <label for="secret-key">Encryption Key (Secret)</label>
                 <input type="password" id="secret-key" placeholder="Enter a strong password for this quiz">
             </div>
 
@@ -256,11 +256,11 @@
 
             <div class="responsive-grid">
                 <div class="form-group">
-                    <label>Quiz ID</label>
+                    <label for="results-quiz-id">Quiz ID</label>
                     <input type="text" id="results-quiz-id" placeholder="Paste the Quiz ID">
                 </div>
                 <div class="form-group">
-                    <label>Secret Key</label>
+                    <label for="results-secret-key">Secret Key</label>
                     <input type="password" id="results-secret-key" placeholder="Enter encryption key">
                 </div>
             </div>
@@ -297,15 +297,15 @@
                 <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
                     <div class="responsive-grid">
                         <div class="form-group">
-                            <label>Modify Duration (Mins)</label>
+                            <label for="modify-quiz-duration">Modify Duration (Mins)</label>
                             <input type="number" id="modify-quiz-duration" placeholder="0 for unlimited">
                         </div>
                         <div class="form-group">
-                            <label>Modify Expiry Date/Time</label>
+                            <label for="modify-quiz-expiry">Modify Expiry Date/Time</label>
                             <input type="datetime-local" id="modify-quiz-expiry">
                         </div>
                         <div class="form-group">
-                            <label>Question Pooling (Items to Show)</label>
+                            <label for="modify-quiz-sample-count">Question Pooling (Items to Show)</label>
                             <input type="number" id="modify-quiz-sample-count" placeholder="0 for all items" min="0">
                             <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 3px;">
                                 Set to <strong>0</strong> to give students all questions (e.g. /20). Current bank: <strong id="modify-quiz-bank-count">0</strong> questions.
@@ -394,26 +394,26 @@
                 provided by your teacher to begin.</p>
 
             <div class="form-group">
-                <label>Quiz ID</label>
+                <label for="student-quiz-id">Quiz ID</label>
                 <input type="text" id="student-quiz-id" placeholder="Enter ID">
             </div>
             <div class="form-group">
-                <label>Student ID / Institutional ID</label>
+                <label for="student-id-field">Student ID / Institutional ID</label>
                 <input type="text" id="student-id-field" placeholder="e.g. 2024-10023">
             </div>
             <div class="responsive-grid">
                 <div class="form-group">
-                    <label>First Name</label>
+                    <label for="student-first-name">First Name</label>
                     <input type="text" id="student-first-name" placeholder="John">
                 </div>
                 <div class="form-group">
-                    <label>Last Name</label>
+                    <label for="student-last-name">Last Name</label>
                     <input type="text" id="student-last-name" placeholder="Doe">
                 </div>
             </div>
             <div class="responsive-grid">
                 <div class="form-group">
-                    <label>Year Level</label>
+                    <label for="student-year">Year Level</label>
                     <select id="student-year">
                         <option value="" disabled selected>Select Year</option>
                         <option value="1">1st Year</option>
@@ -423,7 +423,7 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>Section</label>
+                    <label for="student-section-select">Section</label>
                     <select id="student-section-select">
                         <option value="" disabled selected>Select Section</option>
                         <option value="A">Section A</option>
@@ -441,7 +441,7 @@
                 </div>
             </div>
             <div class="form-group">
-                <label>Access Key</label>
+                <label for="student-secret-key">Access Key</label>
                 <input type="password" id="student-secret-key" placeholder="Provided by teacher">
             </div>
             <button id="start-quiz" class="btn btn-primary"
@@ -456,33 +456,6 @@
             <h2 id="quiz-title-display" style="text-align: center; margin-bottom: 20px;">Quiz</h2>
             <div class="progress-bar">
                 <div class="progress" id="quiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
-            </div>
-
-            <!-- Student Question Navigator / Quick Jump Palette -->
-            <div id="student-palette-container" class="student-palette-container">
-                <div class="palette-header">
-                    <div class="palette-stats">
-                        <span class="palette-stat stat-answered" title="Answered Questions">
-                            <span class="stat-indicator answered-indicator"></span>
-                            <span id="palette-count-answered">0</span> Answered
-                        </span>
-                        <span class="palette-stat stat-flagged" title="Flagged for Review">
-                            <span class="stat-indicator flagged-indicator">🚩</span>
-                            <span id="palette-count-flagged">0</span> Flagged
-                        </span>
-                        <span class="palette-stat stat-unanswered" title="Unanswered Questions">
-                            <span class="stat-indicator unanswered-indicator"></span>
-                            <span id="palette-count-unanswered">0</span> Left
-                        </span>
-                    </div>
-                    <div class="palette-actions">
-                        <button type="button" id="toggle-palette-btn" class="btn btn-sm btn-outline palette-toggle-btn" aria-expanded="true">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-                            <span id="toggle-palette-text">Hide Grid</span>
-                        </button>
-                    </div>
-                </div>
-                <div id="student-palette-grid" class="student-palette-grid" role="navigation" aria-label="Question jump palette"></div>
             </div>
 
             <div id="quiz-questions"></div>
@@ -692,15 +665,15 @@
 
                 <div class="responsive-grid">
                     <div class="form-group">
-                        <label>Duration (Minutes)</label>
+                        <label for="modal-modify-duration">Duration (Minutes)</label>
                         <input type="number" id="modal-modify-duration" placeholder="0 for unlimited">
                     </div>
                     <div class="form-group">
-                        <label>Expiry Date/Time</label>
+                        <label for="modal-modify-expiry">Expiry Date/Time</label>
                         <input type="datetime-local" id="modal-modify-expiry">
                     </div>
                     <div class="form-group">
-                        <label>Question Pooling (Sample Size)</label>
+                        <label for="modal-modify-sample-count">Question Pooling (Sample Size)</label>
                         <input type="number" id="modal-modify-sample-count" placeholder="0 for all items" min="0">
                     </div>
                 </div>
@@ -767,7 +740,7 @@
         <!-- Logic -->
         <div id="quiz-navigator" class="quiz-navigator hidden"></div>
         <div id="toast-container" class="toast-container" role="region" aria-live="polite"></div>
-        <script src="script.js?v=2.9"></script>
+        <script src="script.js?v=2.11"></script>
 </body>
 
 </html>
