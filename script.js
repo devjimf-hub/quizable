@@ -3832,11 +3832,9 @@ async function proceedWithQuizExecution(ctx) {
                 startDevToolsDetection();
                 startWatermarkRotation(firstName, lastName, section, studentInstitutionalId);
 
-                // Show attempts widget
+                // Floating attempts widget removed per user request (shield HUD used instead)
                 if (attemptsWidget) {
-                    attemptsWidget.classList.remove('hidden');
-                    updateAttemptsDisplay();
-                    if (focusLostCount > 0) expandWidget();
+                    attemptsWidget.classList.add('hidden');
                 }
 
                 // Save Session Logic (Auto-Login Data)
@@ -3915,7 +3913,7 @@ function displayQuestion(index) {
 
     const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
     const counterBadge = document.getElementById('q-counter-badge');
-    if (counterBadge) counterBadge.textContent = `Question ${index + 1} of ${quizData.questions.length}`;
+    if (counterBadge) counterBadge.textContent = '';
 
     updateHudAnsweredCounter();
 
@@ -3925,8 +3923,7 @@ function displayQuestion(index) {
                 <img src="assets/mascot_thinking.png" alt="Quizzy Thinking" class="duo-mascot-thinking">
             </div>
             <div class="duo-question-bubble">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-                    <span class="duo-pill-badge">Question ${index + 1} of ${quizData.questions.length}</span>
+                <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:8px;">
                     <button type="button" id="flag-btn-${index}" class="duo-flag-btn ${isFlagged ? 'flagged' : ''}" onclick="toggleFlagQuestion(${index}); playFlagSound();" title="${isFlagged ? 'Remove flag' : 'Flag this question for review'}">
                         <span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>
                     </button>
@@ -4191,20 +4188,8 @@ function handleFocusLoss() {
 }
 
 function expandWidget() {
-    if (!attemptsWidget) return;
-
-    // Set message
-    attemptsText.textContent = `${focusLostCount} attempts to cheat, you will get disqualified on ${MAX_ATTEMPTS}`;
-
-    attemptsWidget.classList.add('expanded');
-
-    // Clear existing timeout
-    if (widgetTimeout) clearTimeout(widgetTimeout);
-
-    // Auto collapse after 5 seconds
-    widgetTimeout = setTimeout(() => {
-        attemptsWidget.classList.remove('expanded');
-    }, 5000);
+    // Redundant floating circular widget removed per user request (shield HUD and modal handle messaging)
+    if (attemptsWidget) attemptsWidget.classList.add('hidden');
 }
 
 function handleFullscreenChange() {

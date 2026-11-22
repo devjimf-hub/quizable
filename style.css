@@ -714,29 +714,9 @@ body.quiz-active .quiz-watermark {
     margin-bottom: 20px;
 }
 
-/* Attempts Widget - Floating Circular/Expanded */
+/* Attempts Widget - Redundant floating circular counter removed */
 .attempts-widget {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background-color: var(--danger);
-    color: white;
-    font-weight: 700;
-    z-index: 2000;
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    overflow: hidden;
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-
-    /* Circular State (Default) */
-    width: 50px;
-    height: 50px;
-    border-radius: 50px;
-    padding: 0;
+    display: none !important;
 }
 
 .attempts-widget.expanded {
