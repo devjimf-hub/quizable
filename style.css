@@ -3061,35 +3061,6 @@ body.quiz-active .quiz-watermark {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Celebrate Again Button */
-.duo-btn-celebrate-again {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 22px;
-    border-radius: 999px;
-    background: #FFFBEB;
-    border: 2px solid #FDE68A;
-    color: #92400E;
-    font-family: var(--duo-font-heading);
-    font-weight: 800;
-    font-size: 0.92rem;
-    box-shadow: 0 3px 0 #FDE68A;
-    cursor: pointer;
-    transition: all 0.14s ease;
-}
-
-.duo-btn-celebrate-again:hover {
-    background: #FEF3C7;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 0 #FDE68A;
-}
-
-.duo-btn-celebrate-again:active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 0 #FDE68A;
-}
-
 /* ==========================================================================
    Cross-Device Viewport Fitting & Vertical Spacing Rules
    ========================================================================== */

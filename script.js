@@ -3952,9 +3952,6 @@ function displayQuestion(index) {
             ? '<button class="btn btn-info" id="review-btn">Finish & Review →</button>'
             : '<button class="btn btn-primary" id="next-btn">Next Question →</button>'}
         </div>
-        <div class="duo-keyboard-hint">
-            <span>💡 Tip: Press <span class="duo-kbd-chip">A</span>, <span class="duo-kbd-chip">B</span>, <span class="duo-kbd-chip">C</span>, <span class="duo-kbd-chip">D</span> to pick, and <span class="duo-kbd-chip">Enter</span> to proceed</span>
-        </div>
     `;
 
     const selectOption = (el) => {
@@ -4438,11 +4435,6 @@ function submitQuiz(auto = false) {
                             <div class="duo-stat-label">Rating</div>
                             <div class="duo-stat-value">${gradeLabel}</div>
                         </div>
-                    </div>
-                    <div style="text-align: center; margin-top: 16px;">
-                        <button type="button" class="duo-btn-celebrate-again" onclick="spawnConfetti(); playCelebrationSound();">
-                            <span>🎉 Celebrate Again!</span>
-                        </button>
                     </div>
                 </div>
             ` : '';
