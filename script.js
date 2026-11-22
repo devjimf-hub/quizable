@@ -82,35 +82,35 @@ function playCelebrationSound() {
     } catch (_) {}
 }
 
-// Duolingo Graphic Icon Library (SVGs)
+// Duolingo 3D Graphic Icon Library
 const DUO_ICONS = {
-    lightning: `<svg class="duo-icon duo-icon-lightning" viewBox="0 0 24 24" fill="none"><path d="M13 2L4.5 13.2h6L8.5 22 19.5 10.8h-6L15 2z" fill="#FFC800" stroke="#D97706" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
-    timer: `<svg class="duo-icon duo-icon-timer" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13.5" r="7.5" fill="#FFF7ED" stroke="#EA580C" stroke-width="2"/><path d="M12 9.5v4l2.5 2.5" stroke="#EA580C" stroke-width="2" stroke-linecap="round"/><path d="M10 2.5h4M12 2.5v3.5M19 6.5l-1.5 1.5" stroke="#EA580C" stroke-width="2" stroke-linecap="round"/></svg>`,
-    shield: `<svg class="duo-icon duo-icon-shield" viewBox="0 0 24 24" fill="none"><path d="M12 2.5L4 6v6c0 5.2 3.4 10 8 11.5 4.6-1.5 8-6.3 8-11.5V6l-8-3.5z" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    shieldRed: `<svg class="duo-icon duo-icon-shield-red" viewBox="0 0 24 24" fill="none"><path d="M12 2.5L4 6v6c0 5.2 3.4 10 8 11.5 4.6-1.5 8-6.3 8-11.5V6l-8-3.5z" fill="#FEF2F2" stroke="#EF4444" stroke-width="2" stroke-linejoin="round"/><path d="M12 8v5M12 16v.5" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round"/></svg>`,
-    soundOn: `<svg class="duo-icon duo-icon-sfx" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H3v6h3l5 4V5z" fill="#3B82F6" stroke="#2563EB" stroke-width="1.5" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 6a9 9 0 0 1 0 12" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/></svg>`,
-    soundOff: `<svg class="duo-icon duo-icon-sfx-muted" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H3v6h3l5 4V5z" fill="#94A3B8" stroke="#64748B" stroke-width="1.5" stroke-linejoin="round"/><line x1="16" y1="9" x2="22" y2="15" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round"/><line x1="22" y1="9" x2="16" y2="15" stroke="#EF4444" stroke-width="2.2" stroke-linecap="round"/></svg>`,
-    star: `<svg class="duo-icon duo-icon-star" viewBox="0 0 24 24" fill="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#FFC800" stroke="#E5A500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    flagFilled: `<svg class="duo-icon duo-icon-flag-filled" viewBox="0 0 24 24" fill="none"><path d="M5 21v-7m0 0V3.5c3-1.5 5 1.5 8 0s5-1.5 6 0v8.5c-2-1.5-4 1.5-7 0s-5-1.5-7 0z" fill="#EF4444" stroke="#DC2626" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5" cy="3.5" r="1.5" fill="#DC2626"/></svg>`,
-    flagOutline: `<svg class="duo-icon duo-icon-flag-outline" viewBox="0 0 24 24" fill="none"><path d="M5 21v-7m0 0V3.5c3-1.5 5 1.5 8 0s5-1.5 6 0v8.5c-2-1.5-4 1.5-7 0s-5-1.5-7 0z" stroke="#64748B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5" cy="3.5" r="1.5" fill="#94A3B8"/></svg>`,
-    lock: `<svg class="duo-icon duo-icon-lock" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="11" rx="3" fill="#3B82F6" stroke="#2563EB" stroke-width="1.6"/><path d="M8 10V7a4 4 0 1 1 8 0v3" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="15" r="1.5" fill="#ffffff"/></svg>`,
-    warning: `<svg class="duo-icon duo-icon-warning" viewBox="0 0 24 24" fill="none"><path d="M12 2.8l9.5 16.5A1.8 1.8 0 0 1 19.9 22H4.1a1.8 1.8 0 0 1-1.6-2.7L12 2.8z" fill="#FEF3C7" stroke="#F59E0B" stroke-width="2" stroke-linejoin="round"/><path d="M12 9v5M12 17.5v.5" stroke="#D97706" stroke-width="2.5" stroke-linecap="round"/></svg>`,
-    stop: `<svg class="duo-icon duo-icon-stop" viewBox="0 0 24 24" fill="none"><polygon points="7.86,2 16.14,2 22,7.86 22,16.14 16.14,22 7.86,22 2,16.14 2,7.86" fill="#EF4444" stroke="#DC2626" stroke-width="1.5"/><line x1="8" y1="12" x2="16" y2="12" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/></svg>`,
-    ban: `<svg class="duo-icon duo-icon-ban" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="#FEE2E2" stroke="#EF4444" stroke-width="2.2"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="#EF4444" stroke-width="2.5" stroke-linecap="round"/></svg>`,
-    clipboard: `<svg class="duo-icon duo-icon-clipboard" viewBox="0 0 24 24" fill="none"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/><rect x="8" y="2" width="8" height="4" rx="1.5" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.8"/><line x1="8" y1="11" x2="16" y2="11" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="15" x2="13" y2="15" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/></svg>`,
-    party: `<svg class="duo-icon duo-icon-party" viewBox="0 0 24 24" fill="none"><path d="M3 21l3.5-10.5 7 7L3 21z" fill="#FFC800" stroke="#EA580C" stroke-width="1.6" stroke-linejoin="round"/><path d="M13.5 17.5l-7-7" stroke="#EA580C" stroke-width="1.5"/><path d="M15 4l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" fill="#EF4444"/><circle cx="20" cy="5" r="1.5" fill="#3B82F6"/><circle cx="18" cy="14" r="1.5" fill="#10B981"/><circle cx="10" cy="5" r="1.5" fill="#8B5CF6"/><path d="M16 10c1.5-1 2.5 0 3-1" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/></svg>`,
-    trophy: `<svg class="duo-icon duo-icon-trophy" viewBox="0 0 24 24" fill="none"><path d="M6 3h12v7a6 6 0 0 1-12 0V3z" fill="#FEF08A" stroke="#EAB308" stroke-width="2"/><path d="M6 5H3a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4h1M18 5h3a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4h-1" stroke="#EAB308" stroke-width="2" stroke-linecap="round"/><path d="M12 16v3M8 21h8" stroke="#CA8A04" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="9" r="2" fill="#EAB308"/></svg>`,
-    question: `<svg class="duo-icon duo-icon-question" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-2.5 2.8V13M12 16.5v.5" stroke="#2563EB" stroke-width="2.4" stroke-linecap="round"/></svg>`,
-    check: `<svg class="duo-icon duo-icon-check" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" fill="#DCFCE7" stroke="#16A34A" stroke-width="2"/><path d="M8 12.2l2.8 2.8L16 9.5" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    cross: `<svg class="duo-icon duo-icon-cross" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" fill="#FEE2E2" stroke="#DC2626" stroke-width="2"/><path d="M9 9l6 6M15 9l-6 6" stroke="#B91C1C" stroke-width="2.5" stroke-linecap="round"/></svg>`,
-    sparkle: `<svg class="duo-icon duo-icon-sparkle" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" fill="#FEF08A" stroke="#EAB308" stroke-width="1.8" stroke-linejoin="round"/><path d="M19 16l1 2.5L22.5 19.5 20 20.5 19 23l-1-2.5-2.5-1 2.5-1 1-2.5z" fill="#FDE047"/></svg>`,
-    refresh: `<svg class="duo-icon duo-icon-refresh" viewBox="0 0 24 24" fill="none"><path d="M20 11A8.1 8.1 0 0 0 4.5 9M4 5v4h4M4 13a8.1 8.1 0 0 0 15.5 2M20 19v-4h-4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    target: `<svg class="duo-icon duo-icon-target" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#2563EB" stroke-width="2"/><circle cx="12" cy="12" r="5" stroke="#3B82F6" stroke-width="2"/><circle cx="12" cy="12" r="1.5" fill="#1D4ED8"/></svg>`
+    lightning: `<img src="assets/icon_lightning.png" alt="Lightning" class="duo-graphic-icon">`,
+    timer: `<img src="assets/icon_timer.png" alt="Timer" class="duo-graphic-icon">`,
+    shield: `<img src="assets/icon_shield.png" alt="Shield" class="duo-graphic-icon">`,
+    shieldRed: `<img src="assets/graphic_warning.png" alt="Warning Shield" class="duo-graphic-icon">`,
+    soundOn: `<img src="assets/icon_sfx_on.png" alt="Sound On" class="duo-graphic-icon">`,
+    soundOff: `<img src="assets/icon_sfx_off.png" alt="Sound Muted" class="duo-graphic-icon">`,
+    star: `<img src="assets/icon_star.png" alt="Star" class="duo-graphic-icon">`,
+    flagFilled: `<img src="assets/icon_flag_red.png" alt="Flagged" class="duo-graphic-icon">`,
+    flagOutline: `<img src="assets/icon_flag_white.png" alt="Flag" class="duo-graphic-icon">`,
+    lock: `<img src="assets/icon_lock.png" alt="Lock" class="duo-graphic-icon">`,
+    warning: `<img src="assets/graphic_warning.png" alt="Warning" class="duo-graphic-icon">`,
+    stop: `<img src="assets/icon_stop.png" alt="Stop" class="duo-graphic-icon">`,
+    ban: `<img src="assets/icon_ban.png" alt="Prohibited" class="duo-graphic-icon">`,
+    clipboard: `<img src="assets/graphic_instructions.png" alt="Review" class="duo-graphic-icon">`,
+    party: `<img src="assets/graphic_celebrate.png" alt="Celebration" class="duo-graphic-icon">`,
+    trophy: `<img src="assets/graphic_trophy.png" alt="Trophy" class="duo-graphic-icon">`,
+    question: `<img src="assets/icon_question.png" alt="Question" class="duo-graphic-icon">`,
+    check: `<img src="assets/icon_check.png" alt="Correct" class="duo-graphic-icon">`,
+    cross: `<img src="assets/icon_cross.png" alt="Incorrect" class="duo-graphic-icon">`,
+    sparkle: `<img src="assets/icon_sparkle.png" alt="Sparkle" class="duo-graphic-icon">`,
+    refresh: `<img src="assets/icon_timer.png" alt="Retake" class="duo-graphic-icon">`,
+    target: `<img src="assets/icon_star.png" alt="Pooled" class="duo-graphic-icon">`
 };
 
 function getDuoIcon(name) {
     if (!name) return '';
-    if (typeof name === 'string' && name.startsWith('<svg')) return name;
+    if (typeof name === 'string' && (name.startsWith('<img') || name.startsWith('<svg'))) return name;
     const emojiMap = {
         '⚡': 'lightning',
         '⏱️': 'timer',
@@ -4454,7 +4454,7 @@ function submitQuiz(auto = false) {
 
             const scoreHtml = showScore ? `
                 <div class="duo-results-card">
-                    <div class="duo-results-icon-badge">${DUO_ICONS.trophy}</div>
+                    <div class="duo-results-graphic-badge"><img src="assets/graphic_trophy.png" alt="Quiz Complete Trophy" class="duo-rendered-graphic"></div>
                     <div class="duo-results-banner">
                         <span class="duo-pill-badge" style="background:#FFFBEB; border-color:#FFC800; color:#B45309; display:inline-flex; align-items:center; gap:4px;">${DUO_ICONS.sparkle} Quiz Complete!</span>
                         <h2 class="duo-results-title">${escapeHtml(gradeLabel)}, ${escapeHtml(quizData.student?.firstName || 'Student')}!</h2>

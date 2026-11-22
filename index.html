@@ -438,7 +438,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
                         <h2 class="duo-heading" style="margin: 0; font-size: 1.65rem; color: #1E293B; font-weight: 800;">Student Portal</h2>
                         <span id="portal-link-badge" class="duo-pill-badge duo-pill-green hidden">
-                            <svg class="duo-icon duo-icon-check" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" fill="#DCFCE7" stroke="#16A34A" stroke-width="2"/><path d="M8 12.2l2.8 2.8L16 9.5" stroke="#15803D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg> Link Auto-Verified
+                            <img src="assets/icon_check.png" alt="Verified" class="duo-graphic-icon"> Link Auto-Verified
                         </span>
                     </div>
                     <p id="portal-welcome-text" style="margin: 0; font-family: var(--duo-font-body); font-weight: 600; font-size: 0.96rem; color: #64748B; line-height: 1.45;">
@@ -448,7 +448,7 @@
 
                 <!-- Hidden Quiz ID & Access Key indicator pill -->
                 <div id="manual-creds-indicator" class="duo-creds-pill hidden">
-                    <span><svg class="duo-icon duo-icon-lock" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="11" rx="3" fill="#3B82F6" stroke="#2563EB" stroke-width="1.6"/><path d="M8 10V7a4 4 0 1 1 8 0v3" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="15" r="1.5" fill="#ffffff"/></svg> Quiz ID &amp; Secret Key auto-filled from teacher link (hidden)</span>
+                    <span><img src="assets/icon_lock.png" alt="Lock" class="duo-graphic-icon"> Quiz ID &amp; Secret Key auto-filled from teacher link (hidden)</span>
                     <button type="button" id="toggle-manual-creds" class="duo-link-btn" onclick="toggleStudentCredentialsManual()">Show fields</button>
                 </div>
 
@@ -528,23 +528,23 @@
                 <div class="duo-hud-center">
                     <div class="progress-bar duo-progress-track">
                         <div class="progress duo-progress-fill" id="quiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="width: 0%;">
-                            <span class="duo-progress-star" aria-hidden="true"><svg class="duo-icon duo-icon-star" viewBox="0 0 24 24" fill="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="#FFC800" stroke="#E5A500" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                            <span class="duo-progress-star" aria-hidden="true"><img src="assets/icon_star.png" alt="Progress Star" class="duo-graphic-icon"></span>
                         </div>
                     </div>
                 </div>
 
                 <div class="duo-hud-right">
                     <div id="hud-answered-pill" class="duo-hud-pill duo-hud-answered" title="Questions answered">
-                        <svg class="duo-icon duo-icon-lightning" viewBox="0 0 24 24" fill="none"><path d="M13 2L4.5 13.2h6L8.5 22 19.5 10.8h-6L15 2z" fill="#FFC800" stroke="#D97706" stroke-width="1.6" stroke-linejoin="round"/></svg> <span id="hud-answered-text">0/0</span>
+                        <img src="assets/icon_lightning.png" alt="Answered" class="duo-graphic-icon"> <span id="hud-answered-text">0/0</span>
                     </div>
                     <div id="timer-display" class="duo-hud-pill duo-hud-timer hidden" role="timer" aria-live="polite">
-                        <svg class="duo-icon duo-icon-timer" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13.5" r="7.5" fill="#FFF7ED" stroke="#EA580C" stroke-width="2"/><path d="M12 9.5v4l2.5 2.5" stroke="#EA580C" stroke-width="2" stroke-linecap="round"/><path d="M10 2.5h4M12 2.5v3.5M19 6.5l-1.5 1.5" stroke="#EA580C" stroke-width="2" stroke-linecap="round"/></svg> <span id="timer-text">00:00</span>
+                        <img src="assets/icon_timer.png" alt="Timer" class="duo-graphic-icon"> <span id="timer-text">00:00</span>
                     </div>
                     <div id="shield-widget" class="duo-hud-pill duo-hud-shield" title="Integrity Shield: Attempts remaining">
-                        <svg class="duo-icon duo-icon-shield" viewBox="0 0 24 24" fill="none"><path d="M12 2.5L4 6v6c0 5.2 3.4 10 8 11.5 4.6-1.5 8-6.3 8-11.5V6l-8-3.5z" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> <span id="shield-count">5/5</span>
+                        <img src="assets/icon_shield.png" alt="Integrity Shield" class="duo-graphic-icon"> <span id="shield-count">5/5</span>
                     </div>
                     <button type="button" id="sfx-toggle-btn" class="duo-hud-pill duo-hud-sfx" title="Toggle Sound Effects" onclick="toggleSoundEffects()">
-                        <span id="sfx-icon"><svg class="duo-icon duo-icon-sfx" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H3v6h3l5 4V5z" fill="#3B82F6" stroke="#2563EB" stroke-width="1.5" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 6a9 9 0 0 1 0 12" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/></svg></span>
+                        <span id="sfx-icon"><img src="assets/icon_sfx_on.png" alt="Sound Effects" class="duo-graphic-icon"></span>
                     </button>
                 </div>
             </div>
@@ -556,7 +556,7 @@
         <!-- Final Results Screen -->
         <div id="results-section" class="card hidden">
             <div id="submission-success-message" style="text-align: center; padding: 30px;">
-                <div class="duo-results-icon-badge"><svg class="duo-icon duo-icon-party" viewBox="0 0 24 24" fill="none"><path d="M3 21l3.5-10.5 7 7L3 21z" fill="#FFC800" stroke="#EA580C" stroke-width="1.6" stroke-linejoin="round"/><path d="M13.5 17.5l-7-7" stroke="#EA580C" stroke-width="1.5"/><path d="M15 4l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z" fill="#EF4444"/><circle cx="20" cy="5" r="1.5" fill="#3B82F6"/><circle cx="18" cy="14" r="1.5" fill="#10B981"/><circle cx="10" cy="5" r="1.5" fill="#8B5CF6"/><path d="M16 10c1.5-1 2.5 0 3-1" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+                <div class="duo-results-graphic-badge"><img src="assets/graphic_celebrate.png" alt="Quiz Submitted" class="duo-rendered-graphic"></div>
                 <h2 style="font-family: var(--duo-font-heading); font-size: 1.8rem; margin: 10px 0; color: #1E293B;">Quiz Submitted!</h2>
                 <p style="color: var(--text-muted); font-size: 0.95rem;">Your responses have been securely encrypted and submitted to the cloud.</p>
             </div>
@@ -571,13 +571,13 @@
         <!-- Proctoring System -->
         <div id="tab-warning" class="tab-warning hidden" role="alert" aria-live="assertive">
             <div class="duo-tab-warning-box">
-                <div class="duo-warning-icon"><svg class="duo-icon duo-icon-warning" viewBox="0 0 24 24" fill="none"><path d="M12 2.8l9.5 16.5A1.8 1.8 0 0 1 19.9 22H4.1a1.8 1.8 0 0 1-1.6-2.7L12 2.8z" fill="#FEF3C7" stroke="#F59E0B" stroke-width="2" stroke-linejoin="round"/><path d="M12 9v5M12 17.5v.5" stroke="#D97706" stroke-width="2.5" stroke-linecap="round"/></svg></div>
+                <div class="duo-warning-graphic"><img src="assets/graphic_warning.png" alt="Security Warning" class="duo-rendered-graphic"></div>
                 <h2 style="font-family: var(--duo-font-heading); font-size: 1.8rem; margin-bottom: 12px; color: #1e293b;">Tab Switch Detected</h2>
                 <p style="max-width: 420px; margin: 0 auto 20px auto; color: #64748b; font-size: 0.95rem; line-height: 1.5;">
                     Leaving or minimizing the quiz window is prohibited. This attempt has been logged.
                 </p>
                 <div class="duo-attempts-left-pill">
-                    <svg class="duo-icon duo-icon-shield-red" viewBox="0 0 24 24" fill="none"><path d="M12 2.5L4 6v6c0 5.2 3.4 10 8 11.5 4.6-1.5 8-6.3 8-11.5V6l-8-3.5z" fill="#FEF2F2" stroke="#EF4444" stroke-width="2" stroke-linejoin="round"/><path d="M12 8v5M12 16v.5" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round"/></svg> Attempts remaining: <span id="remaining-attempts" style="font-size: 1.3rem; font-weight: 800;">5</span>
+                    <img src="assets/graphic_warning.png" alt="Shield Warning" class="duo-graphic-icon"> Attempts remaining: <span id="remaining-attempts" style="font-size: 1.3rem; font-weight: 800;">5</span>
                 </div>
                 <button id="return-to-quiz" class="btn btn-primary duo-btn-large" style="width: 100%; margin-top: 24px;">I Understand, Return to Quiz</button>
             </div>
@@ -691,7 +691,7 @@
         <div id="confirmation-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title" style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
             <div class="modal-content duo-modal" style="max-width: 460px; width: 92%;">
                 <div class="duo-modal-header">
-                    <div class="duo-modal-icon-badge"><svg class="duo-icon duo-icon-question" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9.5" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-2.5 2.8V13M12 16.5v.5" stroke="#2563EB" stroke-width="2.4" stroke-linecap="round"/></svg></div>
+                    <div class="duo-modal-graphic-badge"><img src="assets/icon_question.png" alt="Confirm" class="duo-rendered-graphic-sm"></div>
                     <h2 id="modal-title">Confirm</h2>
                 </div>
                 <p id="modal-message" class="duo-modal-message"></p>
@@ -743,24 +743,24 @@
         <div id="instruction-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3000;">
             <div class="modal-content duo-modal" style="max-width: 480px; width: 92%;">
                 <div class="duo-modal-header">
-                    <div class="duo-modal-icon-badge"><svg class="duo-icon duo-icon-clipboard" viewBox="0 0 24 24" fill="none"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" stroke="#2563EB" stroke-width="2" stroke-linecap="round"/><rect x="8" y="2" width="8" height="4" rx="1.5" fill="#DBEAFE" stroke="#2563EB" stroke-width="1.8"/><line x1="8" y1="11" x2="16" y2="11" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="15" x2="13" y2="15" stroke="#3B82F6" stroke-width="2" stroke-linecap="round"/></svg></div>
+                    <div class="duo-modal-graphic-badge"><img src="assets/graphic_instructions.png" alt="Quiz Instructions" class="duo-rendered-graphic-sm"></div>
                     <h2 style="margin: 0; font-size: 1.45rem;">Quiz Instructions</h2>
                 </div>
                 <div class="duo-instructions-list">
                     <div class="duo-instruction-item">
-                        <span class="duo-inst-icon"><svg class="duo-icon duo-icon-ban" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="#FEE2E2" stroke="#EF4444" stroke-width="2.2"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="#EF4444" stroke-width="2.5" stroke-linecap="round"/></svg></span>
+                        <span class="duo-inst-icon"><img src="assets/icon_ban.png" alt="Prohibited" class="duo-graphic-icon"></span>
                         <span>Do not switch tabs or minimize the browser window.</span>
                     </div>
                     <div class="duo-instruction-item">
-                        <span class="duo-inst-icon"><svg class="duo-icon duo-icon-lock" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="11" rx="3" fill="#3B82F6" stroke="#2563EB" stroke-width="1.6"/><path d="M8 10V7a4 4 0 1 1 8 0v3" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="15" r="1.5" fill="#ffffff"/></svg></span>
+                        <span class="duo-inst-icon"><img src="assets/icon_lock.png" alt="Lock" class="duo-graphic-icon"></span>
                         <span>Right-click and copy/paste are disabled.</span>
                     </div>
                     <div class="duo-instruction-item">
-                        <span class="duo-inst-icon"><svg class="duo-icon duo-icon-timer" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13.5" r="7.5" fill="#FFF7ED" stroke="#EA580C" stroke-width="2"/><path d="M12 9.5v4l2.5 2.5" stroke="#EA580C" stroke-width="2" stroke-linecap="round"/><path d="M10 2.5h4M12 2.5v3.5M19 6.5l-1.5 1.5" stroke="#EA580C" stroke-width="2" stroke-linecap="round"/></svg></span>
+                        <span class="duo-inst-icon"><img src="assets/icon_timer.png" alt="Timer" class="duo-graphic-icon"></span>
                         <span>The quiz ends automatically when time expires.</span>
                     </div>
                     <div class="duo-instruction-item">
-                        <span class="duo-inst-icon"><svg class="duo-icon duo-icon-shield" viewBox="0 0 24 24" fill="none"><path d="M12 2.5L4 6v6c0 5.2 3.4 10 8 11.5 4.6-1.5 8-6.3 8-11.5V6l-8-3.5z" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                        <span class="duo-inst-icon"><img src="assets/icon_shield.png" alt="Integrity" class="duo-graphic-icon"></span>
                         <span>Integrity and DevTools detection are active.</span>
                     </div>
                 </div>
@@ -821,7 +821,7 @@
         <div id="retake-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" style="position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 3600;">
             <div class="modal-content duo-modal" style="max-width: 480px; width: 92%;">
                 <div class="duo-modal-header">
-                    <div class="duo-modal-icon-badge duo-badge-warning"><svg class="duo-icon duo-icon-warning" viewBox="0 0 24 24" fill="none"><path d="M12 2.8l9.5 16.5A1.8 1.8 0 0 1 19.9 22H4.1a1.8 1.8 0 0 1-1.6-2.7L12 2.8z" fill="#FEF3C7" stroke="#F59E0B" stroke-width="2" stroke-linejoin="round"/><path d="M12 9v5M12 17.5v.5" stroke="#D97706" stroke-width="2.5" stroke-linecap="round"/></svg></div>
+                    <div class="duo-modal-graphic-badge"><img src="assets/graphic_warning.png" alt="Warning" class="duo-rendered-graphic-sm"></div>
                     <div>
                         <h2 style="margin: 0; font-size: 1.35rem;">Previous Attempt Found</h2>
                         <p style="margin: 0; font-size: 0.85rem; color: #64748b;">Submission or disqualification recorded</p>
@@ -831,7 +831,7 @@
                     You have already taken or submitted this quiz. Would you like to request to retake this exam?
                 </div>
                 <div class="duo-alert-tile duo-alert-red">
-                    <span class="duo-inst-icon"><svg class="duo-icon duo-icon-stop" viewBox="0 0 24 24" fill="none"><polygon points="7.86,2 16.14,2 22,7.86 22,16.14 16.14,22 7.86,22 2,16.14 2,7.86" fill="#EF4444" stroke="#DC2626" stroke-width="1.5"/><line x1="8" y1="12" x2="16" y2="12" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/></svg></span>
+                    <span class="duo-inst-icon"><img src="assets/icon_stop.png" alt="Stop Penalty" class="duo-graphic-icon"></span>
                     <div>
                         <strong>Penalty Notice:</strong> Every retake automatically incurs a <strong>10% grade deduction penalty</strong> on your final score.
                     </div>

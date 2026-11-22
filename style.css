@@ -2174,6 +2174,151 @@ body.quiz-active .quiz-watermark {
     margin-bottom: 16px;
 }
 
+/* Rendered 3D Duolingo-style Graphics & Icons */
+.duo-rendered-graphic {
+    width: 90px;
+    height: 90px;
+    object-fit: contain;
+    display: inline-block;
+    filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.14));
+    animation: graphicFloat 3.2s ease-in-out infinite;
+    user-select: none;
+}
+
+.duo-rendered-graphic-sm {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    display: inline-block;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.12));
+    user-select: none;
+}
+
+.duo-graphic-icon {
+    display: inline-block;
+    vertical-align: -0.18em;
+    width: 1.25em;
+    height: 1.25em;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12));
+    transition: transform 0.15s ease;
+    user-select: none;
+}
+
+.duo-graphic-icon:hover {
+    transform: scale(1.08);
+}
+
+.duo-graphic-inline {
+    margin-right: 6px;
+}
+
+.duo-hud-pill .duo-graphic-icon {
+    width: 1.25em;
+    height: 1.25em;
+    vertical-align: -0.18em;
+    margin-right: 4px;
+}
+
+.duo-hud-sfx .duo-graphic-icon {
+    margin-right: 0;
+    width: 1.35em;
+    height: 1.35em;
+}
+
+.duo-progress-star .duo-graphic-icon {
+    width: 22px;
+    height: 22px;
+    vertical-align: middle;
+}
+
+.duo-modal-icon-badge .duo-graphic-icon {
+    width: 32px;
+    height: 32px;
+}
+
+.duo-inst-icon .duo-graphic-icon {
+    width: 24px;
+    height: 24px;
+}
+
+.duo-flag-btn .duo-graphic-icon {
+    width: 1.2em;
+    height: 1.2em;
+    margin-right: 6px;
+    vertical-align: -0.18em;
+}
+
+.duo-filter-btn .duo-graphic-icon {
+    width: 1.15em;
+    height: 1.15em;
+    margin-right: 6px;
+    vertical-align: -0.16em;
+}
+
+.duo-review-tile .duo-graphic-icon {
+    width: 1.15em;
+    height: 1.15em;
+    margin-right: 4px;
+    vertical-align: -0.16em;
+}
+
+.duo-toast-icon .duo-graphic-icon {
+    width: 24px;
+    height: 24px;
+}
+
+.duo-attempts-left-pill .duo-graphic-icon {
+    width: 1.3em;
+    height: 1.3em;
+    vertical-align: -0.18em;
+    margin-right: 6px;
+}
+
+.duo-pill-badge .duo-graphic-icon {
+    width: 1.15em;
+    height: 1.15em;
+    vertical-align: -0.16em;
+    margin-right: 5px;
+}
+
+.duo-creds-pill .duo-graphic-icon {
+    width: 1.15em;
+    height: 1.15em;
+    vertical-align: -0.16em;
+    margin-right: 5px;
+}
+
+.duo-results-graphic-badge {
+    margin-bottom: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.duo-warning-graphic {
+    margin-bottom: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    animation: shieldShake 0.5s ease-in-out;
+}
+
+.duo-modal-graphic-badge {
+    width: 52px;
+    height: 52px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+@keyframes graphicFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+
 /* Vector Graphics & Duolingo Iconography */
 .duo-icon {
     display: inline-block;
