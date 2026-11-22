@@ -277,6 +277,13 @@ input::placeholder {
     word-break: break-word;
 }
 
+.quiz-question-text {
+    font-size: 1.35rem;
+    font-weight: 500;
+    line-height: 1.55;
+    margin-bottom: 18px;
+}
+
 .quiz-figure {
     max-width: 100%;
     overflow-x: auto;
@@ -518,6 +525,10 @@ input::placeholder {
 
     h1 {
         font-size: 1.8rem;
+    }
+
+    .quiz-question-text {
+        font-size: 1.2rem;
     }
 
     .responsive-grid {

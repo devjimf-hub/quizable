@@ -2239,7 +2239,7 @@ function updateLivePreview(card) {
     const previewContent = card.querySelector('.preview-content');
 
     previewContent.innerHTML = `
-        <p style="font-size:1.1rem; margin-bottom:15px; white-space: pre-wrap; word-break: break-word;">${text ? escapeHtml(text) : '<i style="color:var(--text-muted)">No question text...</i>'}</p>
+        <p class="quiz-question-text">${text ? escapeHtml(text) : '<i style="color:var(--text-muted)">No question text...</i>'}</p>
         ${figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${sanitizeFigure(figure)}</div>` : ''}
         <div class="quiz-options">
             ${options.map((opt, i) => `
@@ -3658,7 +3658,7 @@ function displayQuestion(index) {
                     <span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>
                 </button>
             </div>
-            <p style="font-size:1.1rem; margin-bottom:15px; white-space: pre-wrap; word-break: break-word;">${escapeHtml(q ? (q.text || '') : '')}</p>
+            <p class="quiz-question-text">${escapeHtml(q ? (q.text || '') : '')}</p>
             ${q.figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${sanitizeFigure(q.figure)}</div>` : ''}
             <div class="quiz-options" role="radiogroup" aria-label="Question choices">
                 ${q.options.map((opt, i) => `
