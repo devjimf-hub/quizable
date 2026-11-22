@@ -60,9 +60,20 @@ body.privacy-blur {
 }
 
 .container {
-    max-width: 1000px;
+    max-width: 960px;
+    width: 100%;
     margin: 0 auto;
-    padding: 40px 20px;
+    /* Balanced fluid spacing ensuring page content never hugs browser edges */
+    padding: clamp(32px, 5.5vh, 60px) clamp(16px, 4vw, 32px) clamp(48px, 8vh, 88px) clamp(16px, 4vw, 32px);
+    padding-top: max(clamp(32px, 5.5vh, 60px), env(safe-area-inset-top));
+    padding-bottom: max(clamp(48px, 8vh, 88px), env(safe-area-inset-bottom));
+    padding-left: max(clamp(16px, 4vw, 32px), env(safe-area-inset-left));
+    padding-right: max(clamp(16px, 4vw, 32px), env(safe-area-inset-right));
+    box-sizing: border-box;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Typography */
@@ -516,11 +527,13 @@ input::placeholder {
 /* Responsive */
 @media (max-width: 640px) {
     .container {
-        padding: 20px 16px;
+        padding: clamp(24px, 4vh, 36px) clamp(12px, 3.5vw, 18px) clamp(40px, 6.5vh, 60px) clamp(12px, 3.5vw, 18px);
+        padding-top: max(clamp(24px, 4vh, 36px), env(safe-area-inset-top));
+        padding-bottom: max(clamp(40px, 6.5vh, 60px), env(safe-area-inset-bottom));
     }
 
     .card {
-        padding: 24px;
+        padding: clamp(18px, 4vw, 24px);
     }
 
     h1 {
@@ -1784,16 +1797,19 @@ body.quiz-active .quiz-watermark {
 }
 
 /* Student Section Card */
-#student-section {
+#student-section,
+.duo-card {
     max-width: 680px;
-    margin: 0 auto 30px auto;
-    border-radius: 28px;
-    border: 2px solid #E2E8F0;
-    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.08), 0 4px 0 #E2E8F0;
+    width: 100%;
+    margin: clamp(14px, 2.5vh, 28px) auto clamp(36px, 6vh, 64px) auto;
+    border-radius: clamp(20px, 4vw, 28px);
+    border: 2px solid #E5E5E5;
+    box-shadow: 0 6px 0 #E5E5E5;
     background: #ffffff;
     position: relative;
     overflow: hidden;
-    padding: 36px 32px;
+    padding: clamp(22px, 4.5vw, 36px) clamp(16px, 4.5vw, 32px);
+    box-sizing: border-box;
 }
 
 .duo-portal-header {
@@ -1882,13 +1898,15 @@ body.quiz-active .quiz-watermark {
 
 /* Quiz Section Card */
 #quiz-section {
-    max-width: 820px;
-    margin: 0 auto 30px auto;
-    border-radius: 28px;
-    border: 2px solid #E2E8F0;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.06), 0 4px 0 #E2E8F0;
+    max-width: 840px;
+    width: 100%;
+    margin: clamp(14px, 2.5vh, 28px) auto clamp(36px, 6vh, 64px) auto;
+    border-radius: clamp(20px, 4vw, 28px);
+    border: 2px solid #E5E5E5;
+    box-shadow: 0 6px 0 #E5E5E5;
     background: #ffffff;
-    padding: 28px 32px;
+    padding: clamp(20px, 4vw, 32px) clamp(14px, 4vw, 30px);
+    box-sizing: border-box;
 }
 
 #quiz-title-display {
@@ -2203,14 +2221,16 @@ body.quiz-active .quiz-watermark {
 /* Results Screen */
 #results-section {
     max-width: 720px;
-    margin: 0 auto 30px auto;
-    border-radius: 28px;
-    border: 2px solid #E2E8F0;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.06), 0 4px 0 #E2E8F0;
+    width: 100%;
+    margin: clamp(14px, 2.5vh, 28px) auto clamp(36px, 6vh, 64px) auto;
+    border-radius: clamp(20px, 4vw, 28px);
+    border: 2px solid #E5E5E5;
+    box-shadow: 0 6px 0 #E5E5E5;
     background: #ffffff;
-    padding: 36px 32px;
+    padding: clamp(24px, 5vw, 40px) clamp(16px, 5vw, 36px);
     position: relative;
     overflow: hidden;
+    box-sizing: border-box;
 }
 
 .duo-results-card {
@@ -2253,8 +2273,8 @@ body.quiz-active .quiz-watermark {
 
 .duo-stats-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: clamp(10px, 2.5vw, 16px);
     margin: 24px 0;
 }
 
@@ -3060,4 +3080,216 @@ body.quiz-active .quiz-watermark {
 .duo-btn-celebrate-again:active {
     transform: translateY(2px);
     box-shadow: 0 1px 0 #FDE68A;
+}
+
+/* ==========================================================================
+   Cross-Device Viewport Fitting & Vertical Spacing Rules
+   ========================================================================== */
+
+/* Tablets and Desktops */
+@media (min-width: 641px) {
+    #quiz-section {
+        max-width: 860px;
+    }
+}
+
+/* Mobile & Touch Devices (<= 640px) */
+@media (max-width: 640px) {
+    /* Prevent content from hugging browser top / bottom navigation bars */
+    .container {
+        padding-top: max(clamp(20px, 4vh, 32px), env(safe-area-inset-top)) !important;
+        padding-bottom: max(clamp(44px, 7vh, 64px), env(safe-area-inset-bottom)) !important;
+        padding-left: max(14px, env(safe-area-inset-left)) !important;
+        padding-right: max(14px, env(safe-area-inset-right)) !important;
+    }
+
+    #student-section,
+    #quiz-section,
+    #results-section {
+        margin-top: clamp(8px, 1.8vh, 16px) !important;
+        margin-bottom: clamp(32px, 5.5vh, 52px) !important;
+        padding: clamp(18px, 4vw, 24px) clamp(14px, 3.5vw, 20px) !important;
+        border-radius: 20px !important;
+    }
+
+    /* HUD adaptation: clean stacking and no horizontal squishing */
+    .duo-quiz-hud {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+        padding: 14px 14px !important;
+        border-radius: 18px !important;
+        margin-bottom: 18px !important;
+    }
+
+    .duo-hud-left {
+        width: 100% !important;
+        text-align: center !important;
+        min-width: 0 !important;
+    }
+
+    .duo-hud-title {
+        text-align: center !important;
+        font-size: 1.15rem !important;
+    }
+
+    .duo-hud-center {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .duo-hud-right {
+        width: 100% !important;
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+    }
+
+    .duo-hud-pill {
+        padding: 6px 11px !important;
+        font-size: 0.82rem !important;
+        border-radius: 12px !important;
+    }
+
+    /* Question & Bubble layout */
+    .duo-quiz-layout {
+        flex-direction: column !important;
+        align-items: center !important;
+        gap: 12px !important;
+        margin-bottom: 18px !important;
+    }
+
+    .duo-mascot-col {
+        width: auto !important;
+    }
+
+    .duo-mascot-thinking {
+        width: 64px !important;
+        height: 64px !important;
+    }
+
+    .duo-question-bubble {
+        width: 100% !important;
+        padding: 16px 16px !important;
+        border-radius: 18px !important;
+    }
+
+    .duo-question-bubble::before {
+        display: none !important;
+    }
+
+    .quiz-question-text {
+        font-size: 1.12rem !important;
+        line-height: 1.45 !important;
+    }
+
+    /* Options choices: touch-friendly minimum 48px height */
+    .quiz-options {
+        gap: 10px !important;
+        margin-bottom: 20px !important;
+    }
+
+    .quiz-option {
+        padding: 12px 14px !important;
+        border-radius: 14px !important;
+        gap: 10px !important;
+        min-height: 50px !important;
+    }
+
+    .duo-option-keycap {
+        width: 32px !important;
+        height: 32px !important;
+        font-size: 0.85rem !important;
+    }
+
+    .duo-option-text {
+        font-size: 0.95rem !important;
+    }
+
+    .duo-option-radio {
+        width: 22px !important;
+        height: 22px !important;
+    }
+
+    /* Navigation: easy full-width thumb targets */
+    .duo-quiz-nav {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+        padding-top: 16px !important;
+    }
+
+    .duo-quiz-nav .btn {
+        width: 100% !important;
+        min-height: 48px !important;
+        font-size: 1rem !important;
+        justify-content: center !important;
+    }
+
+    .duo-keyboard-hint {
+        display: none !important; /* Hide keyboard shortcut hints on mobile/touch screens */
+    }
+
+    /* Student Portal Header */
+    .duo-portal-header {
+        flex-direction: column !important;
+        text-align: center !important;
+        gap: 12px !important;
+        margin-bottom: 18px !important;
+        padding-bottom: 14px !important;
+    }
+
+    .duo-mascot-welcome {
+        width: 74px !important;
+        height: 74px !important;
+    }
+
+    .speech-bubble {
+        width: 100% !important;
+        padding: 14px 16px !important;
+    }
+
+    .speech-bubble::before {
+        display: none !important;
+    }
+
+    .duo-heading {
+        font-size: 1.35rem !important;
+        text-align: center !important;
+    }
+
+    /* Results */
+    .duo-results-title {
+        font-size: 1.55rem !important;
+    }
+
+    .duo-stats-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+}
+
+/* Small mobile devices (<= 380px) */
+@media (max-width: 380px) {
+    .container {
+        padding-top: max(16px, env(safe-area-inset-top)) !important;
+        padding-bottom: max(36px, env(safe-area-inset-bottom)) !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
+    }
+
+    #student-section,
+    #quiz-section,
+    #results-section {
+        padding: 16px 12px !important;
+    }
+
+    .quiz-question-text {
+        font-size: 1.02rem !important;
+    }
+
+    .duo-hud-pill {
+        padding: 5px 8px !important;
+        font-size: 0.76rem !important;
+    }
 }
