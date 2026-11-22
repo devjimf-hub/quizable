@@ -2170,6 +2170,14 @@ body.quiz-active .quiz-watermark {
     border-top: 2px solid #F1F5F9;
 }
 
+.duo-nav-center {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
 /* Review Page */
 .duo-review-header {
     text-align: center;

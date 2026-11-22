@@ -3874,7 +3874,7 @@ window.toggleFlagQuestion = function (index) {
     const flagBtn = document.getElementById(`flag-btn-${index}`);
     const isFlagged = flaggedQuestions.has(index);
     if (flagBtn) {
-        flagBtn.className = `btn btn-sm ${isFlagged ? 'btn-flagged' : 'btn-outline'}`;
+        flagBtn.className = `duo-flag-btn ${isFlagged ? 'flagged' : ''}`;
         flagBtn.innerHTML = `<span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>`;
         flagBtn.title = isFlagged ? 'Remove flag' : 'Flag this question for review';
     }
@@ -3923,13 +3923,8 @@ function displayQuestion(index) {
                 <img src="assets/mascot_thinking.png" alt="Quizzy Thinking" class="duo-mascot-thinking">
             </div>
             <div class="duo-question-bubble">
-                <div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:8px;">
-                    <button type="button" id="flag-btn-${index}" class="duo-flag-btn ${isFlagged ? 'flagged' : ''}" onclick="toggleFlagQuestion(${index}); playFlagSound();" title="${isFlagged ? 'Remove flag' : 'Flag this question for review'}">
-                        <span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>
-                    </button>
-                </div>
                 <p class="quiz-question-text">${escapeHtml(q ? (q.text || '') : '')}</p>
-                ${q.figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${sanitizeFigure(q.figure)}</div>` : ''}
+                ${q.figure ? `<div class="quiz-figure" style="margin-top:16px;">${sanitizeFigure(q.figure)}</div>` : ''}
             </div>
         </div>
         <div class="quiz-options" role="radiogroup" aria-label="Question choices">
@@ -3947,7 +3942,12 @@ function displayQuestion(index) {
         </div>
         <div class="duo-quiz-nav">
             <button class="btn btn-outline" ${index === 0 ? 'disabled' : ''} id="prev-btn">← Previous</button>
-            <button class="btn btn-outline btn-sm" id="jump-review-btn" style="color:var(--duo-blue-border);" title="View all answers overview">📋 Review Answers</button>
+            <div class="duo-nav-center">
+                <button type="button" id="flag-btn-${index}" class="duo-flag-btn ${isFlagged ? 'flagged' : ''}" onclick="toggleFlagQuestion(${index}); playFlagSound();" title="${isFlagged ? 'Remove flag' : 'Flag this question for review'}">
+                    <span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>
+                </button>
+                <button class="btn btn-outline btn-sm" id="jump-review-btn" style="color:var(--duo-blue-border);" title="View all answers overview">📋 Review Answers</button>
+            </div>
             ${index === quizData.questions.length - 1
             ? '<button class="btn btn-info" id="review-btn">Finish & Review →</button>'
             : '<button class="btn btn-primary" id="next-btn">Next Question →</button>'}
