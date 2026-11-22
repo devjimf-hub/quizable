@@ -1,3 +1,197 @@
+
+// ==========================================================================
+// Web Audio API Sound Effects (Zero External Assets, 100% Reliable Offline)
+// ==========================================================================
+let sfxEnabled = localStorage.getItem('quizable_sfx') !== 'false';
+let audioCtx = null;
+
+function getAudioContext() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    return audioCtx;
+}
+
+function playTone(freq, duration, type = 'sine', volume = 0.08) {
+    if (!sfxEnabled) return;
+    try {
+        const ctx = getAudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(volume, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+    } catch (_) {}
+}
+
+function playOptionSelectSound() {
+    playTone(560, 0.08, 'triangle', 0.08);
+}
+
+function playNextSound() {
+    if (!sfxEnabled) return;
+    try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc1.frequency.setValueAtTime(523.25, now);
+        osc2.frequency.setValueAtTime(659.25, now + 0.05);
+        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.07);
+        osc2.start(now + 0.05);
+        osc2.stop(now + 0.2);
+    } catch (_) {}
+}
+
+function playFlagSound() {
+    playTone(880, 0.12, 'sine', 0.06);
+}
+
+function playCelebrationSound() {
+    if (!sfxEnabled) return;
+    try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.50];
+        notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+            gain.gain.setValueAtTime(0.07, now + idx * 0.09);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.3);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(now + idx * 0.09);
+            osc.stop(now + idx * 0.09 + 0.3);
+        });
+    } catch (_) {}
+}
+
+function showDuoToast(message, type = 'info', icon = '✨') {
+    const toast = document.getElementById('duo-toast');
+    if (!toast) return;
+    toast.className = `duo-toast ${type}`;
+    toast.innerHTML = `<span class="duo-toast-icon">${icon}</span><span>${escapeHtml(message)}</span>`;
+    toast.classList.remove('hidden');
+    if (window._duoToastTimeout) clearTimeout(window._duoToastTimeout);
+    window._duoToastTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 2400);
+}
+
+function updateHudAnsweredCounter() {
+    const textEl = document.getElementById('hud-answered-text');
+    const pill = document.getElementById('hud-answered-pill');
+    if (!textEl || !quizData || !Array.isArray(quizData.questions)) return;
+    const answeredCount = studentAnswers.filter(a => a !== null).length;
+    const totalCount = quizData.questions.length;
+    textEl.textContent = `${answeredCount}/${totalCount}`;
+    if (pill) {
+        if (answeredCount === totalCount && totalCount > 0) {
+            pill.classList.add('all-done');
+            pill.title = 'All questions answered! Great job!';
+        } else {
+            pill.classList.remove('all-done');
+            pill.title = 'Questions answered';
+        }
+    }
+}
+
+function animateCountUp(elementId, targetValue, suffix = '') {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    const duration = 1200;
+    const start = 0;
+    const startTime = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    function tick(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 4); // easeOutQuart
+        const current = Math.round(start + (targetValue - start) * ease);
+        el.textContent = `${current}${suffix}`;
+        if (progress < 1) {
+            if (typeof requestAnimationFrame !== 'undefined') {
+                requestAnimationFrame(tick);
+            }
+        } else {
+            el.textContent = `${targetValue}${suffix}`;
+        }
+    }
+    if (typeof requestAnimationFrame !== 'undefined') {
+        requestAnimationFrame(tick);
+    } else {
+        el.textContent = `${targetValue}${suffix}`;
+    }
+}
+
+function toggleSoundEffects() {
+    sfxEnabled = !sfxEnabled;
+    try { localStorage.setItem('quizable_sfx', sfxEnabled ? 'true' : 'false'); } catch {}
+    const icon = document.getElementById('sfx-icon');
+    if (icon) icon.textContent = sfxEnabled ? '🔊' : '🔇';
+    const sfxBtn = document.getElementById('sfx-toggle-btn');
+    if (sfxBtn) sfxBtn.classList.toggle('muted', !sfxEnabled);
+    if (sfxEnabled) playOptionSelectSound();
+    showDuoToast(sfxEnabled ? 'Sound effects enabled!' : 'Sound effects muted', 'info', sfxEnabled ? '🔊' : '🔇');
+}
+
+function spawnConfetti() {
+    const container = document.getElementById('results-section');
+    if (!container) return;
+    const oldLayer = container.querySelector('.duo-confetti-layer');
+    if (oldLayer) oldLayer.remove();
+
+    const layer = document.createElement('div');
+    layer.className = 'duo-confetti-layer';
+    const colors = ['#58CC02', '#1CB0F6', '#FFC800', '#FF4B4B', '#CE82FF', '#FF9600'];
+    
+    for (let i = 0; i < 45; i++) {
+        const piece = document.createElement('div');
+        piece.className = 'duo-confetti-piece';
+        piece.style.backgroundColor = colors[i % colors.length];
+        piece.style.left = (15 + Math.random() * 70) + '%';
+        piece.style.top = '12%';
+        piece.style.setProperty('--tx', (Math.random() * 320 - 160) + 'px');
+        piece.style.setProperty('--ty', (140 + Math.random() * 260) + 'px');
+        piece.style.setProperty('--rot', (Math.random() * 720 - 360) + 'deg');
+        piece.style.animationDelay = (Math.random() * 0.25) + 's';
+        layer.appendChild(piece);
+    }
+    container.prepend(layer);
+}
+
+function filterReviewGrid(type) {
+    document.querySelectorAll('.duo-filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === type);
+    });
+    document.querySelectorAll('.duo-review-tile').forEach(tile => {
+        if (type === 'all') {
+            tile.classList.remove('hidden');
+        } else if (type === 'answered') {
+            tile.classList.toggle('hidden', !tile.classList.contains('answered'));
+        } else if (type === 'missing') {
+            tile.classList.toggle('hidden', !tile.classList.contains('missing'));
+        } else if (type === 'flagged') {
+            tile.classList.toggle('hidden', !tile.classList.contains('flagged'));
+        }
+    });
+}
+
 // --- FIREBASE INITIALIZATION ---
 // IMPORTANT: Replace this with your own Firebase project configuration.
 const firebaseConfig = {
@@ -485,6 +679,43 @@ function showStudentPortal(cleanUrl = false) {
     }
 }
 
+let isStudentCredsManuallyShown = false;
+
+function setStudentCredentialsHidden(hidden) {
+    const credsBox = document.getElementById('manual-creds-box');
+    const indicator = document.getElementById('manual-creds-indicator');
+    const linkBadge = document.getElementById('portal-link-badge');
+    const toggleBtn = document.getElementById('toggle-manual-creds');
+
+    if (hidden) {
+        if (credsBox) credsBox.classList.add('hidden');
+        if (indicator) indicator.classList.remove('hidden');
+        if (linkBadge) linkBadge.classList.remove('hidden');
+        if (toggleBtn) toggleBtn.textContent = 'Show fields';
+        isStudentCredsManuallyShown = false;
+    } else {
+        if (credsBox) credsBox.classList.remove('hidden');
+        if (indicator) indicator.classList.add('hidden');
+        if (linkBadge) linkBadge.classList.add('hidden');
+        isStudentCredsManuallyShown = true;
+    }
+}
+
+function toggleStudentCredentialsManual() {
+    const credsBox = document.getElementById('manual-creds-box');
+    const toggleBtn = document.getElementById('toggle-manual-creds');
+    if (!credsBox) return;
+
+    isStudentCredsManuallyShown = !isStudentCredsManuallyShown;
+    if (isStudentCredsManuallyShown) {
+        credsBox.classList.remove('hidden');
+        if (toggleBtn) toggleBtn.textContent = 'Hide fields';
+    } else {
+        credsBox.classList.add('hidden');
+        if (toggleBtn) toggleBtn.textContent = 'Show fields';
+    }
+}
+
 // Initialize based on URL parameters
 function initializeApp() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -501,6 +732,7 @@ function initializeApp() {
     const qParam = urlParams.get('q');
     let linkQuizId = null;
     let handledTeacherLink = false;
+    setStudentCredentialsHidden(false);
 
     if (qParam) {
         try {
@@ -527,6 +759,8 @@ function initializeApp() {
                             openAuthModal('login');
                             showToast('Please sign in to access teacher results.', 'info');
                         }
+                    } else if (part !== 'admin') {
+                        setStudentCredentialsHidden(true);
                     }
                 }
             }
@@ -3217,7 +3451,7 @@ function confirmRetakeQuiz() {
     }
 
     if (!pendingRetakeContext) return;
-    const ctx = { ...pendingRetakeContext, isRetake: true, retakeReason: reason };
+    const ctx = { ...pendingRetakeContext, isRetake: true, retakeReason: reason, isResumingRetake: false };
     closeRetakeModal();
 
     // Clear local storage locks & persistence for this quiz/student
@@ -3291,6 +3525,29 @@ async function startQuiz() {
         const localRecord = localStorage.getItem(quizId);
         const hasSubmitted = snap.exists() || (localRecord && (Date.now() - JSON.parse(localRecord).timestamp < 10800000));
 
+        // If the student is already mid-retake (active progress saved), resume directly instead of re-prompting
+        let activeRetakeState = null;
+        try {
+            const rawProgress = localStorage.getItem(`quiz_progress_${quizId}_${studentId}`);
+            if (rawProgress) {
+                const parsedProgress = JSON.parse(rawProgress);
+                if (parsedProgress && parsedProgress.isRetake === true && (Date.now() - (parsedProgress.startTime || 0) < 14400000)) {
+                    activeRetakeState = parsedProgress;
+                }
+            }
+        } catch (_) { }
+
+        if (activeRetakeState) {
+            hideLoading();
+            proceedWithQuizExecution({
+                ...context,
+                isRetake: true,
+                retakeReason: activeRetakeState.retakeReason || '',
+                isResumingRetake: true
+            });
+            return;
+        }
+
         if (hasSubmitted) {
             hideLoading();
             openRetakeModal(context);
@@ -3305,13 +3562,14 @@ async function startQuiz() {
 }
 
 async function proceedWithQuizExecution(ctx) {
-    const { quizId, firstName, lastName, studentInstitutionalId, yearVal, sectionVal, section, secretKey, studentId, isRetake, retakeReason } = ctx;
+    const { quizId, firstName, lastName, studentInstitutionalId, yearVal, sectionVal, section, secretKey, studentId, isRetake, retakeReason, isResumingRetake } = ctx;
     showLoading();
     try {
         const quizSnap = await database.ref('quizzes/' + quizId).once('value');
         const data = quizSnap.val();
         if (!data) {
             hideLoading();
+            setStudentCredentialsHidden(false);
             alert('Quiz not found in cloud database. Please verify the Quiz ID with your teacher.');
             return;
         }
@@ -3321,6 +3579,7 @@ async function proceedWithQuizExecution(ctx) {
             decrypted = await decryptData(data.encryptedQuizData, secretKey);
         } catch (decryptErr) {
             hideLoading();
+            setStudentCredentialsHidden(false);
             alert('Decryption failed: Incorrect secret key. Please check the access key provided by your teacher.');
             return;
         }
@@ -3404,8 +3663,8 @@ async function proceedWithQuizExecution(ctx) {
                 };
                 quizData.secretKey = secretKey;
 
-                // Persistence: Check for existing session (only if not retake)
-                let savedState = (!isRetake) ? localStorage.getItem(persistenceKey) : null;
+                // Persistence: Check for existing session (initial attempt or resuming an active retake)
+                let savedState = (!isRetake || isResumingRetake) ? localStorage.getItem(persistenceKey) : null;
 
                 if (savedState) {
                     try {
@@ -3587,6 +3846,8 @@ async function proceedWithQuizExecution(ctx) {
                     yearVal: yearVal || (document.getElementById('student-year')?.value || '1'),
                     sectionVal: sectionVal || (document.getElementById('student-section-select')?.value || 'A'),
                     section, secretKey,
+                    isRetake: !!isRetake,
+                    retakeReason: retakeReason || '',
                     timestamp: Date.now()
                 }));
             } catch (err) {
@@ -3606,9 +3867,11 @@ window.toggleFlagQuestion = function (index) {
     if (flaggedQuestions.has(index)) {
         flaggedQuestions.delete(index);
         showToast(`Unflagged Question ${index + 1}`, 'info');
+        showDuoToast(`Unflagged Question ${index + 1}`, 'info', '🏳️');
     } else {
         flaggedQuestions.add(index);
         showToast(`Flagged Question ${index + 1} for review`, 'warning');
+        showDuoToast(`Question ${index + 1} flagged for review`, 'warning', '🚩');
     }
     const flagBtn = document.getElementById(`flag-btn-${index}`);
     const isFlagged = flaggedQuestions.has(index);
@@ -3650,33 +3913,50 @@ function displayQuestion(index) {
         progressEl.setAttribute('aria-valuenow', Math.round(pct));
     }
 
+    const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+    const counterBadge = document.getElementById('q-counter-badge');
+    if (counterBadge) counterBadge.textContent = `Question ${index + 1} of ${quizData.questions.length}`;
+
+    updateHudAnsweredCounter();
+
     container.innerHTML = `
-        <div class="quiz-question">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
-                <h3 style="margin:0;">Question ${index + 1} of ${quizData.questions.length}</h3>
-                <button type="button" id="flag-btn-${index}" class="btn btn-sm ${isFlagged ? 'btn-flagged' : 'btn-outline'}" onclick="toggleFlagQuestion(${index})" title="${isFlagged ? 'Remove flag' : 'Flag this question for review'}">
-                    <span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>
-                </button>
+        <div class="duo-quiz-layout">
+            <div class="duo-mascot-col">
+                <img src="assets/mascot_thinking.png" alt="Quizzy Thinking" class="duo-mascot-thinking">
             </div>
-            <p class="quiz-question-text">${escapeHtml(q ? (q.text || '') : '')}</p>
-            ${q.figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${sanitizeFigure(q.figure)}</div>` : ''}
-            <div class="quiz-options" role="radiogroup" aria-label="Question choices">
-                ${q.options.map((opt, i) => `
-                    <div class="quiz-option ${studentAnswers[index] === i ? 'selected' : ''}" 
-                         data-index="${i}" 
-                         role="radio" 
-                         tabindex="0" 
-                         aria-checked="${studentAnswers[index] === i ? 'true' : 'false'}" 
-                         style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(opt)}</div>
-                `).join('')}
+            <div class="duo-question-bubble">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                    <span class="duo-pill-badge">Question ${index + 1} of ${quizData.questions.length}</span>
+                    <button type="button" id="flag-btn-${index}" class="duo-flag-btn ${isFlagged ? 'flagged' : ''}" onclick="toggleFlagQuestion(${index}); playFlagSound();" title="${isFlagged ? 'Remove flag' : 'Flag this question for review'}">
+                        <span>${isFlagged ? '🚩 Flagged' : '🏳️ Flag for Review'}</span>
+                    </button>
+                </div>
+                <p class="quiz-question-text">${escapeHtml(q ? (q.text || '') : '')}</p>
+                ${q.figure ? `<div class="quiz-figure" style="margin-bottom:20px;">${sanitizeFigure(q.figure)}</div>` : ''}
             </div>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-            <button class="btn btn-outline" ${index === 0 ? 'disabled' : ''} id="prev-btn">Previous</button>
-            <button class="btn btn-outline btn-sm" id="jump-review-btn" style="color:var(--info);" title="View all answers overview">Review Answers</button>
+        <div class="quiz-options" role="radiogroup" aria-label="Question choices">
+            ${q.options.map((opt, i) => `
+                <div class="quiz-option ${studentAnswers[index] === i ? 'selected' : ''}" 
+                     data-index="${i}" 
+                     role="radio" 
+                     tabindex="0" 
+                     aria-checked="${studentAnswers[index] === i ? 'true' : 'false'}">
+                    <span class="duo-option-keycap">${optionLetters[i] || (i + 1)}</span>
+                    <span class="duo-option-text">${escapeHtml(opt)}</span>
+                    <span class="duo-option-radio" aria-hidden="true"></span>
+                </div>
+            `).join('')}
+        </div>
+        <div class="duo-quiz-nav">
+            <button class="btn btn-outline" ${index === 0 ? 'disabled' : ''} id="prev-btn">← Previous</button>
+            <button class="btn btn-outline btn-sm" id="jump-review-btn" style="color:var(--duo-blue-border);" title="View all answers overview">📋 Review Answers</button>
             ${index === quizData.questions.length - 1
-            ? '<button class="btn btn-info" id="review-btn">Finish & Review</button>'
-            : '<button class="btn btn-primary" id="next-btn">Next</button>'}
+            ? '<button class="btn btn-info" id="review-btn">Finish & Review →</button>'
+            : '<button class="btn btn-primary" id="next-btn">Next Question →</button>'}
+        </div>
+        <div class="duo-keyboard-hint">
+            <span>💡 Tip: Press <span class="duo-kbd-chip">A</span>, <span class="duo-kbd-chip">B</span>, <span class="duo-kbd-chip">C</span>, <span class="duo-kbd-chip">D</span> to pick, and <span class="duo-kbd-chip">Enter</span> to proceed</span>
         </div>
     `;
 
@@ -3688,7 +3968,32 @@ function displayQuestion(index) {
         el.classList.add('selected');
         el.setAttribute('aria-checked', 'true');
         studentAnswers[index] = parseInt(el.dataset.index);
+        playOptionSelectSound();
         saveProgress();
+        updateHudAnsweredCounter();
+
+        // Playful mascot bounce & reaction bubble
+        const mascotImg = container.querySelector('.duo-mascot-thinking');
+        if (mascotImg) {
+            mascotImg.classList.remove('mascot-pop');
+            void mascotImg.offsetWidth;
+            mascotImg.classList.add('mascot-pop');
+        }
+        let reactionBubble = container.querySelector('#mascot-reaction-bubble');
+        if (!reactionBubble) {
+            reactionBubble = document.createElement('div');
+            reactionBubble.id = 'mascot-reaction-bubble';
+            reactionBubble.className = 'duo-mascot-reaction-bubble';
+            const mascotCol = container.querySelector('.duo-mascot-col');
+            if (mascotCol) mascotCol.appendChild(reactionBubble);
+        }
+        const cheers = ['Nice! ✨', 'Locked in! 🎯', 'Awesome! 🔥', 'You got this! 🦉', 'Super! ⭐'];
+        reactionBubble.textContent = cheers[Math.floor(Math.random() * cheers.length)];
+        reactionBubble.classList.remove('hidden');
+
+        // Bouncy pulse on next button
+        const nextBtn = document.getElementById('next-btn') || document.getElementById('review-btn');
+        if (nextBtn) nextBtn.classList.add('btn-ready');
     };
 
     container.querySelectorAll('.quiz-option').forEach(el => {
@@ -3701,10 +4006,15 @@ function displayQuestion(index) {
         };
     });
 
+    if (studentAnswers[index] !== null && studentAnswers[index] !== undefined) {
+        const nextBtn = document.getElementById('next-btn') || document.getElementById('review-btn');
+        if (nextBtn) nextBtn.classList.add('btn-ready');
+    }
+
     const prev = document.getElementById('prev-btn');
     if (prev) prev.onclick = () => displayQuestion(index - 1);
     const next = document.getElementById('next-btn');
-    if (next) next.onclick = () => displayQuestion(index + 1);
+    if (next) next.onclick = () => { playNextSound(); displayQuestion(index + 1); };
     const review = document.getElementById('review-btn');
     if (review) review.onclick = () => showReviewPage();
     const jumpReview = document.getElementById('jump-review-btn');
@@ -3712,32 +4022,46 @@ function displayQuestion(index) {
 }
 
 function showReviewPage() {
+    updateHudAnsweredCounter();
     document.getElementById('quiz-questions').classList.add('hidden');
     const review = document.getElementById('quiz-review');
     review.classList.remove('hidden');
 
+    const answeredCount = studentAnswers.filter(a => a !== null).length;
+    const missingCount = quizData.questions.length - answeredCount;
+    const flaggedCount = flaggedQuestions ? flaggedQuestions.size : 0;
+
     review.innerHTML = `
-        <h2>Review Answers</h2>
-        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr)); gap:15px; margin-bottom:30px;" role="navigation" aria-label="Question review list">
+        <div class="duo-review-header">
+            <h2>Review Your Answers</h2>
+            <p>You've answered <strong>${answeredCount} of ${quizData.questions.length}</strong> questions. Click any tile to review before final submission.</p>
+        </div>
+        <div class="duo-review-filters">
+            <button type="button" class="duo-filter-btn active" data-filter="all" onclick="filterReviewGrid('all')">All (${quizData.questions.length})</button>
+            <button type="button" class="duo-filter-btn" data-filter="answered" onclick="filterReviewGrid('answered')">✓ Answered (${answeredCount})</button>
+            <button type="button" class="duo-filter-btn" data-filter="missing" onclick="filterReviewGrid('missing')">✗ Missing (${missingCount})</button>
+            ${flaggedCount > 0 ? `<button type="button" class="duo-filter-btn" data-filter="flagged" onclick="filterReviewGrid('flagged')">🚩 Flagged (${flaggedCount})</button>` : ''}
+        </div>
+        <div class="duo-review-grid" role="navigation" aria-label="Question review list">
             ${quizData.questions.map((q, i) => {
                 const isAnswered = studentAnswers[i] !== null;
                 const isFlagged = flaggedQuestions.has(i);
                 return `
-                <div role="button" tabindex="0" onclick="displayQuestion(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();displayQuestion(${i});}" style="padding:15px; border-radius:10px; cursor:pointer; border:1.5px solid ${isAnswered ? 'var(--success)' : 'var(--danger)'}; background:${isAnswered ? '#f0fdf4' : '#fef2f2'}; position:relative;">
+                <div role="button" tabindex="0" onclick="displayQuestion(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();displayQuestion(${i});}" class="duo-review-tile ${isAnswered ? 'answered' : 'missing'} ${isFlagged ? 'flagged' : ''}">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <strong>Q${i + 1}</strong>
-                        ${isFlagged ? '<span style="font-size:0.75rem; background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:4px; font-weight:700; border:1px solid #fde68a;">🚩 Flagged</span>' : ''}
+                        <strong style="font-family:var(--duo-font-heading); font-size:1.05rem;">Q${i + 1}</strong>
+                        ${isFlagged ? '<span style="font-size:0.75rem; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:999px; font-weight:700; border:1px solid #fde68a;">🚩 Flagged</span>' : ''}
                     </div>
-                    <div style="margin-top:6px; font-size:0.85rem; font-weight:600; color:${isAnswered ? 'var(--success)' : 'var(--danger)'};">
+                    <div style="margin-top:8px; font-size:0.88rem; font-weight:700; color:${isAnswered ? '#15803d' : '#b91c1c'};">
                         ${isAnswered ? '✓ Answered' : '✗ Missing'}
                     </div>
                 </div>
                 `;
             }).join('')}
         </div>
-        <div style="display:flex; justify-content:space-between;">
-            <button class="btn btn-outline" onclick="displayQuestion(${quizData.questions.length - 1})">Back</button>
-            <button class="btn btn-success" id="submit-btn" style="padding:15px 40px;">Final Submit</button>
+        <div class="duo-quiz-nav">
+            <button class="btn btn-outline" onclick="displayQuestion(${quizData.questions.length - 1})">← Back to Quiz</button>
+            <button class="btn btn-primary" id="submit-btn" style="padding:15px 36px; font-size:1.05rem;">Final Submit 🎉</button>
         </div>
     `;
     document.getElementById('submit-btn').onclick = () => submitQuiz();
@@ -3794,7 +4118,7 @@ function startQuizTimer(mins, expiry, startTime) {
         const h = Math.floor(diff / 3600000);
         const m = Math.floor((diff % 3600000) / 60000);
         const s = Math.floor((diff % 60000) / 1000);
-        timerDisplay.textContent = `Time Left: ${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        timerDisplay.innerHTML = `<span>⏱️</span> <span>${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}</span>`;
     };
 
     updateTimer();
@@ -3835,6 +4159,8 @@ function handleFocusLoss() {
     if (Date.now() - quizStartTime < 3000) return; // 3-second grace period
     isHandlingFocusLoss = true;
     focusLostCount++;
+        const shieldCount = document.getElementById('shield-count');
+        if (shieldCount) shieldCount.textContent = `${Math.max(0, 5 - focusLostCount)}/5`;
 
     updateAttemptsDisplay();
     clearClipboard();
@@ -3889,6 +4215,8 @@ function handleFullscreenChange() {
 
         isHandlingFocusLoss = true;
         focusLostCount++;
+        const shieldCount = document.getElementById('shield-count');
+        if (shieldCount) shieldCount.textContent = `${Math.max(0, 5 - focusLostCount)}/5`;
         updateAttemptsDisplay();
 
         // Show Full Screen Warning
@@ -3944,6 +4272,8 @@ function saveProgress() {
         answers: studentAnswers,
         attempts: focusLostCount,
         flagged: Array.from(flaggedQuestions || []),
+        isRetake: !!quizData.student?.isRetake,
+        retakeReason: quizData.student?.retakeReason || '',
         questions: sanitizedQuestions // Safe structure without answer keys
     };
     try {
@@ -4028,6 +4358,7 @@ function submitQuiz(auto = false) {
         isSubmittingQuiz = true;
         if (confirmationModal) confirmationModal.classList.add('hidden');
         cleanupQuizSession();
+        if (persistenceKey) localStorage.removeItem(persistenceKey);
         localStorage.removeItem('quizable_active_session');
         let score = 0;
         const detail = (quizData.questions || []).map((q, i) => {
@@ -4099,21 +4430,52 @@ function submitQuiz(auto = false) {
             }
 
             const scoreHtml = showScore ? `
-                <div style="text-align:center; padding:30px; background:var(--bg-body); border-radius:15px; margin-bottom:20px;">
-                    <div style="font-size:3rem; font-weight:800; color:var(--primary);">${finalScore} / ${totalQuestions}</div>
-                    <div style="font-size:1.5rem; font-weight:700; color:${gradeColor}; margin-top:5px;">${gradeLabel} (${finalPercentage}%)</div>
+                <div class="duo-results-card">
+                    <div class="duo-mascot-celebrate-wrap">
+                        <img src="assets/mascot_celebrate.png" alt="Quizzy Cheering" class="duo-mascot-celebrate">
+                    </div>
+                    <div class="duo-results-banner">
+                        <span class="duo-pill-badge" style="background:#FFFBEB; border-color:#FFC800; color:#B45309;">✨ Quiz Complete!</span>
+                        <h2 class="duo-results-title">${escapeHtml(gradeLabel)}, ${escapeHtml(quizData.student?.firstName || 'Student')}!</h2>
+                        <p class="duo-results-sub">Your exam has been submitted securely.</p>
+                    </div>
                     ${penaltyNotice}
-                    <div style="color:var(--text-muted); margin-top:5px;">Final Result</div>
+                    <div class="duo-stats-grid">
+                        <div class="duo-stat-tile duo-stat-gold">
+                            <div class="duo-stat-label">Final Score</div>
+                            <div class="duo-stat-value">${finalScore} / ${totalQuestions}</div>
+                        </div>
+                        <div class="duo-stat-tile duo-stat-green">
+                            <div class="duo-stat-label">Accuracy</div>
+                            <div class="duo-stat-value count-up" id="results-accuracy-val">${finalPercentage}%</div>
+                        </div>
+                        <div class="duo-stat-tile duo-stat-blue">
+                            <div class="duo-stat-label">Rating</div>
+                            <div class="duo-stat-value">${gradeLabel}</div>
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 16px;">
+                        <button type="button" class="duo-btn-celebrate-again" onclick="spawnConfetti(); playCelebrationSound();">
+                            <span>🎉 Celebrate Again!</span>
+                        </button>
+                    </div>
                 </div>
             ` : '';
 
-            const answerHtml = showAnswerSummary ? detail.map((a, i) => `
-                <div class="quiz-question" style="border-left:5px solid ${a.isCorrect ? 'var(--success)' : 'var(--danger)'};">
-                    <strong>Q${i + 1}</strong>: <span style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(a.questionText)}</span><br>
-                    Your Answer: <span style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(a.studentAnswerText)}</span>
-                    ${!a.isCorrect ? `<br><span style="color:var(--success); font-weight:600;">Correct Answer:</span> <span style="white-space: pre-wrap; word-break: break-word; color:var(--success);">${escapeHtml(a.correctAnswerText)}</span>` : ''}
+            const answerHtml = showAnswerSummary ? `
+                <div style="margin-top: 24px;">
+                    <h3 style="font-family: var(--duo-font-heading); font-size: 1.3rem; margin-bottom: 14px; text-align: left;">Detailed Answer Review</h3>
+                    ${detail.map((a, i) => `
+                        <div class="duo-answer-breakdown-card ${a.isCorrect ? '' : 'incorrect'}">
+                            <div style="font-weight: 800; color: #1E293B; margin-bottom: 6px;">Q${i + 1}: ${escapeHtml(a.questionText)}</div>
+                            <div style="font-size: 0.92rem; color: #475569;">
+                                Your Answer: <strong>${escapeHtml(a.studentAnswerText)}</strong> ${a.isCorrect ? '<span style="color: #16a34a; font-weight: 800; margin-left: 6px;">✓ Correct</span>' : '<span style="color: #dc2626; font-weight: 800; margin-left: 6px;">✗ Incorrect</span>'}
+                            </div>
+                            ${!a.isCorrect ? `<div style="font-size: 0.92rem; color: #15803d; font-weight: 700; margin-top: 4px;">Correct Answer: ${escapeHtml(a.correctAnswerText)}</div>` : ''}
+                        </div>
+                    `).join('')}
                 </div>
-            `).join('') : '';
+            ` : '';
 
             summary.innerHTML = scoreHtml + answerHtml;
             summary.classList.remove('hidden');
@@ -4127,6 +4489,9 @@ function submitQuiz(auto = false) {
 
         quizSection.classList.add('hidden');
         resultsSection.classList.remove('hidden');
+        setTimeout(() => animateCountUp('results-accuracy-val', finalPercentage, '%'), 100);
+        spawnConfetti();
+        playCelebrationSound();
         flaggedQuestions.clear();
         try { localStorage.setItem(quizData.id, JSON.stringify({ timestamp: Date.now() })); } catch { }
 
@@ -4524,3 +4889,55 @@ function showQuizCreatedModal(studentLink, teacherLink) {
     setupCopy(studentCopyBtn, studentLink, 'Student Link');
     setupCopy(teacherCopyBtn, teacherLink, 'Teacher Link');
 }
+
+
+// Keyboard Navigation & Shortcuts for Student Quiz Answering
+document.addEventListener('keydown', (e) => {
+    if (!isExamInProgress()) return;
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) return;
+
+    const quizQuestionsContainer = document.getElementById('quiz-questions');
+    if (!quizQuestionsContainer || quizQuestionsContainer.classList.contains('hidden')) return;
+
+    // Keys 1-9
+    if (e.key >= '1' && e.key <= '9') {
+        const optIndex = parseInt(e.key, 10) - 1;
+        const optEl = quizQuestionsContainer.querySelector(`.quiz-option[data-index="${optIndex}"]`);
+        if (optEl) {
+            e.preventDefault();
+            optEl.click();
+        }
+    }
+    // Keys A-D
+    const upperKey = e.key.toUpperCase();
+    if (['A', 'B', 'C', 'D', 'E', 'F'].includes(upperKey)) {
+        const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+        const optIndex = letters.indexOf(upperKey);
+        const optEl = quizQuestionsContainer.querySelector(`.quiz-option[data-index="${optIndex}"]`);
+        if (optEl) {
+            e.preventDefault();
+            optEl.click();
+        }
+    }
+    // Enter or ArrowRight for Next
+    if (e.key === 'ArrowRight' || (e.key === 'Enter' && !e.target.matches('button, a'))) {
+        const nextBtn = document.getElementById('next-btn');
+        const reviewBtn = document.getElementById('review-btn');
+        if (nextBtn && !nextBtn.disabled) {
+            e.preventDefault();
+            nextBtn.click();
+        } else if (reviewBtn) {
+            e.preventDefault();
+            reviewBtn.click();
+        }
+    }
+    // ArrowLeft for Previous
+    if (e.key === 'ArrowLeft') {
+        const prevBtn = document.getElementById('prev-btn');
+        if (prevBtn && !prevBtn.disabled) {
+            e.preventDefault();
+            prevBtn.click();
+        }
+    }
+});
