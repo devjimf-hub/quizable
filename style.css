@@ -1813,43 +1813,9 @@ body.quiz-active .quiz-watermark {
 }
 
 .duo-portal-header {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    margin-bottom: 26px;
-    padding-bottom: 20px;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
     border-bottom: 2px dashed #E2E8F0;
-}
-
-.duo-mascot-welcome {
-    width: 88px;
-    height: 88px;
-    object-fit: contain;
-    flex-shrink: 0;
-    animation: mascotBob 3s ease-in-out infinite;
-    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.08));
-}
-
-.duo-portal-speech {
-    background: #F0FDF4;
-    border: 2px solid #BBF7D0;
-    border-radius: 20px;
-    padding: 14px 18px;
-    position: relative;
-    flex: 1;
-    box-shadow: 0 3px 0 #BBF7D0;
-}
-.duo-portal-speech::before {
-    content: '';
-    position: absolute;
-    left: -10px;
-    top: 24px;
-    width: 14px;
-    height: 14px;
-    background: #F0FDF4;
-    border-left: 2px solid #BBF7D0;
-    border-bottom: 2px solid #BBF7D0;
-    transform: rotate(45deg);
 }
 
 .duo-portal-speech h2 {
@@ -1971,66 +1937,23 @@ body.quiz-active .quiz-watermark {
     animation: shieldShake 0.45s infinite;
 }
 
-/* Question & Thinking Mascot Layout */
-.duo-quiz-layout {
-    display: flex;
-    align-items: flex-start;
-    gap: 20px;
-    margin-bottom: 24px;
-}
-
-.duo-mascot-col {
-    flex-shrink: 0;
-    width: 86px;
-    text-align: center;
-}
-
-.duo-mascot-thinking {
-    width: 84px;
-    height: 84px;
-    object-fit: contain;
-    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.08));
-    animation: mascotBob 3.2s ease-in-out infinite;
-}
-
+/* Question Card Layout (Clean Full-Width Alignment) */
+.duo-question-card,
 .duo-question-bubble {
-    flex: 1;
+    width: 100%;
     background: #ffffff;
     border: 2px solid #E5E7EB;
     border-radius: 22px;
-    padding: 22px 24px;
+    padding: clamp(20px, 4vw, 26px) clamp(18px, 4vw, 26px);
     box-shadow: 0 4px 0 #E5E7EB;
-    position: relative;
+    margin-bottom: 24px;
+    box-sizing: border-box;
+    text-align: left;
 }
 
+.duo-question-card::before,
 .duo-question-bubble::before {
-    content: '';
-    position: absolute;
-    left: -12px;
-    top: 28px;
-    width: 16px;
-    height: 16px;
-    background: #ffffff;
-    border-left: 2px solid #E5E7EB;
-    border-bottom: 2px solid #E5E7EB;
-    transform: rotate(45deg);
-}
-
-@media (max-width: 640px) {
-    .duo-quiz-layout {
-        flex-direction: column;
-        align-items: center;
-    }
-    .duo-question-bubble::before {
-        display: none;
-    }
-    .duo-mascot-col {
-        width: auto;
-    }
-    .duo-mascot-thinking {
-        width: 72px;
-        height: 72px;
-    }
+    display: none !important;
 }
 
 .duo-pill-badge {
@@ -2251,12 +2174,18 @@ body.quiz-active .quiz-watermark {
     margin-bottom: 16px;
 }
 
-.duo-mascot-celebrate {
-    width: 120px;
-    height: 120px;
-    object-fit: contain;
-    filter: drop-shadow(0 6px 12px rgba(0,0,0,0.12));
-    animation: mascotBob 2.5s ease-in-out infinite;
+.duo-results-icon-badge {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: #FEF9C3;
+    border: 2px solid #FDE047;
+    box-shadow: 0 4px 0 #FACC15;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.3rem;
+    margin-bottom: 16px;
 }
 
 .duo-results-banner {
@@ -3001,45 +2930,6 @@ body.quiz-active .quiz-watermark {
     100% { transform: scale(1); }
 }
 
-/* Mascot Reaction Badge & Jump */
-.duo-mascot-col {
-    position: relative;
-}
-
-.duo-mascot-reaction-bubble {
-    position: absolute;
-    top: -12px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #FEF08A;
-    border: 2px solid #FACC15;
-    color: #854D0E;
-    font-family: var(--duo-font-heading);
-    font-size: 0.78rem;
-    font-weight: 800;
-    padding: 3px 10px;
-    border-radius: 999px;
-    white-space: nowrap;
-    box-shadow: 0 3px 0 #EAB308;
-    animation: reactionPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
-    z-index: 10;
-}
-
-@keyframes reactionPop {
-    from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.85); }
-    to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-}
-
-.mascot-pop {
-    animation: mascotJump 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes mascotJump {
-    0% { transform: translateY(0); }
-    50% { transform: translateY(-9px); }
-    100% { transform: translateY(0); }
-}
-
 /* Ready State Bouncy Button */
 .btn-ready {
     animation: readyPulse 1.2s infinite ease-in-out;
@@ -3130,31 +3020,13 @@ body.quiz-active .quiz-watermark {
         border-radius: 12px !important;
     }
 
-    /* Question & Bubble layout */
-    .duo-quiz-layout {
-        flex-direction: column !important;
-        align-items: center !important;
-        gap: 12px !important;
-        margin-bottom: 18px !important;
-    }
-
-    .duo-mascot-col {
-        width: auto !important;
-    }
-
-    .duo-mascot-thinking {
-        width: 64px !important;
-        height: 64px !important;
-    }
-
+    /* Question Card layout */
+    .duo-question-card,
     .duo-question-bubble {
         width: 100% !important;
         padding: 16px 16px !important;
         border-radius: 18px !important;
-    }
-
-    .duo-question-bubble::before {
-        display: none !important;
+        margin-bottom: 18px !important;
     }
 
     .quiz-question-text {
@@ -3211,30 +3083,12 @@ body.quiz-active .quiz-watermark {
 
     /* Student Portal Header */
     .duo-portal-header {
-        flex-direction: column !important;
-        text-align: center !important;
-        gap: 12px !important;
         margin-bottom: 18px !important;
         padding-bottom: 14px !important;
     }
 
-    .duo-mascot-welcome {
-        width: 74px !important;
-        height: 74px !important;
-    }
-
-    .speech-bubble {
-        width: 100% !important;
-        padding: 14px 16px !important;
-    }
-
-    .speech-bubble::before {
-        display: none !important;
-    }
-
     .duo-heading {
-        font-size: 1.35rem !important;
-        text-align: center !important;
+        font-size: 1.4rem !important;
     }
 
     /* Results */

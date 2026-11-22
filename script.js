@@ -3918,14 +3918,9 @@ function displayQuestion(index) {
     updateHudAnsweredCounter();
 
     container.innerHTML = `
-        <div class="duo-quiz-layout">
-            <div class="duo-mascot-col">
-                <img src="assets/mascot_thinking.png" alt="Quizzy Thinking" class="duo-mascot-thinking">
-            </div>
-            <div class="duo-question-bubble">
-                <p class="quiz-question-text">${escapeHtml(q ? (q.text || '') : '')}</p>
-                ${q.figure ? `<div class="quiz-figure" style="margin-top:16px;">${sanitizeFigure(q.figure)}</div>` : ''}
-            </div>
+        <div class="duo-question-card">
+            <p class="quiz-question-text">${escapeHtml(q ? (q.text || '') : '')}</p>
+            ${q.figure ? `<div class="quiz-figure" style="margin-top:16px;">${sanitizeFigure(q.figure)}</div>` : ''}
         </div>
         <div class="quiz-options" role="radiogroup" aria-label="Question choices">
             ${q.options.map((opt, i) => `
@@ -3965,25 +3960,6 @@ function displayQuestion(index) {
         playOptionSelectSound();
         saveProgress();
         updateHudAnsweredCounter();
-
-        // Playful mascot bounce & reaction bubble
-        const mascotImg = container.querySelector('.duo-mascot-thinking');
-        if (mascotImg) {
-            mascotImg.classList.remove('mascot-pop');
-            void mascotImg.offsetWidth;
-            mascotImg.classList.add('mascot-pop');
-        }
-        let reactionBubble = container.querySelector('#mascot-reaction-bubble');
-        if (!reactionBubble) {
-            reactionBubble = document.createElement('div');
-            reactionBubble.id = 'mascot-reaction-bubble';
-            reactionBubble.className = 'duo-mascot-reaction-bubble';
-            const mascotCol = container.querySelector('.duo-mascot-col');
-            if (mascotCol) mascotCol.appendChild(reactionBubble);
-        }
-        const cheers = ['Nice! ✨', 'Locked in! 🎯', 'Awesome! 🔥', 'You got this! 🦉', 'Super! ⭐'];
-        reactionBubble.textContent = cheers[Math.floor(Math.random() * cheers.length)];
-        reactionBubble.classList.remove('hidden');
 
         // Bouncy pulse on next button
         const nextBtn = document.getElementById('next-btn') || document.getElementById('review-btn');
@@ -4413,9 +4389,7 @@ function submitQuiz(auto = false) {
 
             const scoreHtml = showScore ? `
                 <div class="duo-results-card">
-                    <div class="duo-mascot-celebrate-wrap">
-                        <img src="assets/mascot_celebrate.png" alt="Quizzy Cheering" class="duo-mascot-celebrate">
-                    </div>
+                    <div class="duo-results-icon-badge">🏆</div>
                     <div class="duo-results-banner">
                         <span class="duo-pill-badge" style="background:#FFFBEB; border-color:#FFC800; color:#B45309;">✨ Quiz Complete!</span>
                         <h2 class="duo-results-title">${escapeHtml(gradeLabel)}, ${escapeHtml(quizData.student?.firstName || 'Student')}!</h2>

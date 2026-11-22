@@ -433,22 +433,17 @@
             <div class="duo-blob duo-blob-blue" aria-hidden="true"></div>
 
             <div style="position: relative; z-index: 10;">
-                <!-- Mascot Welcome Header -->
-                <div class="duo-portal-header" style="display: flex; align-items: center; gap: 18px; margin-bottom: 22px;">
-                    <div class="mascot-bob" style="flex-shrink: 0;" aria-hidden="true">
-                        <img src="assets/mascot_welcome.png" alt="Quizzy Welcome" class="duo-mascot-welcome" style="width: 92px; height: 92px; object-fit: contain;">
+                <!-- Student Portal Header -->
+                <div class="duo-portal-header">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
+                        <h2 class="duo-heading" style="margin: 0; font-size: 1.65rem; color: #1E293B; font-weight: 800;">Student Portal</h2>
+                        <span id="portal-link-badge" class="duo-pill-badge duo-pill-green hidden">
+                            ✓ Link Auto-Verified
+                        </span>
                     </div>
-                    <div class="speech-bubble" style="flex: 1; width: 100%; padding: 18px 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">
-                            <h2 class="duo-heading" style="margin: 0; font-size: 1.55rem; color: #1E293B; font-weight: 800;">Student Portal</h2>
-                            <span id="portal-link-badge" class="duo-pill-badge duo-pill-green hidden">
-                                ✓ Link Auto-Verified
-                            </span>
-                        </div>
-                        <p id="portal-welcome-text" style="margin: 0; font-family: var(--duo-font-body); font-weight: 600; font-size: 0.94rem; color: #64748B; line-height: 1.45;">
-                            Hey there! Enter your details below to begin your quiz.
-                        </p>
-                    </div>
+                    <p id="portal-welcome-text" style="margin: 0; font-family: var(--duo-font-body); font-weight: 600; font-size: 0.96rem; color: #64748B; line-height: 1.45;">
+                        Enter your student details below to begin your examination.
+                    </p>
                 </div>
 
                 <!-- Hidden Quiz ID & Access Key indicator pill -->
@@ -561,9 +556,7 @@
         <!-- Final Results Screen -->
         <div id="results-section" class="card hidden">
             <div id="submission-success-message" style="text-align: center; padding: 30px;">
-                <div class="duo-mascot-celebrate-wrap">
-                    <img src="assets/mascot_celebrate.png" alt="Quizzy Cheering" class="duo-mascot-celebrate">
-                </div>
+                <div class="duo-results-icon-badge">🎉</div>
                 <h2 style="font-family: var(--duo-font-heading); font-size: 1.8rem; margin: 10px 0; color: #1E293B;">Quiz Submitted!</h2>
                 <p style="color: var(--text-muted); font-size: 0.95rem;">Your responses have been securely encrypted and submitted to the cloud.</p>
             </div>
