@@ -951,47 +951,77 @@ function filterDashboardQuizzes() {
     renderDashboardQuizzes(filtered);
 }
 
+function getSubjectCardTheme(subject) {
+    const s = (subject || '').toLowerCase();
+    if (s.includes('elec') || s.includes('web') || s.includes('tech') || s.includes('internet')) {
+        return { stripe: '', pill: '', icon: '🌐' };
+    } else if (s.includes('cc214') || s.includes('data') || s.includes('struct') || s.includes('algo')) {
+        return { stripe: 'stripe-blue', pill: 'pill-blue', icon: '⚡' };
+    } else if (s.includes('cs') || s.includes('comput') || s.includes('soft') || s.includes('prog')) {
+        return { stripe: 'stripe-purple', pill: 'pill-purple', icon: '💻' };
+    } else if (s.includes('math') || s.includes('stat') || s.includes('calc')) {
+        return { stripe: 'stripe-amber', pill: 'pill-amber', icon: '📐' };
+    }
+    return { stripe: '', pill: '', icon: '📋' };
+}
+
 function renderDashboardQuizzes(quizzes) {
     const grid = document.getElementById('dashboard-quizzes-grid');
     if (!grid) return;
 
     grid.innerHTML = quizzes.map(q => {
         const dateStr = q.createdAt ? new Date(q.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Active';
-        const itemCount = q.sampleCount ? `${q.sampleCount} Items Pooled` : 'Comprehensive Exam';
+        const itemCount = q.sampleCount ? `${q.sampleCount} Items` : 'Comprehensive Exam';
+        const theme = getSubjectCardTheme(q.subject);
 
         return `
-            <div class="dashboard-quiz-card card">
-                <div class="card-top-row">
-                    <span class="subject-badge">${escapeHtml(q.subject || 'General')}</span>
-                    <span class="items-badge">${escapeHtml(itemCount)}</span>
-                </div>
-                <h3 class="card-title">${escapeHtml(q.title)}</h3>
-                <div class="card-meta">
-                    <span class="meta-item" title="Published Date">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                        ${dateStr}
-                    </span>
-                    <span class="meta-item" title="Instructor">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                        ${escapeHtml(q.teacherName || 'Faculty')}
-                    </span>
-                    <span class="meta-item" title="Quiz Code">
-                        <code style="font-size: 0.72rem; background: var(--bg-body); padding: 2px 6px; border-radius: 4px;">${escapeHtml(q.id)}</code>
-                    </span>
-                </div>
-                <div class="card-actions">
-                    <button type="button" class="btn btn-primary take-quiz-btn" onclick="startQuizFromDashboard('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}', '${escapeJsSingle(q.title)}')">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                        </svg>
-                        Take Quiz
-                    </button>
-                    <button type="button" class="btn btn-outline share-quiz-btn" onclick="copyQuizLinkFromDashboard('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')" title="Copy Direct Quiz Link">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                        </svg>
-                    </button>
+            <div class="dashboard-quiz-card">
+                <div class="card-color-stripe ${theme.stripe}"></div>
+                <div class="card-inner-content">
+                    <div class="card-top-row">
+                        <span class="duo-subject-pill ${theme.pill}">
+                            <span>${theme.icon}</span>
+                            <span>${escapeHtml(q.subject || 'General')}</span>
+                        </span>
+                        <span class="duo-pool-pill" title="Question Pooling">
+                            <img src="assets/icon_sparkle.png" alt="" class="card-mini-icon" onerror="this.style.display='none'">
+                            <span>${escapeHtml(itemCount)}</span>
+                        </span>
+                    </div>
+
+                    <h3 class="card-title" title="${escapeHtml(q.title)}">${escapeHtml(q.title)}</h3>
+
+                    <div class="card-meta-box">
+                        <div class="card-meta-row">
+                            <span class="meta-tag" title="Published Date">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                <span>${dateStr}</span>
+                            </span>
+                            <span class="meta-tag" title="Instructor">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                <span>${escapeHtml(q.teacherName || 'Faculty')}</span>
+                            </span>
+                        </div>
+                        <div class="card-code-row">
+                            <span class="code-label">Quiz Code</span>
+                            <code class="quiz-code-badge">${escapeHtml(q.id)}</code>
+                        </div>
+                    </div>
+
+                    <div class="card-actions">
+                        <button type="button" class="duo-card-take-btn" onclick="startQuizFromDashboard('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}', '${escapeJsSingle(q.title)}')">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            <span>Take Quiz</span>
+                        </button>
+                        <button type="button" class="duo-card-share-btn" onclick="copyQuizLinkFromDashboard('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')" title="Copy Direct Quiz Link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         `;
@@ -1108,7 +1138,10 @@ function showStudentPortal(cleanUrl = false) {
     closeAuthModal();
 
     const mainContainer = document.querySelector('.container');
-    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
+    if (mainContainer) {
+        mainContainer.classList.remove('dashboard-container-expanded');
+        mainContainer.classList.remove('teacher-dashboard-expanded');
+    }
 
     teacherMenu.classList.add('hidden');
     teacherCreateSection.classList.add('hidden');
@@ -1269,7 +1302,10 @@ async function loadAdminDashboard() {
     if (header) header.classList.remove('hidden');
 
     const mainContainer = document.querySelector('.container');
-    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
+    if (mainContainer) {
+        mainContainer.classList.remove('dashboard-container-expanded');
+        mainContainer.classList.add('teacher-dashboard-expanded');
+    }
 
     cleanupQuizSession();
     studentSection.classList.add('hidden');
@@ -2265,7 +2301,10 @@ function showTeacherMenu() {
     if (header) header.classList.remove('hidden');
 
     const mainContainer = document.querySelector('.container');
-    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
+    if (mainContainer) {
+        mainContainer.classList.remove('dashboard-container-expanded');
+        mainContainer.classList.add('teacher-dashboard-expanded');
+    }
 
     cleanupQuizSession();
     teacherMenu.classList.remove('hidden');
@@ -2522,68 +2561,105 @@ function renderFilteredTeacherQuizzes() {
 
     if (filtered.length === 0) {
         container.innerHTML = `
-            <div style="text-align: center; padding: 25px 20px; background: var(--bg-body); border: 1.5px dashed var(--border); border-radius: 12px; color: var(--text-muted);">
-                <p style="margin: 0; font-size: 0.9rem;">No quizzes found in category <strong>${escapeHtml(activeTeacherCategoryFilter)}</strong>.</p>
-                <button class="btn btn-sm btn-outline" style="margin-top: 10px;" onclick="filterTeacherQuizzesByCategory('All')">View All Quizzes</button>
+            <div class="dashboard-empty-card" style="grid-column: 1 / -1; margin: 15px 0;">
+                <p style="margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--text-muted);">No quizzes found in category <strong>${escapeHtml(activeTeacherCategoryFilter)}</strong>.</p>
+                <button class="btn btn-sm btn-outline" style="margin-top: 12px; border-radius: 8px;" onclick="filterTeacherQuizzesByCategory('All')">View All Quizzes</button>
             </div>
         `;
         return;
     }
 
+    const allCategories = getTeacherCategories();
+
     container.innerHTML = filtered.map(q => {
         const studentLink = generateQuizLink(q.id, q.secretKey);
         const dateStr = new Date(q.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+        const currentSub = q.subject || 'General';
+        const theme = getSubjectCardTheme(currentSub);
+
+        // Prepare categories list for this card with current selection
+        const cardCats = [...allCategories];
+        if (!cardCats.some(c => c.toLowerCase() === currentSub.toLowerCase())) {
+            cardCats.push(currentSub);
+        }
+
+        const catSelectOptions = cardCats.map(cat => 
+            `<option value="${escapeHtml(cat)}"${cat.toLowerCase() === currentSub.toLowerCase() ? ' selected' : ''}>${escapeHtml(cat)}</option>`
+        ).join('') + `<option value="__NEW__" style="color: var(--primary); font-weight: 700;">+ New Category...</option>`;
 
         return `
-            <div class="card" style="padding: 16px 20px; margin-bottom: 0; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--border); background: white;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 240px;">
-                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                            <h3 style="font-size: 1.08rem; margin: 0; color: var(--text-main); font-weight: 700;">${escapeHtml(q.title)}</h3>
-                            <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #ecfdf5; color: var(--primary); font-weight: 600; border: 1px solid rgba(16,185,129,0.2);">
-                                ${escapeHtml(q.subject)}
-                            </span>
-                            ${q.sampleCount ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #eff6ff; color: #2563eb; font-weight: 600; border: 1px solid rgba(37,99,235,0.2); display:inline-flex; align-items:center; gap:3px;">${DUO_ICONS.target} ${q.sampleCount} items pooled</span>` : ''}
-                            ${q.visibleOnDashboard ? `
-                                <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #ecfdf5; color: #059669; font-weight: 700; border: 1px solid rgba(16,185,129,0.3); display: inline-flex; align-items: center; gap: 4px;">
-                                    <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
-                                    On Dashboard
-                                </span>
-                            ` : `
-                                <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #f1f5f9; color: #64748b; font-weight: 700; border: 1px solid rgba(100,116,139,0.25); display: inline-flex; align-items: center; gap: 4px;">
-                                    <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#94a3b8;"></span>
-                                    Hidden from Dashboard
-                                </span>
-                            `}
+            <div class="dashboard-quiz-card teacher-grid-card">
+                <div class="card-color-stripe ${theme.stripe}"></div>
+                <div class="card-inner-content">
+                    <!-- Top Row: Category Picker & Dashboard Status -->
+                    <div class="card-top-row">
+                        <div class="card-category-picker-wrapper" title="Category: ${escapeHtml(currentSub)} (Click to change)">
+                            <span class="card-category-icon">🏷️</span>
+                            <select class="card-category-select" onchange="handleQuizCardCategoryChange('${escapeJsSingle(q.id)}', this.value, this)" aria-label="Change quiz category">
+                                ${catSelectOptions}
+                            </select>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap;">
-                            <span>Created: <strong>${dateStr}</strong></span>
-                            <span>&bull;</span>
-                            <span>Quiz ID: <code style="background: var(--bg-body); padding: 2px 6px; border-radius: 4px; font-family: monospace;">${escapeHtml(q.id)}</code></span>
-                            <span>&bull;</span>
-                            <span>Key: <code style="background: var(--bg-body); padding: 2px 6px; border-radius: 4px; font-family: monospace;">${escapeHtml(q.secretKey)}</code></span>
+
+                        <button type="button" class="duo-dash-status-btn ${q.visibleOnDashboard ? 'dash-status-live' : 'dash-status-off'}" onclick="toggleQuizDashboardVisibility('${escapeJsSingle(q.id)}', ${!q.visibleOnDashboard})" title="${q.visibleOnDashboard ? 'Published on Student Dashboard (Click to hide)' : 'Hidden from Student Dashboard (Click to publish)'}">
+                            <span class="dash-dot"></span>
+                            <span>${q.visibleOnDashboard ? 'On Dash' : 'Hidden'}</span>
+                        </button>
+                    </div>
+
+                    <!-- Title -->
+                    <h3 class="card-title" title="${escapeHtml(q.title)}">${escapeHtml(q.title)}</h3>
+
+                    <!-- Pooling / Type Pill -->
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        ${q.sampleCount ? `
+                            <span class="duo-pool-pill" title="Question Pooling Enabled">
+                                <span>🎯</span>
+                                <span>${q.sampleCount} Items Pooled</span>
+                            </span>
+                        ` : `
+                            <span class="duo-pool-pill" title="Standard Full Exam">
+                                <span>📝 Standard Exam</span>
+                            </span>
+                        `}
+                    </div>
+
+                    <!-- Meta Box -->
+                    <div class="card-meta-box">
+                        <div class="card-meta-row">
+                            <span class="meta-tag" title="Date Created">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                <span>${dateStr}</span>
+                            </span>
+                            <span class="meta-tag" title="Admin Secret Key (Click to copy)" style="cursor: pointer;" onclick="copyToClipboard('${escapeJsSingle(q.secretKey)}', 'Admin Secret Key copied!')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-6.5 6.5l3.5 3.5m-7.5-7.5l-3.5 3.5a5 5 0 1 0 7.07 7.07l3.5-3.5"></path></svg>
+                                <code class="quiz-code-badge" style="color: #7c3aed; background: #faf5ff; border-color: #e9d5ff;">${escapeHtml(q.secretKey)}</code>
+                            </span>
+                        </div>
+                        <div class="card-code-row">
+                            <span class="code-label">Quiz Code</span>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <code class="quiz-code-badge">${escapeHtml(q.id)}</code>
+                                <button type="button" class="btn-mini-copy" onclick="copyToClipboard('${escapeJsSingle(q.id)}', 'Quiz ID copied!')" title="Copy Quiz Code">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn btn-sm btn-outline ${q.visibleOnDashboard ? 'btn-dash-visible' : 'btn-dash-hidden'}" onclick="toggleQuizDashboardVisibility('${escapeJsSingle(q.id)}', ${!q.visibleOnDashboard})" title="${q.visibleOnDashboard ? 'Currently visible on public dashboard. Click to hide.' : 'Currently hidden. Click to show on public dashboard.'}">
-                            ${q.visibleOnDashboard ? `
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                                Hide
-                            ` : `
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
-                                Show on Dash
-                            `}
+
+                    <!-- Tactile Action Buttons -->
+                    <div class="card-actions teacher-card-actions">
+                        <button type="button" class="duo-card-take-btn duo-card-results-btn" onclick="openTeacherQuizResults('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')" title="View Student Results">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                            <span>Results</span>
                         </button>
-                        <button class="btn btn-sm btn-primary" onclick="openTeacherQuizResults('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-                            View Results
+                        <button type="button" class="duo-card-share-btn" onclick="copyToClipboard('${escapeJsSingle(studentLink)}', 'Student quiz link copied!')" title="Copy Student Quiz Link">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                         </button>
-                        <button class="btn btn-sm btn-outline" onclick="copyToClipboard('${escapeJsSingle(studentLink)}', 'Student quiz link copied!')" title="Copy Student Link">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-                            Student Link
+                        <button type="button" class="duo-card-share-btn" onclick="promptChangeQuizCategory('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.subject || 'General')}')" title="Change Category">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
                         </button>
-                        <button class="btn btn-sm btn-outline" style="color: var(--danger); padding: 6px 10px;" onclick="deleteTeacherQuiz('${escapeJsSingle(q.id)}')" title="Delete from list">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        <button type="button" class="duo-card-share-btn btn-delete-danger" onclick="deleteTeacherQuiz('${escapeJsSingle(q.id)}')" title="Delete Quiz">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                         </button>
                     </div>
                 </div>
@@ -2591,6 +2667,122 @@ function renderFilteredTeacherQuizzes() {
         `;
     }).join('');
 }
+
+async function handleQuizCardCategoryChange(quizId, newSubject, selectElem) {
+    if (!quizId) return;
+
+    if (newSubject === '__NEW__') {
+        const customCat = prompt('Enter a new category/subject name for this quiz:');
+        if (!customCat || !customCat.trim()) {
+            if (selectElem) {
+                const quiz = allMyTeacherQuizzes.find(q => q.id === quizId);
+                if (quiz) selectElem.value = quiz.subject || 'General';
+            }
+            return;
+        }
+        newSubject = customCat.trim();
+        await saveTeacherCategory(newSubject);
+    }
+
+    await applyQuizCategoryChange(quizId, newSubject);
+}
+
+async function promptChangeQuizCategory(quizId, currentSubject) {
+    const categories = getTeacherCategories();
+    const currentName = currentSubject || 'General';
+    const listStr = categories.map((c, i) => `  ${i + 1}. ${c}`).join('\n');
+    const promptMsg = `Change category for this quiz\n\nCurrent category: "${currentName}"\n\nExisting categories:\n${listStr}\n\nEnter number or type a new category name:`;
+    
+    const choice = prompt(promptMsg, currentSubject || 'General');
+    if (!choice || !choice.trim()) return;
+
+    let chosen = choice.trim();
+    const num = parseInt(chosen, 10);
+    if (!isNaN(num) && num >= 1 && num <= categories.length) {
+        chosen = categories[num - 1];
+    }
+
+    await saveTeacherCategory(chosen);
+    await applyQuizCategoryChange(quizId, chosen);
+}
+
+async function applyQuizCategoryChange(quizId, newSubject) {
+    showLoading();
+    try {
+        const cleanSubject = (newSubject || 'General').trim();
+
+        // 1. Update Firebase teacher node
+        if (auth.currentUser) {
+            await database.ref('teachers/' + auth.currentUser.uid + '/quizzes/' + quizId + '/subject').set(cleanSubject);
+
+            // Update main quizzes node if it exists
+            try {
+                const qSnap = await database.ref('quizzes/' + quizId).once('value');
+                if (qSnap.exists()) {
+                    await database.ref('quizzes/' + quizId + '/subject').set(cleanSubject);
+                }
+            } catch (err) {
+                console.warn('Could not update quizzes node subject:', err);
+            }
+
+            // Update dashboard_quizzes if published
+            try {
+                const dashSnap = await database.ref('dashboard_quizzes/' + quizId).once('value');
+                if (dashSnap.exists()) {
+                    await database.ref('dashboard_quizzes/' + quizId + '/subject').set(cleanSubject);
+                    await database.ref('dashboard_quizzes/' + quizId + '/updatedAt').set(Date.now());
+                }
+            } catch (err) {
+                console.warn('Could not update dashboard_quizzes subject:', err);
+            }
+        }
+
+        // 2. Update local in-memory quizzes
+        const target = allMyTeacherQuizzes.find(q => q.id === quizId);
+        if (target) {
+            target.subject = cleanSubject;
+        }
+
+        // 3. Update localStorage teacher history
+        try {
+            const hist = JSON.parse(localStorage.getItem('quizable_teacher_history') || '[]');
+            const item = hist.find(h => h.id === quizId);
+            if (item) {
+                item.subject = cleanSubject;
+                localStorage.setItem('quizable_teacher_history', JSON.stringify(hist));
+            }
+        } catch (e) {}
+
+        // 4. Update local dashboard cache
+        try {
+            const dashLocal = JSON.parse(localStorage.getItem('quizable_dashboard_quizzes') || '[]');
+            const dItem = dashLocal.find(d => d.id === quizId);
+            if (dItem) {
+                dItem.subject = cleanSubject;
+                localStorage.setItem('quizable_dashboard_quizzes', JSON.stringify(dashLocal));
+            }
+        } catch (e) {}
+
+        // 5. Ensure saved in custom categories
+        await saveTeacherCategory(cleanSubject);
+
+        // 6. Refresh category filters and quiz list
+        renderTeacherCategoryPills();
+        renderFilteredTeacherQuizzes();
+
+        showToast('Category updated to "' + cleanSubject + '"!', 'success');
+    } catch (err) {
+        console.error('Error updating quiz category:', err);
+        showToast('Failed to update category: ' + err.message, 'error');
+        renderFilteredTeacherQuizzes();
+    } finally {
+        hideLoading();
+    }
+}
+
+window.handleQuizCardCategoryChange = handleQuizCardCategoryChange;
+window.promptChangeQuizCategory = promptChangeQuizCategory;
+window.applyQuizCategoryChange = applyQuizCategoryChange;
 
 function openTeacherQuizResults(id, key) {
     showViewResults();
@@ -2634,7 +2826,10 @@ function showCreateQuiz() {
     if (header) header.classList.remove('hidden');
 
     const mainContainer = document.querySelector('.container');
-    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
+    if (mainContainer) {
+        mainContainer.classList.remove('dashboard-container-expanded');
+        mainContainer.classList.remove('teacher-dashboard-expanded');
+    }
 
     cleanupQuizSession();
     teacherMenu.classList.add('hidden');
@@ -2668,7 +2863,10 @@ function showViewResults() {
     if (header) header.classList.remove('hidden');
 
     const mainContainer = document.querySelector('.container');
-    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
+    if (mainContainer) {
+        mainContainer.classList.remove('dashboard-container-expanded');
+        mainContainer.classList.add('teacher-dashboard-expanded');
+    }
 
     cleanupQuizSession();
     teacherMenu.classList.add('hidden');
