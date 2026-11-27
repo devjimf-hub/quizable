@@ -29,7 +29,7 @@ function playTone(freq, duration, type = 'sine', volume = 0.08) {
         gain.connect(ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + duration);
-    } catch (_) {}
+    } catch (_) { }
 }
 
 function playOptionSelectSound() {
@@ -55,7 +55,7 @@ function playNextSound() {
         osc1.stop(now + 0.07);
         osc2.start(now + 0.05);
         osc2.stop(now + 0.2);
-    } catch (_) {}
+    } catch (_) { }
 }
 
 function playFlagSound() {
@@ -79,7 +79,7 @@ function playCelebrationSound() {
             osc.start(now + idx * 0.09);
             osc.stop(now + idx * 0.09 + 0.3);
         });
-    } catch (_) {}
+    } catch (_) { }
 }
 
 // Duolingo 3D Graphic Icon Library
@@ -206,7 +206,7 @@ function animateCountUp(elementId, targetValue, suffix = '') {
 
 function toggleSoundEffects() {
     sfxEnabled = !sfxEnabled;
-    try { localStorage.setItem('quizable_sfx', sfxEnabled ? 'true' : 'false'); } catch {}
+    try { localStorage.setItem('quizable_sfx', sfxEnabled ? 'true' : 'false'); } catch { }
     const icon = document.getElementById('sfx-icon');
     if (icon) icon.innerHTML = sfxEnabled ? DUO_ICONS.soundOn : DUO_ICONS.soundOff;
     const sfxBtn = document.getElementById('sfx-toggle-btn');
@@ -224,7 +224,7 @@ function spawnConfetti() {
     const layer = document.createElement('div');
     layer.className = 'duo-confetti-layer';
     const colors = ['#58CC02', '#1CB0F6', '#FFC800', '#FF4B4B', '#CE82FF', '#FF9600'];
-    
+
     for (let i = 0; i < 45; i++) {
         const piece = document.createElement('div');
         piece.className = 'duo-confetti-piece';
@@ -877,7 +877,7 @@ async function fetchAndRenderDashboardQuizzes() {
 
     try {
         localStorage.setItem('quizable_dashboard_quizzes', JSON.stringify(allDashboardQuizzes));
-    } catch (e) {}
+    } catch (e) { }
 
     populateDashboardSubjectPills();
     filterDashboardQuizzes();
@@ -2336,7 +2336,7 @@ function getTeacherCategories() {
         if (Array.isArray(saved)) {
             saved.forEach(s => { if (s && typeof s === 'string' && !list.includes(s.trim())) list.push(s.trim()); });
         }
-    } catch (e) {}
+    } catch (e) { }
 
     allMyTeacherQuizzes.forEach(q => {
         if (q.subject && typeof q.subject === 'string' && q.subject.trim() && !list.includes(q.subject.trim())) {
@@ -2361,7 +2361,7 @@ async function saveTeacherCategory(newCategory) {
         teacherCustomSubjects = current;
         try {
             localStorage.setItem('quizable_custom_subjects', JSON.stringify(current));
-        } catch (e) {}
+        } catch (e) { }
 
         if (auth.currentUser) {
             try {
@@ -2583,7 +2583,7 @@ function renderFilteredTeacherQuizzes() {
             cardCats.push(currentSub);
         }
 
-        const catSelectOptions = cardCats.map(cat => 
+        const catSelectOptions = cardCats.map(cat =>
             `<option value="${escapeHtml(cat)}"${cat.toLowerCase() === currentSub.toLowerCase() ? ' selected' : ''}>${escapeHtml(cat)}</option>`
         ).join('') + `<option value="__NEW__" style="color: var(--primary); font-weight: 700;">+ New Category...</option>`;
 
@@ -2692,7 +2692,7 @@ async function promptChangeQuizCategory(quizId, currentSubject) {
     const currentName = currentSubject || 'General';
     const listStr = categories.map((c, i) => `  ${i + 1}. ${c}`).join('\n');
     const promptMsg = `Change category for this quiz\n\nCurrent category: "${currentName}"\n\nExisting categories:\n${listStr}\n\nEnter number or type a new category name:`;
-    
+
     const choice = prompt(promptMsg, currentSubject || 'General');
     if (!choice || !choice.trim()) return;
 
@@ -2751,7 +2751,7 @@ async function applyQuizCategoryChange(quizId, newSubject) {
                 item.subject = cleanSubject;
                 localStorage.setItem('quizable_teacher_history', JSON.stringify(hist));
             }
-        } catch (e) {}
+        } catch (e) { }
 
         // 4. Update local dashboard cache
         try {
@@ -2761,7 +2761,7 @@ async function applyQuizCategoryChange(quizId, newSubject) {
                 dItem.subject = cleanSubject;
                 localStorage.setItem('quizable_dashboard_quizzes', JSON.stringify(dashLocal));
             }
-        } catch (e) {}
+        } catch (e) { }
 
         // 5. Ensure saved in custom categories
         await saveTeacherCategory(cleanSubject);
@@ -3993,9 +3993,9 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
             if (newSettings.hasOwnProperty('sampleCount')) updates['sampleCount'] = newSettings.sampleCount || 0;
             if (newSettings.hasOwnProperty('subject')) updates['subject'] = newSettings.subject;
             const teacherQuizRef = database.ref(`teachers/${targetUid}/quizzes/${quizId}`);
-            await teacherQuizRef.update(updates).catch(() => {});
+            await teacherQuizRef.update(updates).catch(() => { });
             if (newSettings.hasOwnProperty('subject')) {
-                await database.ref(`dashboard_quizzes/${quizId}`).update({ subject: newSettings.subject }).catch(() => {});
+                await database.ref(`dashboard_quizzes/${quizId}`).update({ subject: newSettings.subject }).catch(() => { });
             }
         }
 
@@ -4905,9 +4905,9 @@ function showReviewPage() {
         </div>
         <div class="duo-review-grid" role="navigation" aria-label="Question review list">
             ${quizData.questions.map((q, i) => {
-                const isAnswered = studentAnswers[i] !== null;
-                const isFlagged = flaggedQuestions.has(i);
-                return `
+        const isAnswered = studentAnswers[i] !== null;
+        const isFlagged = flaggedQuestions.has(i);
+        return `
                 <div role="button" tabindex="0" onclick="displayQuestion(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();displayQuestion(${i});}" class="duo-review-tile ${isAnswered ? 'answered' : 'missing'} ${isFlagged ? 'flagged' : ''}">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <strong style="font-family:var(--duo-font-heading); font-size:1.05rem;">Q${i + 1}</strong>
@@ -4918,7 +4918,7 @@ function showReviewPage() {
                     </div>
                 </div>
                 `;
-            }).join('')}
+    }).join('')}
         </div>
         <div class="duo-quiz-nav">
             <button class="btn btn-outline" onclick="displayQuestion(${quizData.questions.length - 1})">← Back to Quiz</button>
@@ -5020,8 +5020,8 @@ function handleFocusLoss() {
     if (Date.now() - quizStartTime < 3000) return; // 3-second grace period
     isHandlingFocusLoss = true;
     focusLostCount++;
-        const shieldCount = document.getElementById('shield-count');
-        if (shieldCount) shieldCount.textContent = `${Math.max(0, 5 - focusLostCount)}/5`;
+    const shieldCount = document.getElementById('shield-count');
+    if (shieldCount) shieldCount.textContent = `${Math.max(0, 5 - focusLostCount)}/5`;
 
     updateAttemptsDisplay();
     clearClipboard();
@@ -5092,7 +5092,7 @@ function handleFullscreenChange() {
 function returnToQuiz() {
     if (tabWarning) tabWarning.classList.add('hidden');
     if (isExamInProgress() && !document.fullscreenElement && document.documentElement && document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
+        document.documentElement.requestFullscreen().catch(() => { });
     }
 }
 
@@ -5167,7 +5167,7 @@ function cleanupQuizSession() {
     }
 
     if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().catch(() => { });
     }
 }
 
@@ -5343,7 +5343,7 @@ function submitQuiz(auto = false) {
                 const instId = (quizData.student?.institutionalId || '').replace(/[^a-zA-Z0-9_-]/g, '');
                 const namePart = `${quizData.student?.lastName || ''}_${quizData.student?.firstName || ''}`.replace(/[^a-zA-Z0-9_]/g, '');
                 const id = (instId ? `${instId}_${namePart}` : namePart).replace(/^[_-]+|[_-]+$/g, '') || `student_${Date.now()}`;
-                
+
                 // Keep emergency local backup until confirmation
                 localStorage.setItem(`backup_submission_${quizData.id}`, JSON.stringify(res));
 

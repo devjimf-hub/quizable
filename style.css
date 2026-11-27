@@ -3456,9 +3456,11 @@ body:has(#quizzes-dashboard-section:not(.hidden)) .container {
     padding-right: clamp(16px, 3.5vw, 48px) !important;
 }
 
-#quizzes-dashboard-section {
+#quizzes-dashboard-section,
+#quizzes-dashboard-section.duo-card {
+    max-width: none !important;
     width: 100% !important;
-    padding: clamp(24px, 4vw, 48px) !important;
+    padding: clamp(20px, 3.5vw, 40px) !important;
     box-sizing: border-box !important;
 }
 
@@ -3578,9 +3580,10 @@ body:has(#quizzes-dashboard-section:not(.hidden)) .container {
 
 .dashboard-quizzes-grid {
     display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
-    gap: 24px !important;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)) !important;
+    gap: 22px !important;
     margin-top: 22px !important;
+    width: 100% !important;
 }
 
 .dashboard-quiz-card {
@@ -3976,7 +3979,7 @@ body:has(#quizzes-dashboard-section:not(.hidden)) .container {
 
 .teacher-quizzes-grid {
     display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)) !important;
     gap: 22px !important;
     margin-top: 16px !important;
 }
