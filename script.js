@@ -755,8 +755,11 @@ let activeDashboardSubjectFilter = 'All';
 function showQuizzesDashboard(cleanUrl = false) {
     cleanupQuizSession();
     const header = document.getElementById('app-header');
-    if (header) header.classList.remove('hidden');
+    if (header) header.classList.add('hidden');
     closeAuthModal();
+
+    const mainContainer = document.querySelector('.container');
+    if (mainContainer) mainContainer.classList.add('dashboard-container-expanded');
 
     studentSection.classList.add('hidden');
     teacherMenu.classList.add('hidden');
@@ -1104,6 +1107,9 @@ function showStudentPortal(cleanUrl = false) {
     if (header) header.classList.add('hidden');
     closeAuthModal();
 
+    const mainContainer = document.querySelector('.container');
+    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
+
     teacherMenu.classList.add('hidden');
     teacherCreateSection.classList.add('hidden');
     teacherResultsSection.classList.add('hidden');
@@ -1261,6 +1267,9 @@ async function loadAdminDashboard() {
 
     const header = document.getElementById('app-header');
     if (header) header.classList.remove('hidden');
+
+    const mainContainer = document.querySelector('.container');
+    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
 
     cleanupQuizSession();
     studentSection.classList.add('hidden');
@@ -2255,6 +2264,9 @@ function showTeacherMenu() {
     const header = document.getElementById('app-header');
     if (header) header.classList.remove('hidden');
 
+    const mainContainer = document.querySelector('.container');
+    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
+
     cleanupQuizSession();
     teacherMenu.classList.remove('hidden');
     teacherCreateSection.classList.add('hidden');
@@ -2446,6 +2458,9 @@ function showCreateQuiz() {
     const header = document.getElementById('app-header');
     if (header) header.classList.remove('hidden');
 
+    const mainContainer = document.querySelector('.container');
+    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
+
     cleanupQuizSession();
     teacherMenu.classList.add('hidden');
     if (quizzesDashboardSection) quizzesDashboardSection.classList.add('hidden');
@@ -2474,6 +2489,9 @@ function showViewResults() {
     }
     const header = document.getElementById('app-header');
     if (header) header.classList.remove('hidden');
+
+    const mainContainer = document.querySelector('.container');
+    if (mainContainer) mainContainer.classList.remove('dashboard-container-expanded');
 
     cleanupQuizSession();
     teacherMenu.classList.add('hidden');
