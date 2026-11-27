@@ -696,6 +696,7 @@ const teacherResultsSection = document.getElementById('teacher-results-section')
 const studentSection = document.getElementById('student-section');
 const quizSection = document.getElementById('quiz-section');
 const resultsSection = document.getElementById('results-section');
+const quizzesDashboardSection = document.getElementById('quizzes-dashboard-section');
 const tabWarning = document.getElementById('tab-warning');
 const attemptsCounter = document.getElementById('attempts-counter');
 const timerDisplay = document.getElementById('timer-display');
@@ -720,6 +721,383 @@ const attemptsMessage = document.getElementById('attempts-message');
 let widgetTimeout;
 
 // Show Student Portal View
+
+// --- QUIZZES DASHBOARD CONTROLLERS ---
+
+const DEFAULT_DASHBOARD_QUIZZES = [
+    {
+        id: 'quiz-1795403528222-4tkjgou',
+        title: 'P ELEC 2 – Summative Examination (100 Items)',
+        subject: 'P ELEC 2',
+        sampleCount: 100,
+        secretKey: 'summative',
+        creatorUid: 'seed_p_elec_2',
+        teacherName: 'Prof. J. Bocales',
+        visible: true,
+        createdAt: 1732622400000
+    },
+    {
+        id: 'quiz-1795393236653-tx341ko',
+        title: 'CC214 – Data Structures & Algorithms Summative',
+        subject: 'CC214',
+        sampleCount: 50,
+        secretKey: 'SUMMATIVE',
+        creatorUid: 'seed_cc214',
+        teacherName: 'Prof. J. Bocales',
+        visible: true,
+        createdAt: 1732600000000
+    }
+];
+
+let allDashboardQuizzes = [];
+let activeDashboardSubjectFilter = 'All';
+
+function showQuizzesDashboard(cleanUrl = false) {
+    cleanupQuizSession();
+    const header = document.getElementById('app-header');
+    if (header) header.classList.remove('hidden');
+    closeAuthModal();
+
+    studentSection.classList.add('hidden');
+    teacherMenu.classList.add('hidden');
+    teacherCreateSection.classList.add('hidden');
+    teacherResultsSection.classList.add('hidden');
+    const adminDash = document.getElementById('admin-dashboard-section');
+    if (adminDash) adminDash.classList.add('hidden');
+    quizSection.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    const nav = document.getElementById('quiz-navigator');
+    if (nav) nav.classList.add('hidden');
+
+    if (quizzesDashboardSection) quizzesDashboardSection.classList.remove('hidden');
+
+    if (cleanUrl && window.history && window.history.replaceState) {
+        const url = new URL(window.location);
+        url.searchParams.set('part', 'dashboard');
+        url.searchParams.delete('q');
+        window.history.replaceState(null, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : ''));
+    }
+
+    fetchAndRenderDashboardQuizzes();
+}
+
+async function fetchAndRenderDashboardQuizzes() {
+    const grid = document.getElementById('dashboard-quizzes-grid');
+    const emptyState = document.getElementById('dashboard-empty-state');
+    const totalBadge = document.getElementById('dashboard-total-badge');
+    if (!grid) return;
+
+    grid.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
+            <div class="loader-spinner" style="width: 32px; height: 32px; border-width: 3px; margin: 0 auto 12px auto;"></div>
+            <p style="font-size: 0.95rem; font-weight: 600;">Loading available quizzes...</p>
+        </div>
+    `;
+
+    const map = new Map();
+
+    // 1. Seed defaults
+    DEFAULT_DASHBOARD_QUIZZES.forEach(q => map.set(q.id, { ...q }));
+
+    // 2. Local storage cache
+    try {
+        const localCached = JSON.parse(localStorage.getItem('quizable_dashboard_quizzes') || '[]');
+        localCached.forEach(q => {
+            if (q && q.id) {
+                if (q.visible !== false) map.set(q.id, q);
+                else map.delete(q.id);
+            }
+        });
+    } catch (e) {
+        console.warn("Failed reading local dashboard quizzes cache", e);
+    }
+
+    // 3. Cloud RTDB (dashboard_quizzes)
+    try {
+        const snap = await database.ref('dashboard_quizzes').once('value');
+        if (snap.exists()) {
+            const data = snap.val();
+            Object.keys(data).forEach(id => {
+                const item = data[id];
+                if (item && item.visible !== false) {
+                    map.set(id, {
+                        id,
+                        title: item.title || 'Untitled Quiz',
+                        subject: item.subject || 'General',
+                        sampleCount: item.sampleCount || 0,
+                        secretKey: item.secretKey || '',
+                        creatorUid: item.creatorUid || '',
+                        teacherName: item.teacherName || 'Faculty',
+                        visible: true,
+                        createdAt: item.createdAt || Date.now()
+                    });
+                } else if (item && item.visible === false) {
+                    map.delete(id);
+                }
+            });
+        }
+    } catch (err) {
+        console.warn("Firebase fetch dashboard_quizzes warning:", err);
+    }
+
+    // 4. If current teacher is signed in, sync their own quizzes
+    if (auth.currentUser) {
+        try {
+            const teacherSnap = await database.ref(`teachers/${auth.currentUser.uid}/quizzes`).once('value');
+            if (teacherSnap.exists()) {
+                const tData = teacherSnap.val();
+                Object.keys(tData).forEach(id => {
+                    const tQuiz = tData[id];
+                    if (tQuiz.visibleOnDashboard !== false) {
+                        map.set(id, {
+                            id,
+                            title: tQuiz.title || 'Untitled Quiz',
+                            subject: tQuiz.subject || 'General',
+                            sampleCount: tQuiz.sampleCount || 0,
+                            secretKey: tQuiz.secretKey || '',
+                            creatorUid: auth.currentUser.uid,
+                            teacherName: auth.currentUser.displayName || auth.currentUser.email || 'You',
+                            visible: true,
+                            createdAt: tQuiz.createdAt || Date.now()
+                        });
+                    } else {
+                        map.delete(id);
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn("Teacher dashboard sync error:", e);
+        }
+    }
+
+    allDashboardQuizzes = Array.from(map.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    try {
+        localStorage.setItem('quizable_dashboard_quizzes', JSON.stringify(allDashboardQuizzes));
+    } catch (e) {}
+
+    populateDashboardSubjectPills();
+    filterDashboardQuizzes();
+}
+
+function populateDashboardSubjectPills() {
+    const pillsContainer = document.getElementById('dashboard-subject-pills');
+    if (!pillsContainer) return;
+
+    const subjects = new Set(['All']);
+    allDashboardQuizzes.forEach(q => {
+        if (q.subject && q.subject.trim()) subjects.add(q.subject.trim());
+    });
+
+    pillsContainer.innerHTML = Array.from(subjects).map(sub => `
+        <button type="button" class="dashboard-pill-btn ${activeDashboardSubjectFilter === sub ? 'active' : ''}"
+                onclick="setDashboardSubjectFilter('${escapeJsSingle(sub)}')">
+            ${escapeHtml(sub)}
+        </button>
+    `).join('');
+}
+
+function setDashboardSubjectFilter(subject) {
+    activeDashboardSubjectFilter = subject;
+    populateDashboardSubjectPills();
+    filterDashboardQuizzes();
+}
+
+function resetDashboardFilters() {
+    activeDashboardSubjectFilter = 'All';
+    const searchInput = document.getElementById('dashboard-search-input');
+    if (searchInput) searchInput.value = '';
+    populateDashboardSubjectPills();
+    filterDashboardQuizzes();
+}
+
+function filterDashboardQuizzes() {
+    const searchInput = document.getElementById('dashboard-search-input');
+    const query = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    const grid = document.getElementById('dashboard-quizzes-grid');
+    const emptyState = document.getElementById('dashboard-empty-state');
+    const totalBadge = document.getElementById('dashboard-total-badge');
+    if (!grid) return;
+
+    let filtered = allDashboardQuizzes;
+
+    if (activeDashboardSubjectFilter && activeDashboardSubjectFilter !== 'All') {
+        filtered = filtered.filter(q => (q.subject || '').toLowerCase() === activeDashboardSubjectFilter.toLowerCase());
+    }
+
+    if (query) {
+        filtered = filtered.filter(q =>
+            (q.title || '').toLowerCase().includes(query) ||
+            (q.subject || '').toLowerCase().includes(query) ||
+            (q.id || '').toLowerCase().includes(query) ||
+            (q.teacherName || '').toLowerCase().includes(query)
+        );
+    }
+
+    if (totalBadge) {
+        totalBadge.textContent = `${filtered.length} Quiz${filtered.length === 1 ? '' : 'zes'} Available`;
+    }
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '';
+        if (emptyState) emptyState.classList.remove('hidden');
+        return;
+    }
+
+    if (emptyState) emptyState.classList.add('hidden');
+    renderDashboardQuizzes(filtered);
+}
+
+function renderDashboardQuizzes(quizzes) {
+    const grid = document.getElementById('dashboard-quizzes-grid');
+    if (!grid) return;
+
+    grid.innerHTML = quizzes.map(q => {
+        const dateStr = q.createdAt ? new Date(q.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Active';
+        const itemCount = q.sampleCount ? `${q.sampleCount} Items Pooled` : 'Comprehensive Exam';
+
+        return `
+            <div class="dashboard-quiz-card card">
+                <div class="card-top-row">
+                    <span class="subject-badge">${escapeHtml(q.subject || 'General')}</span>
+                    <span class="items-badge">${escapeHtml(itemCount)}</span>
+                </div>
+                <h3 class="card-title">${escapeHtml(q.title)}</h3>
+                <div class="card-meta">
+                    <span class="meta-item" title="Published Date">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        ${dateStr}
+                    </span>
+                    <span class="meta-item" title="Instructor">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        ${escapeHtml(q.teacherName || 'Faculty')}
+                    </span>
+                    <span class="meta-item" title="Quiz Code">
+                        <code style="font-size: 0.72rem; background: var(--bg-body); padding: 2px 6px; border-radius: 4px;">${escapeHtml(q.id)}</code>
+                    </span>
+                </div>
+                <div class="card-actions">
+                    <button type="button" class="btn btn-primary take-quiz-btn" onclick="startQuizFromDashboard('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}', '${escapeJsSingle(q.title)}')">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        Take Quiz
+                    </button>
+                    <button type="button" class="btn btn-outline share-quiz-btn" onclick="copyQuizLinkFromDashboard('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')" title="Copy Direct Quiz Link">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function startQuizFromDashboard(quizId, secretKey, quizTitle) {
+    const idField = document.getElementById('student-quiz-id');
+    const keyField = document.getElementById('student-secret-key');
+    if (idField) idField.value = quizId;
+    if (keyField) keyField.value = secretKey;
+
+    setStudentCredentialsHidden(true);
+
+    if (window.history && window.history.pushState) {
+        const studentLink = generateQuizLink(quizId, secretKey);
+        window.history.pushState(null, '', studentLink);
+    }
+
+    showStudentPortal();
+
+    const banner = document.getElementById('selected-quiz-banner');
+    const titleEl = document.getElementById('selected-quiz-title');
+    if (banner && titleEl) {
+        titleEl.textContent = quizTitle || 'Selected Examination';
+        banner.classList.remove('hidden');
+    }
+
+    setTimeout(() => {
+        const idInput = document.getElementById('student-id-field');
+        if (idInput) {
+            idInput.focus();
+            idInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 200);
+
+    showToast(`Ready to take "${quizTitle}". Please enter your student details to begin.`, 'success');
+}
+
+function copyQuizLinkFromDashboard(quizId, secretKey) {
+    const link = generateQuizLink(quizId, secretKey);
+    copyToClipboard(link, 'Direct student quiz link copied to clipboard!');
+}
+
+async function toggleQuizDashboardVisibility(quizId, shouldBeVisible) {
+    if (!auth.currentUser) {
+        showToast('Please sign in as a teacher to modify quiz visibility.', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const teacherUid = auth.currentUser.uid;
+        await database.ref(`teachers/${teacherUid}/quizzes/${quizId}/visibleOnDashboard`).set(shouldBeVisible);
+
+        const snap = await database.ref(`teachers/${teacherUid}/quizzes/${quizId}`).once('value');
+        const qData = snap.val() || {};
+
+        if (shouldBeVisible) {
+            const dashObj = {
+                id: quizId,
+                title: qData.title || 'Untitled Quiz',
+                subject: qData.subject || 'General',
+                sampleCount: qData.sampleCount || 0,
+                secretKey: qData.secretKey || '',
+                creatorUid: teacherUid,
+                teacherName: auth.currentUser.displayName || auth.currentUser.email || 'Faculty',
+                visible: true,
+                updatedAt: Date.now()
+            };
+            try {
+                await database.ref(`dashboard_quizzes/${quizId}`).set(dashObj);
+            } catch (err) {
+                console.warn("Cloud dashboard write warning:", err);
+            }
+            syncLocalDashboardQuiz(dashObj, true);
+            showToast('Quiz is now visible to students on the Quizzes Dashboard!', 'success');
+        } else {
+            try {
+                await database.ref(`dashboard_quizzes/${quizId}`).remove();
+            } catch (err) {
+                console.warn("Cloud dashboard remove warning:", err);
+            }
+            syncLocalDashboardQuiz({ id: quizId }, false);
+            showToast('Quiz is now hidden from the student Quizzes Dashboard.', 'info');
+        }
+
+        await loadTeacherDashboardQuizzes();
+    } catch (e) {
+        console.error("Error toggling dashboard visibility:", e);
+        showToast('Failed to update visibility: ' + e.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+function syncLocalDashboardQuiz(quizObj, isVisible) {
+    let list = [];
+    try {
+        list = JSON.parse(localStorage.getItem('quizable_dashboard_quizzes') || '[]');
+    } catch (e) { list = []; }
+
+    list = list.filter(q => q.id !== quizObj.id);
+    if (isVisible) {
+        list.push(quizObj);
+    }
+    localStorage.setItem('quizable_dashboard_quizzes', JSON.stringify(list));
+}
+
 function showStudentPortal(cleanUrl = false) {
     cleanupQuizSession();
     const header = document.getElementById('app-header');
@@ -731,6 +1109,7 @@ function showStudentPortal(cleanUrl = false) {
     teacherResultsSection.classList.add('hidden');
     const adminDash = document.getElementById('admin-dashboard-section');
     if (adminDash) adminDash.classList.add('hidden');
+    if (quizzesDashboardSection) quizzesDashboardSection.classList.add('hidden');
     quizSection.classList.add('hidden');
     resultsSection.classList.add('hidden');
     studentSection.classList.remove('hidden');
@@ -858,6 +1237,8 @@ function initializeApp() {
         } else {
             showTeacherMenu();
         }
+    } else if (part === 'dashboard') {
+        showQuizzesDashboard(false);
     } else if (part !== 'teacher') {
         showStudentPortal(false);
         checkAutoLogin(linkQuizId);
@@ -883,6 +1264,7 @@ async function loadAdminDashboard() {
 
     cleanupQuizSession();
     studentSection.classList.add('hidden');
+    if (quizzesDashboardSection) quizzesDashboardSection.classList.add('hidden');
     teacherMenu.classList.add('hidden');
     teacherCreateSection.classList.add('hidden');
     teacherResultsSection.classList.add('hidden');
@@ -1878,6 +2260,7 @@ function showTeacherMenu() {
     teacherCreateSection.classList.add('hidden');
     teacherResultsSection.classList.add('hidden');
     studentSection.classList.add('hidden');
+    if (quizzesDashboardSection) quizzesDashboardSection.classList.add('hidden');
     quizSection.classList.add('hidden');
     resultsSection.classList.add('hidden');
     const adminDash = document.getElementById('admin-dashboard-section');
@@ -1916,6 +2299,7 @@ async function loadTeacherDashboardQuizzes() {
                 subject: data[id].subject || 'General',
                 secretKey: data[id].secretKey || '',
                 sampleCount: data[id].sampleCount || 0,
+                visibleOnDashboard: data[id].visibleOnDashboard !== false,
                 createdAt: data[id].createdAt || Date.now()
             })).sort((a, b) => b.createdAt - a.createdAt);
         }
@@ -1973,6 +2357,17 @@ async function loadTeacherDashboardQuizzes() {
                                 ${escapeHtml(q.subject)}
                             </span>
                             ${q.sampleCount ? `<span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #eff6ff; color: #2563eb; font-weight: 600; border: 1px solid rgba(37,99,235,0.2); display:inline-flex; align-items:center; gap:3px;">${DUO_ICONS.target} ${q.sampleCount} items pooled</span>` : ''}
+                            ${q.visibleOnDashboard ? `
+                                <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #ecfdf5; color: #059669; font-weight: 700; border: 1px solid rgba(16,185,129,0.3); display: inline-flex; align-items: center; gap: 4px;">
+                                    <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
+                                    On Dashboard
+                                </span>
+                            ` : `
+                                <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: #f1f5f9; color: #64748b; font-weight: 700; border: 1px solid rgba(100,116,139,0.25); display: inline-flex; align-items: center; gap: 4px;">
+                                    <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#94a3b8;"></span>
+                                    Hidden from Dashboard
+                                </span>
+                            `}
                         </div>
                         <div style="display: flex; align-items: center; gap: 12px; margin-top: 6px; font-size: 0.8rem; color: var(--text-muted); flex-wrap: wrap;">
                             <span>Created: <strong>${dateStr}</strong></span>
@@ -1983,6 +2378,15 @@ async function loadTeacherDashboardQuizzes() {
                         </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-sm btn-outline ${q.visibleOnDashboard ? 'btn-dash-visible' : 'btn-dash-hidden'}" onclick="toggleQuizDashboardVisibility('${escapeJsSingle(q.id)}', ${!q.visibleOnDashboard})" title="${q.visibleOnDashboard ? 'Currently visible on public dashboard. Click to hide.' : 'Currently hidden. Click to show on public dashboard.'}">
+                            ${q.visibleOnDashboard ? `
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                Hide
+                            ` : `
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                                Show on Dash
+                            `}
+                        </button>
                         <button class="btn btn-sm btn-primary" onclick="openTeacherQuizResults('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
                             View Results
@@ -2019,6 +2423,8 @@ async function deleteTeacherQuiz(id) {
             updates[`quizzes/${id}`] = null;
             updates[`results/${id}`] = null;
             updates[`admin/quizzes/${id}`] = null;
+            updates[`dashboard_quizzes/${id}`] = null;
+            syncLocalDashboardQuiz({ id: id }, false);
             await database.ref().update(updates);
         }
         removeFromLocalHistory(id);
@@ -2042,6 +2448,7 @@ function showCreateQuiz() {
 
     cleanupQuizSession();
     teacherMenu.classList.add('hidden');
+    if (quizzesDashboardSection) quizzesDashboardSection.classList.add('hidden');
     teacherCreateSection.classList.remove('hidden');
     document.getElementById('quiz-navigator').classList.remove('hidden');
 
@@ -2070,6 +2477,7 @@ function showViewResults() {
 
     cleanupQuizSession();
     teacherMenu.classList.add('hidden');
+    if (quizzesDashboardSection) quizzesDashboardSection.classList.add('hidden');
     teacherResultsSection.classList.remove('hidden');
     loadTeacherHistory();
 }
@@ -2771,6 +3179,7 @@ function generateEncryptedFile() {
         // Encrypt metadata
         const encryptedAdminMeta = await systemEncrypt(JSON.stringify(adminMeta));
 
+        const showOnDash = document.getElementById('quiz-show-on-dashboard')?.checked ?? true;
         const saveData = {};
         saveData['quizzes/' + quiz.id] = {
             encryptedQuizData: encrypted,
@@ -2783,8 +3192,24 @@ function generateEncryptedFile() {
             subject: quizSubject || 'Uncategorized',
             secretKey: secretKey,
             sampleCount: sampleQuestionCount,
+            visibleOnDashboard: showOnDash,
             createdAt: Date.now()
         };
+        if (showOnDash) {
+            const dashObj = {
+                id: quiz.id,
+                title: quizTitle,
+                subject: quizSubject || 'Uncategorized',
+                secretKey: secretKey,
+                sampleCount: sampleQuestionCount,
+                creatorUid: teacherUid,
+                teacherName: teacherEmail,
+                visible: true,
+                createdAt: Date.now()
+            };
+            saveData['dashboard_quizzes/' + quiz.id] = dashObj;
+            syncLocalDashboardQuiz(dashObj, true);
+        }
         saveData['admin/quizzes/' + quiz.id] = { data: encryptedAdminMeta };
 
         database.ref().update(saveData).then(() => {
@@ -4702,6 +5127,14 @@ window.showTeacherMenu = showTeacherMenu;
 window.showCreateQuiz = showCreateQuiz;
 window.showViewResults = showViewResults;
 window.adminLogout = adminLogout;
+window.showQuizzesDashboard = showQuizzesDashboard;
+window.startQuizFromDashboard = startQuizFromDashboard;
+window.copyQuizLinkFromDashboard = copyQuizLinkFromDashboard;
+window.toggleQuizDashboardVisibility = toggleQuizDashboardVisibility;
+window.filterDashboardQuizzes = filterDashboardQuizzes;
+window.setDashboardSubjectFilter = setDashboardSubjectFilter;
+window.resetDashboardFilters = resetDashboardFilters;
+window.fetchAndRenderDashboardQuizzes = fetchAndRenderDashboardQuizzes;
 window.exportAugust2026Excel = exportAugust2026Excel;
 window.exportCurrentTeacherQuizExcel = exportCurrentTeacherQuizExcel;
 window.exportAdminQuizResultsExcel = exportAdminQuizResultsExcel;

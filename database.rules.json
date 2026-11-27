@@ -44,6 +44,15 @@
           ".write": "auth != null && (!data.exists() || root.child('quizzes').child($quizId).child('creatorUid').val() === auth.uid || auth.token.email === 'ctutc.jbocales@gmail.com')"
         }
       }
+    },
+    "dashboard_quizzes": {
+      // Public read access for students to browse published quizzes
+      ".read": true,
+      "$quizId": {
+        // Only creator teacher or system administrator can publish, update, or remove
+        ".write": "auth != null && (!data.exists() || data.child('creatorUid').val() === auth.uid || auth.token.email === 'ctutc.jbocales@gmail.com')",
+        ".validate": "newData.hasChildren(['title', 'creatorUid', 'secretKey', 'visible'])"
+      }
     }
   }
 }
