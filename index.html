@@ -158,6 +158,18 @@
                         style="background: var(--bg-body); padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid var(--border); font-weight: 600; color: var(--primary);">0
                         Quizzes</span>
                 </div>
+                <!-- Teacher Category Filter Bar -->
+                <div class="teacher-category-filter-bar" style="background: #f8fafc; border: 1.5px solid var(--border); border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;">Category:</span>
+                        <div id="teacher-category-pills" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <!-- Category filter pills e.g. All, P ELEC 2, CC214 -->
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline" onclick="promptAddTeacherCategory()" style="font-size: 0.76rem; padding: 4px 10px; border-radius: 6px;">
+                        + New Category
+                    </button>
+                </div>
                 <div id="teacher-quizzes-container" style="display: flex; flex-direction: column; gap: 14px;">
                     <!-- Dynamically populated quiz cards -->
                 </div>
@@ -218,9 +230,48 @@
                 <label for="quiz-title">Quiz Title</label>
                 <input type="text" id="quiz-title" placeholder="e.g., Final Examination - Web Dev">
             </div>
-            <div class="form-group">
-                <label for="quiz-subject">Subject</label>
-                <input type="text" id="quiz-subject" placeholder="e.g., Information Technology">
+            <div class="form-group" style="position: relative;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label for="quiz-subject" style="margin: 0; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                        </svg>
+                        Subject / Category
+                    </label>
+                    <button type="button" class="btn btn-sm btn-outline" onclick="toggleAddCategoryBox()" style="font-size: 0.76rem; padding: 3px 10px; border-radius: 6px;">
+                        + Add New Category
+                    </button>
+                </div>
+
+                <!-- Inline Quick Add Category Box -->
+                <div id="add-category-box" class="hidden" style="background: #f8fafc; border: 1.5px dashed var(--primary); border-radius: 10px; padding: 12px; margin-bottom: 10px;">
+                    <div style="font-size: 0.82rem; font-weight: 700; color: var(--primary); margin-bottom: 6px;">Create New Subject / Category</div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="new-category-input" placeholder="e.g. Mobile Development, Networking, Discrete Math..." class="duo-input" style="font-size: 0.88rem; padding: 8px 12px;">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="addNewCategoryFromCreator()" style="white-space: nowrap;">
+                            Save &amp; Select
+                        </button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="toggleAddCategoryBox()">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+
+                <div style="position: relative;">
+                    <input type="text" id="quiz-subject" list="subject-datalist" placeholder="Select or type a category (e.g. P ELEC 2, CC214)..." class="duo-input" oninput="highlightMatchingSubjectChip()" autocomplete="off">
+                    <datalist id="subject-datalist">
+                        <!-- Populated dynamically -->
+                    </datalist>
+                </div>
+
+                <!-- Interactive Category Quick Chips -->
+                <div style="margin-top: 8px;">
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 5px; font-weight: 600;">Click a quick tag to categorize:</div>
+                    <div id="creator-subject-chips" class="dashboard-pills-container" style="gap: 6px;">
+                        <!-- Category Chips injected dynamically -->
+                    </div>
+                </div>
             </div>
 
             <div class="responsive-grid">
@@ -344,6 +395,10 @@
 
                 <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
                     <div class="responsive-grid">
+                        <div class="form-group">
+                            <label for="modify-quiz-subject">Modify Category / Subject</label>
+                            <input type="text" id="modify-quiz-subject" list="subject-datalist" placeholder="Select or type subject...">
+                        </div>
                         <div class="form-group">
                             <label for="modify-quiz-duration">Modify Duration (Mins)</label>
                             <input type="number" id="modify-quiz-duration" placeholder="0 for unlimited">

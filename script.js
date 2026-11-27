@@ -2283,6 +2283,156 @@ function showTeacherMenu() {
     loadTeacherDashboardQuizzes();
 }
 
+
+// --- TEACHER SUBJECT & CATEGORY MANAGEMENT ---
+const DEFAULT_CATEGORIES = ['CC214', 'P ELEC 2', 'Web Systems', 'Data Structures', 'Algorithms', 'Information Technology', 'Computer Science'];
+let teacherCustomSubjects = [...DEFAULT_CATEGORIES];
+let activeTeacherCategoryFilter = 'All';
+let allMyTeacherQuizzes = [];
+
+function getTeacherCategories() {
+    let list = [...DEFAULT_CATEGORIES];
+    try {
+        const saved = JSON.parse(localStorage.getItem('quizable_custom_subjects') || '[]');
+        if (Array.isArray(saved)) {
+            saved.forEach(s => { if (s && typeof s === 'string' && !list.includes(s.trim())) list.push(s.trim()); });
+        }
+    } catch (e) {}
+
+    allMyTeacherQuizzes.forEach(q => {
+        if (q.subject && typeof q.subject === 'string' && q.subject.trim() && !list.includes(q.subject.trim())) {
+            list.push(q.subject.trim());
+        }
+    });
+
+    return list;
+}
+
+async function saveTeacherCategory(newCategory) {
+    if (!newCategory || typeof newCategory !== 'string') return;
+    const clean = newCategory.trim();
+    if (clean.length < 2) {
+        showToast('Category name must be at least 2 characters.', 'warning');
+        return;
+    }
+
+    const current = getTeacherCategories();
+    if (!current.includes(clean)) {
+        current.push(clean);
+        teacherCustomSubjects = current;
+        try {
+            localStorage.setItem('quizable_custom_subjects', JSON.stringify(current));
+        } catch (e) {}
+
+        if (auth.currentUser) {
+            try {
+                await database.ref('teachers/' + auth.currentUser.uid + '/categories').set(current);
+            } catch (err) {
+                console.warn("Could not sync category to Firebase:", err);
+            }
+        }
+    }
+
+    renderSubjectDatalists();
+    renderCreatorSubjectChips();
+    renderTeacherCategoryPills();
+}
+
+function renderSubjectDatalists() {
+    const datalist = document.getElementById('subject-datalist');
+    if (!datalist) return;
+
+    const cats = getTeacherCategories();
+    datalist.innerHTML = cats.map(c => '<option value="' + escapeHtml(c) + '">').join('');
+}
+
+function renderCreatorSubjectChips() {
+    const container = document.getElementById('creator-subject-chips');
+    const input = document.getElementById('quiz-subject');
+    if (!container) return;
+
+    const cats = getTeacherCategories();
+    const currentVal = (input ? input.value : '').trim().toLowerCase();
+
+    container.innerHTML = cats.map(c => {
+        const isSelected = currentVal === c.toLowerCase();
+        return '<button type="button" class="dashboard-pill-btn ' + (isSelected ? 'active' : '') + '" onclick="selectCreatorSubjectChip(\'' + escapeJsSingle(c) + '\')">' + escapeHtml(c) + '</button>';
+    }).join('');
+}
+
+function selectCreatorSubjectChip(subject) {
+    const input = document.getElementById('quiz-subject');
+    if (input) {
+        input.value = subject;
+        renderCreatorSubjectChips();
+        isDraftDirty = true;
+        saveDraft();
+    }
+}
+
+function highlightMatchingSubjectChip() {
+    renderCreatorSubjectChips();
+}
+
+function toggleAddCategoryBox() {
+    const box = document.getElementById('add-category-box');
+    const input = document.getElementById('new-category-input');
+    if (!box) return;
+
+    box.classList.toggle('hidden');
+    if (!box.classList.contains('hidden') && input) {
+        input.value = '';
+        input.focus();
+    }
+}
+
+async function addNewCategoryFromCreator() {
+    const input = document.getElementById('new-category-input');
+    const val = input ? input.value.trim() : '';
+    if (!val) {
+        showToast('Please enter a category name.', 'warning');
+        return;
+    }
+
+    await saveTeacherCategory(val);
+    selectCreatorSubjectChip(val);
+    toggleAddCategoryBox();
+    showToast('Category "' + val + '" created and assigned to quiz!', 'success');
+}
+
+function promptAddTeacherCategory() {
+    const name = prompt('Enter a new Category / Subject name:\n(e.g. Mobile Computing, CC214, Web Systems)');
+    if (name && name.trim()) {
+        saveTeacherCategory(name.trim());
+        showToast('Category "' + name.trim() + '" added to your subjects.', 'success');
+    }
+}
+
+function renderTeacherCategoryPills() {
+    const container = document.getElementById('teacher-category-pills');
+    if (!container) return;
+
+    const counts = { 'All': allMyTeacherQuizzes.length };
+    allMyTeacherQuizzes.forEach(q => {
+        const s = (q.subject || 'General').trim();
+        counts[s] = (counts[s] || 0) + 1;
+    });
+
+    const categories = ['All', ...Object.keys(counts).filter(k => k !== 'All')];
+
+    container.innerHTML = categories.map(cat => {
+        const isActive = activeTeacherCategoryFilter.toLowerCase() === cat.toLowerCase();
+        const count = counts[cat] || 0;
+        return '<button type="button" class="dashboard-pill-btn ' + (isActive ? 'active' : '') + '" onclick="filterTeacherQuizzesByCategory(\'' + escapeJsSingle(cat) + '\')">' + escapeHtml(cat) + ' (' + count + ')</button>';
+    }).join('');
+}
+
+function filterTeacherQuizzesByCategory(cat) {
+    activeTeacherCategoryFilter = cat;
+    renderTeacherCategoryPills();
+    renderFilteredTeacherQuizzes();
+}
+
 async function loadTeacherDashboardQuizzes() {
     const container = document.getElementById('teacher-quizzes-container');
     const countBadge = document.getElementById('teacher-quiz-count-badge');
@@ -2336,10 +2486,13 @@ async function loadTeacherDashboardQuizzes() {
         }
     });
 
-    const allMyQuizzes = Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
-    if (countBadge) countBadge.textContent = `${allMyQuizzes.length} Quiz${allMyQuizzes.length === 1 ? '' : 'zes'}`;
+    allMyTeacherQuizzes = Array.from(map.values()).sort((a, b) => b.createdAt - a.createdAt);
+    if (countBadge) countBadge.textContent = `${allMyTeacherQuizzes.length} Quiz${allMyTeacherQuizzes.length === 1 ? '' : 'zes'}`;
 
-    if (allMyQuizzes.length === 0) {
+    renderSubjectDatalists();
+    renderTeacherCategoryPills();
+
+    if (allMyTeacherQuizzes.length === 0) {
         container.innerHTML = `
             <div style="text-align: center; padding: 35px 20px; background: var(--bg-body); border: 2px dashed var(--border); border-radius: 12px;">
                 <div style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; background: white; border-radius: 50%; margin-bottom: 12px; color: var(--primary);">
@@ -2355,7 +2508,29 @@ async function loadTeacherDashboardQuizzes() {
         return;
     }
 
-    container.innerHTML = allMyQuizzes.map(q => {
+    renderFilteredTeacherQuizzes();
+}
+
+function renderFilteredTeacherQuizzes() {
+    const container = document.getElementById('teacher-quizzes-container');
+    if (!container) return;
+
+    let filtered = allMyTeacherQuizzes;
+    if (activeTeacherCategoryFilter && activeTeacherCategoryFilter !== 'All') {
+        filtered = filtered.filter(q => (q.subject || 'General').toLowerCase() === activeTeacherCategoryFilter.toLowerCase());
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 25px 20px; background: var(--bg-body); border: 1.5px dashed var(--border); border-radius: 12px; color: var(--text-muted);">
+                <p style="margin: 0; font-size: 0.9rem;">No quizzes found in category <strong>${escapeHtml(activeTeacherCategoryFilter)}</strong>.</p>
+                <button class="btn btn-sm btn-outline" style="margin-top: 10px;" onclick="filterTeacherQuizzesByCategory('All')">View All Quizzes</button>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = filtered.map(q => {
         const studentLink = generateQuizLink(q.id, q.secretKey);
         const dateStr = new Date(q.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
@@ -2466,6 +2641,8 @@ function showCreateQuiz() {
     if (quizzesDashboardSection) quizzesDashboardSection.classList.add('hidden');
     teacherCreateSection.classList.remove('hidden');
     document.getElementById('quiz-navigator').classList.remove('hidden');
+    renderSubjectDatalists();
+    renderCreatorSubjectChips();
 
     // Attempt to load draft first
     const hasQuestions = document.getElementById('questions-container').children.length > 0;
@@ -3411,6 +3588,8 @@ async function fetchAndDisplayResults(quizId, secretKey) {
             // Requirement 2: Save to history if not already there
             saveTeacherHistory(quizDetails.title, quizId, secretKey);
 
+            const modSubInput = document.getElementById('modify-quiz-subject');
+            if (modSubInput) modSubInput.value = quizDetails.subject || '';
             const isOwner = !quizDataEnc.creatorUid || (auth.currentUser && auth.currentUser.uid === quizDataEnc.creatorUid);
             const updateBtn = document.getElementById('update-quiz-settings-btn');
             if (updateBtn) {
@@ -3427,12 +3606,14 @@ async function fetchAndDisplayResults(quizId, secretKey) {
                         alert("Permission Denied: Only the creator of this quiz can modify settings.");
                         return;
                     }
+                    const newSubject = document.getElementById('modify-quiz-subject')?.value.trim();
                     const newDuration = parseFloat(document.getElementById('modify-quiz-duration').value) || 0;
                     const newExpiry = parseExpiryInput(modifyExpiryInput.value);
                     const newSampleCount = parseInt(document.getElementById('modify-quiz-sample-count')?.value, 10) || 0;
                     const showResults = document.getElementById('modify-show-results').checked;
                     const showAnswerSummaryVal = document.getElementById('modify-show-answer-summary').checked;
                     updateQuizSettings(quizId, secretKey, {
+                        subject: newSubject,
                         duration: newDuration,
                         expiry: newExpiry,
                         sampleCount: newSampleCount,
@@ -3583,6 +3764,9 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
     showLoading();
     try {
         // Update the fields in the quiz object
+        if (newSettings.hasOwnProperty('subject') && newSettings.subject) {
+            currentQuizData.subject = newSettings.subject;
+        }
         if (newSettings.hasOwnProperty('duration')) currentQuizData.duration = newSettings.duration;
         if (newSettings.hasOwnProperty('expiry')) {
             currentQuizData.expiry = parseExpiryTimestamp(newSettings.expiry);
@@ -3606,13 +3790,14 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
         });
 
         const targetUid = creatorUid || (auth.currentUser ? auth.currentUser.uid : null);
-        if (targetUid && newSettings.hasOwnProperty('sampleCount')) {
+        if (targetUid) {
+            const updates = {};
+            if (newSettings.hasOwnProperty('sampleCount')) updates['sampleCount'] = newSettings.sampleCount || 0;
+            if (newSettings.hasOwnProperty('subject')) updates['subject'] = newSettings.subject;
             const teacherQuizRef = database.ref(`teachers/${targetUid}/quizzes/${quizId}`);
-            const teacherQuizSnap = await teacherQuizRef.once('value').catch(() => null);
-            if (teacherQuizSnap && teacherQuizSnap.exists()) {
-                await teacherQuizRef.update({
-                    sampleCount: newSettings.sampleCount || 0
-                }).catch(() => {});
+            await teacherQuizRef.update(updates).catch(() => {});
+            if (newSettings.hasOwnProperty('subject')) {
+                await database.ref(`dashboard_quizzes/${quizId}`).update({ subject: newSettings.subject }).catch(() => {});
             }
         }
 
@@ -5153,6 +5338,14 @@ window.filterDashboardQuizzes = filterDashboardQuizzes;
 window.setDashboardSubjectFilter = setDashboardSubjectFilter;
 window.resetDashboardFilters = resetDashboardFilters;
 window.fetchAndRenderDashboardQuizzes = fetchAndRenderDashboardQuizzes;
+window.saveTeacherCategory = saveTeacherCategory;
+window.selectCreatorSubjectChip = selectCreatorSubjectChip;
+window.highlightMatchingSubjectChip = highlightMatchingSubjectChip;
+window.toggleAddCategoryBox = toggleAddCategoryBox;
+window.addNewCategoryFromCreator = addNewCategoryFromCreator;
+window.promptAddTeacherCategory = promptAddTeacherCategory;
+window.filterTeacherQuizzesByCategory = filterTeacherQuizzesByCategory;
+window.renderCreatorSubjectChips = renderCreatorSubjectChips;
 window.exportAugust2026Excel = exportAugust2026Excel;
 window.exportCurrentTeacherQuizExcel = exportCurrentTeacherQuizExcel;
 window.exportAdminQuizResultsExcel = exportAdminQuizResultsExcel;
