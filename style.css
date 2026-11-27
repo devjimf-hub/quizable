@@ -4078,3 +4078,142 @@ body:has(#quizzes-dashboard-section:not(.hidden)) .container {
     color: #EF4444 !important;
     box-shadow: 0 3px 0 #FCA5A5 !important;
 }
+
+/* Inline Date Expire Control on Teacher Quiz Cards */
+.card-expiry-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px dashed #E2E8F0;
+}
+
+.card-expiry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-expiry-status {
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    line-height: 1.3;
+}
+
+.card-expiry-status.expiry-none {
+    background: #F1F5F9;
+    color: #64748B;
+    border-color: #CBD5E1;
+}
+
+.card-expiry-status.expiry-loading {
+    background: #EFF6FF;
+    color: #3B82F6;
+    border-color: #BFDBFE;
+}
+
+.card-expiry-status.expiry-active {
+    background: #ECFDF5;
+    color: #059669;
+    border-color: #A7F3D0;
+}
+
+.card-expiry-status.expiry-expired {
+    background: #FEF2F2;
+    color: #DC2626;
+    border-color: #FECACA;
+}
+
+.card-expiry-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.card-expiry-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    background: #FFFFFF;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    font-family: inherit;
+    color: #334155;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card-expiry-input:focus {
+    border-color: #10B981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+}
+
+.btn-expiry-save {
+    flex-shrink: 0;
+    background: #FFFFFF;
+    border: 1.5px solid #CBD5E1;
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 0.73rem;
+    font-weight: 700;
+    font-family: inherit;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-expiry-save:hover {
+    background: #ECFDF5;
+    border-color: #10B981;
+    color: #059669;
+}
+
+.btn-expiry-save.is-dirty {
+    background: #10B981;
+    border-color: #059669;
+    color: #FFFFFF;
+    box-shadow: 0 2px 0 #047857;
+}
+
+.btn-expiry-save.is-dirty:hover {
+    background: #059669;
+    color: #FFFFFF;
+}
+
+.btn-expiry-clear {
+    flex-shrink: 0;
+    background: #FFFFFF;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #94A3B8;
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.15s ease;
+}
+
+.btn-expiry-clear:hover {
+    background: #FEF2F2;
+    border-color: #FCA5A5;
+    color: #EF4444;
+}
+
+.meta-tag-expired {
+    color: #DC2626 !important;
+    font-weight: 700 !important;
+}

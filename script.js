@@ -653,6 +653,20 @@ function formatDateTimeLocal(timestampOrDateStr) {
     return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 }
 
+function formatExpiryDisplay(timestampOrDateStr) {
+    const ts = parseExpiryTimestamp(timestampOrDateStr);
+    if (!ts) return 'No Expiry';
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return 'No Expiry';
+    return d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
 function showLoading() {
     document.getElementById('loading-overlay').classList.remove('hidden');
 }
@@ -832,6 +846,7 @@ async function fetchAndRenderDashboardQuizzes() {
                         creatorUid: item.creatorUid || '',
                         teacherName: item.teacherName || 'Faculty',
                         visible: true,
+                        expiry: item.expiry !== undefined ? parseExpiryTimestamp(item.expiry) : null,
                         createdAt: item.createdAt || Date.now()
                     });
                 } else if (item && item.visible === false) {
@@ -861,6 +876,7 @@ async function fetchAndRenderDashboardQuizzes() {
                             creatorUid: auth.currentUser.uid,
                             teacherName: auth.currentUser.displayName || auth.currentUser.email || 'You',
                             visible: true,
+                            expiry: tQuiz.expiry !== undefined ? parseExpiryTimestamp(tQuiz.expiry) : null,
                             createdAt: tQuiz.createdAt || Date.now()
                         });
                     } else {
@@ -973,6 +989,13 @@ function renderDashboardQuizzes(quizzes) {
         const dateStr = q.createdAt ? new Date(q.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Active';
         const itemCount = q.sampleCount ? `${q.sampleCount} Items` : 'Comprehensive Exam';
         const theme = getSubjectCardTheme(q.subject);
+        const expiryTs = parseExpiryTimestamp(q.expiry);
+        const isExpired = Boolean(expiryTs && Date.now() > expiryTs);
+        const expiryTagHtml = expiryTs ? `
+                            <span class="meta-tag ${isExpired ? 'meta-tag-expired' : ''}" title="Closes: ${escapeHtml(formatExpiryDisplay(expiryTs))}">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                <span>${isExpired ? 'Expired' : 'Closes ' + escapeHtml(formatExpiryDisplay(expiryTs))}</span>
+                            </span>` : '';
 
         return `
             <div class="dashboard-quiz-card">
@@ -1000,7 +1023,7 @@ function renderDashboardQuizzes(quizzes) {
                             <span class="meta-tag" title="Instructor">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                                 <span>${escapeHtml(q.teacherName || 'Faculty')}</span>
-                            </span>
+                            </span>${expiryTagHtml}
                         </div>
                         <div class="card-code-row">
                             <span class="code-label">Quiz Code</span>
@@ -1090,6 +1113,7 @@ async function toggleQuizDashboardVisibility(quizId, shouldBeVisible) {
                 creatorUid: teacherUid,
                 teacherName: auth.currentUser.displayName || auth.currentUser.email || 'Faculty',
                 visible: true,
+                expiry: qData.expiry || 0,
                 updatedAt: Date.now()
             };
             try {
@@ -2500,6 +2524,7 @@ async function loadTeacherDashboardQuizzes() {
                 subject: data[id].subject || 'General',
                 secretKey: data[id].secretKey || '',
                 sampleCount: data[id].sampleCount || 0,
+                expiry: data[id].expiry !== undefined ? parseExpiryTimestamp(data[id].expiry) : undefined,
                 visibleOnDashboard: data[id].visibleOnDashboard !== false,
                 createdAt: data[id].createdAt || Date.now()
             })).sort((a, b) => b.createdAt - a.createdAt);
@@ -2548,6 +2573,54 @@ async function loadTeacherDashboardQuizzes() {
     }
 
     renderFilteredTeacherQuizzes();
+    hydrateMissingTeacherQuizExpiries(allMyTeacherQuizzes);
+}
+
+async function hydrateMissingTeacherQuizExpiries(quizzes) {
+    if (!Array.isArray(quizzes) || !auth.currentUser) return;
+    const missing = quizzes.filter(q => q.expiry === undefined && q.secretKey);
+    if (missing.length === 0) return;
+
+    const uid = auth.currentUser.uid;
+    const batchSize = 5;
+    for (let i = 0; i < missing.length; i += batchSize) {
+        const batch = missing.slice(i, i + batchSize);
+        await Promise.all(batch.map(async (q) => {
+            try {
+                const snap = await database.ref('quizzes/' + q.id + '/encryptedQuizData').once('value');
+                if (!snap.exists()) {
+                    q.expiry = null;
+                    updateQuizCardExpiryUI(q.id, null);
+                    return;
+                }
+                const decStr = await decryptData(snap.val(), q.secretKey);
+                const parsed = JSON.parse(decStr);
+                const ts = parseExpiryTimestamp(parsed.expiry);
+                q.expiry = ts;
+
+                // Persist mirrored expiry so future loads don't need decryption
+                database.ref(`teachers/${uid}/quizzes/${q.id}/expiry`).set(ts || 0).catch(() => { });
+                try {
+                    const dashSnap = await database.ref(`dashboard_quizzes/${q.id}`).once('value');
+                    if (dashSnap.exists()) {
+                        database.ref(`dashboard_quizzes/${q.id}/expiry`).set(ts || 0).catch(() => { });
+                    }
+                } catch (_) { }
+
+                const inputEl = document.getElementById('card-expiry-input-' + q.id);
+                if (!inputEl || inputEl.dataset.dirty !== 'true') {
+                    updateQuizCardExpiryUI(q.id, ts);
+                }
+            } catch (err) {
+                console.warn('Could not hydrate expiry for quiz ' + q.id + ':', err);
+                q.expiry = null;
+                const inputEl = document.getElementById('card-expiry-input-' + q.id);
+                if (!inputEl || inputEl.dataset.dirty !== 'true') {
+                    updateQuizCardExpiryUI(q.id, null);
+                }
+            }
+        }));
+    }
 }
 
 function renderFilteredTeacherQuizzes() {
@@ -2586,6 +2659,19 @@ function renderFilteredTeacherQuizzes() {
         const catSelectOptions = cardCats.map(cat =>
             `<option value="${escapeHtml(cat)}"${cat.toLowerCase() === currentSub.toLowerCase() ? ' selected' : ''}>${escapeHtml(cat)}</option>`
         ).join('') + `<option value="__NEW__" style="color: var(--primary); font-weight: 700;">+ New Category...</option>`;
+
+        const expiryTs = parseExpiryTimestamp(q.expiry);
+        const expiryInputVal = formatDateTimeLocal(expiryTs);
+        const isExpired = Boolean(expiryTs && Date.now() > expiryTs);
+        let expiryStatusLabel = 'No Expiry';
+        let expiryStatusClass = 'expiry-none';
+        if (q.expiry === undefined) {
+            expiryStatusLabel = 'Loading…';
+            expiryStatusClass = 'expiry-loading';
+        } else if (expiryTs) {
+            expiryStatusLabel = isExpired ? 'Expired' : 'Active';
+            expiryStatusClass = isExpired ? 'expiry-expired' : 'expiry-active';
+        }
 
         return `
             <div class="dashboard-quiz-card teacher-grid-card">
@@ -2641,6 +2727,35 @@ function renderFilteredTeacherQuizzes() {
                                 <code class="quiz-code-badge">${escapeHtml(q.id)}</code>
                                 <button type="button" class="btn-mini-copy" onclick="copyToClipboard('${escapeJsSingle(q.id)}', 'Quiz ID copied!')" title="Copy Quiz Code">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-expiry-row" data-quiz-expiry-row="${escapeHtml(q.id)}">
+                            <div class="card-expiry-header">
+                                <span class="code-label">Date Expire</span>
+                                <span id="card-expiry-status-${escapeHtml(q.id)}" class="card-expiry-status ${expiryStatusClass}" title="${expiryTs ? 'Expires: ' + escapeHtml(formatExpiryDisplay(expiryTs)) : 'No expiration date set'}">${expiryStatusLabel}</span>
+                            </div>
+                            <div class="card-expiry-controls">
+                                <input type="datetime-local"
+                                       id="card-expiry-input-${escapeHtml(q.id)}"
+                                       class="card-expiry-input"
+                                       value="${escapeHtml(expiryInputVal)}"
+                                       data-saved-value="${escapeHtml(expiryInputVal)}"
+                                       aria-label="Expiration date and time"
+                                       oninput="markQuizCardExpiryDirty('${escapeJsSingle(q.id)}')">
+                                <button type="button"
+                                        id="card-expiry-save-${escapeHtml(q.id)}"
+                                        class="btn-expiry-save"
+                                        onclick="saveQuizCardExpiry('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')"
+                                        title="Save expiration date">
+                                    Save
+                                </button>
+                                <button type="button"
+                                        id="card-expiry-clear-${escapeHtml(q.id)}"
+                                        class="btn-expiry-clear ${expiryTs ? '' : 'hidden'}"
+                                        onclick="clearQuizCardExpiry('${escapeJsSingle(q.id)}', '${escapeJsSingle(q.secretKey)}')"
+                                        title="Remove expiration date">
+                                    ✕
                                 </button>
                             </div>
                         </div>
@@ -2783,6 +2898,150 @@ async function applyQuizCategoryChange(quizId, newSubject) {
 window.handleQuizCardCategoryChange = handleQuizCardCategoryChange;
 window.promptChangeQuizCategory = promptChangeQuizCategory;
 window.applyQuizCategoryChange = applyQuizCategoryChange;
+
+function markQuizCardExpiryDirty(quizId) {
+    const inputEl = document.getElementById('card-expiry-input-' + quizId);
+    const saveBtn = document.getElementById('card-expiry-save-' + quizId);
+    if (!inputEl) return;
+    const isDirty = (inputEl.value || '') !== (inputEl.dataset.savedValue || '');
+    inputEl.dataset.dirty = isDirty ? 'true' : 'false';
+    if (saveBtn) {
+        saveBtn.classList.toggle('is-dirty', isDirty);
+    }
+}
+
+function updateQuizCardExpiryUI(quizId, expiryTs) {
+    const ts = parseExpiryTimestamp(expiryTs);
+    const formattedInput = formatDateTimeLocal(ts);
+    const isExpired = Boolean(ts && Date.now() > ts);
+
+    const inputEl = document.getElementById('card-expiry-input-' + quizId);
+    const saveBtn = document.getElementById('card-expiry-save-' + quizId);
+    const clearBtn = document.getElementById('card-expiry-clear-' + quizId);
+    const statusEl = document.getElementById('card-expiry-status-' + quizId);
+
+    if (inputEl) {
+        inputEl.value = formattedInput;
+        inputEl.dataset.savedValue = formattedInput;
+        inputEl.dataset.dirty = 'false';
+    }
+    if (saveBtn) {
+        saveBtn.classList.remove('is-dirty');
+    }
+    if (clearBtn) {
+        clearBtn.classList.toggle('hidden', !ts);
+    }
+    if (statusEl) {
+        statusEl.classList.remove('expiry-none', 'expiry-active', 'expiry-expired', 'expiry-loading');
+        if (!ts) {
+            statusEl.classList.add('expiry-none');
+            statusEl.textContent = 'No Expiry';
+            statusEl.title = 'No expiration date set';
+        } else if (isExpired) {
+            statusEl.classList.add('expiry-expired');
+            statusEl.textContent = 'Expired';
+            statusEl.title = 'Expired: ' + formatExpiryDisplay(ts);
+        } else {
+            statusEl.classList.add('expiry-active');
+            statusEl.textContent = 'Active';
+            statusEl.title = 'Expires: ' + formatExpiryDisplay(ts);
+        }
+    }
+}
+
+async function saveQuizCardExpiry(quizId, secretKey) {
+    const inputEl = document.getElementById('card-expiry-input-' + quizId);
+    if (!inputEl) return;
+    const rawVal = (inputEl.value || '').trim();
+    let parsedTs = null;
+    if (rawVal) {
+        parsedTs = parseExpiryInput(rawVal);
+        if (!parsedTs) {
+            showToast('Please enter a valid expiration date and time.', 'warning');
+            return;
+        }
+    }
+    await applyQuizCardExpiryChange(quizId, secretKey, parsedTs);
+}
+
+async function clearQuizCardExpiry(quizId, secretKey) {
+    await applyQuizCardExpiryChange(quizId, secretKey, null);
+}
+
+async function applyQuizCardExpiryChange(quizId, secretKey, newExpiryTs) {
+    if (!auth.currentUser) {
+        showToast('Please sign in as a teacher to update quiz expiration.', 'error');
+        return;
+    }
+    if (!quizId || !secretKey) {
+        showToast('Missing quiz credentials to update encrypted quiz data.', 'error');
+        return;
+    }
+
+    showLoading();
+    try {
+        const cleanTs = parseExpiryTimestamp(newExpiryTs);
+        const snap = await database.ref('quizzes/' + quizId + '/encryptedQuizData').once('value');
+        if (!snap.exists()) {
+            throw new Error('Quiz payload not found in cloud database.');
+        }
+
+        const decStr = await decryptData(snap.val(), secretKey);
+        const quizObj = JSON.parse(decStr);
+        quizObj.expiry = cleanTs;
+
+        const reEncrypted = await encryptData(JSON.stringify(quizObj), secretKey);
+        await database.ref('quizzes/' + quizId).update({
+            encryptedQuizData: reEncrypted
+        });
+
+        await database.ref(`teachers/${auth.currentUser.uid}/quizzes/${quizId}/expiry`).set(cleanTs || 0);
+
+        try {
+            const dashSnap = await database.ref('dashboard_quizzes/' + quizId).once('value');
+            if (dashSnap.exists()) {
+                await database.ref('dashboard_quizzes/' + quizId).update({
+                    expiry: cleanTs || 0,
+                    updatedAt: Date.now()
+                });
+            }
+        } catch (err) {
+            console.warn('Could not update dashboard_quizzes expiry:', err);
+        }
+
+        const target = allMyTeacherQuizzes.find(q => q.id === quizId);
+        if (target) {
+            target.expiry = cleanTs;
+        }
+
+        try {
+            const dashLocal = JSON.parse(localStorage.getItem('quizable_dashboard_quizzes') || '[]');
+            const dItem = dashLocal.find(d => d.id === quizId);
+            if (dItem) {
+                dItem.expiry = cleanTs || 0;
+                localStorage.setItem('quizable_dashboard_quizzes', JSON.stringify(dashLocal));
+            }
+        } catch (e) { }
+
+        updateQuizCardExpiryUI(quizId, cleanTs);
+
+        if (cleanTs) {
+            showToast('Expiry updated to ' + formatExpiryDisplay(cleanTs), 'success');
+        } else {
+            showToast('Expiry removed — quiz now has no expiration.', 'success');
+        }
+    } catch (err) {
+        console.error('Error updating quiz expiry:', err);
+        showToast('Failed to update expiry: ' + err.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+window.markQuizCardExpiryDirty = markQuizCardExpiryDirty;
+window.saveQuizCardExpiry = saveQuizCardExpiry;
+window.clearQuizCardExpiry = clearQuizCardExpiry;
+window.applyQuizCardExpiryChange = applyQuizCardExpiryChange;
 
 function openTeacherQuizResults(id, key) {
     showViewResults();
@@ -3585,6 +3844,7 @@ function generateEncryptedFile() {
             subject: quizSubject || 'Uncategorized',
             secretKey: secretKey,
             sampleCount: sampleQuestionCount,
+            expiry: quiz.expiry || 0,
             visibleOnDashboard: showOnDash,
             createdAt: Date.now()
         };
@@ -3595,6 +3855,7 @@ function generateEncryptedFile() {
                 subject: quizSubject || 'Uncategorized',
                 secretKey: secretKey,
                 sampleCount: sampleQuestionCount,
+                expiry: quiz.expiry || 0,
                 creatorUid: teacherUid,
                 teacherName: teacherEmail,
                 visible: true,
@@ -3992,11 +4253,18 @@ async function updateQuizSettings(quizId, secretKey, newSettings, currentQuizDat
             const updates = {};
             if (newSettings.hasOwnProperty('sampleCount')) updates['sampleCount'] = newSettings.sampleCount || 0;
             if (newSettings.hasOwnProperty('subject')) updates['subject'] = newSettings.subject;
+            if (newSettings.hasOwnProperty('expiry')) updates['expiry'] = currentQuizData.expiry || 0;
             const teacherQuizRef = database.ref(`teachers/${targetUid}/quizzes/${quizId}`);
             await teacherQuizRef.update(updates).catch(() => { });
-            if (newSettings.hasOwnProperty('subject')) {
-                await database.ref(`dashboard_quizzes/${quizId}`).update({ subject: newSettings.subject }).catch(() => { });
-            }
+            try {
+                const dashSnap = await database.ref(`dashboard_quizzes/${quizId}`).once('value');
+                if (dashSnap.exists()) {
+                    const dashUpdates = { updatedAt: Date.now() };
+                    if (newSettings.hasOwnProperty('subject')) dashUpdates.subject = newSettings.subject;
+                    if (newSettings.hasOwnProperty('expiry')) dashUpdates.expiry = currentQuizData.expiry || 0;
+                    await database.ref(`dashboard_quizzes/${quizId}`).update(dashUpdates);
+                }
+            } catch (_) { }
         }
 
         hideLoading();
@@ -5544,6 +5812,10 @@ window.addNewCategoryFromCreator = addNewCategoryFromCreator;
 window.promptAddTeacherCategory = promptAddTeacherCategory;
 window.filterTeacherQuizzesByCategory = filterTeacherQuizzesByCategory;
 window.renderCreatorSubjectChips = renderCreatorSubjectChips;
+window.markQuizCardExpiryDirty = markQuizCardExpiryDirty;
+window.saveQuizCardExpiry = saveQuizCardExpiry;
+window.clearQuizCardExpiry = clearQuizCardExpiry;
+window.applyQuizCardExpiryChange = applyQuizCardExpiryChange;
 window.exportAugust2026Excel = exportAugust2026Excel;
 window.exportCurrentTeacherQuizExcel = exportCurrentTeacherQuizExcel;
 window.exportAdminQuizResultsExcel = exportAdminQuizResultsExcel;
